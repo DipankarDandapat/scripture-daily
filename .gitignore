@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+android/.gradle/
+android/local.properties
+android/**/build/
+*.iml
+.idea/
+.DS_Store
+
+android/.kotlin/
+*.jks
+*.keystore
+android/keystore/
+google-services.json

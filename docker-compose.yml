@@ -1,0 +1,33 @@
+services:
+  db:
+    image: postgres:16-alpine
+    env_file:
+      - ./backend/.env
+    environment:
+      POSTGRES_DB: scripture
+      POSTGRES_USER: scripture
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-scripture-local-only}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scripture -d scripture"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  api:
+    build: ./backend
+    env_file:
+      - ./backend/.env
+    environment:
+      SD_ENVIRONMENT: ${SD_ENVIRONMENT:-development}
+      SD_DATABASE_URL: postgresql+psycopg://scripture:${POSTGRES_PASSWORD:-scripture-local-only}@db:5432/scripture
+      SD_JWT_SECRET: ${SD_JWT_SECRET:-local-change-this-secret}
+      SD_ADMIN_TOKEN: ${SD_ADMIN_TOKEN:-local-change-admin-token}
+      SD_CORS_ORIGINS: ${SD_CORS_ORIGINS:-*}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+volumes:
+  postgres-data:
