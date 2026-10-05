@@ -8,6 +8,7 @@ android/**/build/
 *.iml
 .idea/
 .DS_Store
+prompt_log.txt
 
 android/.kotlin/
 *.jks

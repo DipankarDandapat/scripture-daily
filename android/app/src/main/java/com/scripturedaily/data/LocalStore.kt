@@ -34,8 +34,8 @@ data class CachedVerse(
     fun toVerse() = Verse(id, scripture, religion, book, chapter, verseNumber, language, text, translation, source, "", isDemo)
 }
 
-fun Verse.toCached(scriptureId: Int, languageId: Int, favorite: Boolean = false) = CachedVerse(
-    id, scriptureId, languageId, scripture, religion, book, chapter, verseNumber, language, text, translation, source, isDemo, favorite = favorite
+fun Verse.toCached(scriptureId: Int, languageId: Int, favorite: Boolean = false, savedAt: Long = System.currentTimeMillis()) = CachedVerse(
+    id, scriptureId, languageId, scripture, religion, book, chapter, verseNumber, language, text, translation, source, isDemo, savedAt, favorite
 )
 
 @Dao

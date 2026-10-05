@@ -53,11 +53,107 @@ For a physical Android device, keep the API bound to `0.0.0.0` and add this to `
 SD_API_BASE_URL=http://192.168.1.20:8000/api/v1/
 ```
 
-Then run the `app` configuration. Alternatively, build with Gradle from `android/`:
+### Debug build (development)
+
+Clears the Gradle cache and previous outputs, then produces a fresh debug APK:
 
 ```bash
+cd android
+./gradlew clean
 ./gradlew assembleDebug
 ```
+
+The signed debug APK is written to:
+
+```
+android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+Install directly on a connected device or emulator:
+
+```bash
+adb install app/build/outputs/apk/debug/app-debug.apk
+```
+
+### Production / release build (no Chucker)
+
+Chucker (the HTTP inspector overlay) is automatically excluded from release builds — `build.gradle.kts` uses `debugImplementation` for the full library and `releaseImplementation` for the official no-op stub, so **no code changes are needed**.
+
+Before building for release you need a signing keystore. Create one once:
+
+```bash
+keytool -genkeypair -v \
+  -keystore lumora-release.jks \
+  -alias lumora \
+  -keyalg RSA -keysize 2048 \
+  -validity 10000
+```
+
+Add the signing config to `android/gradle.properties` (keep this file out of version control):
+
+```properties
+SD_API_BASE_URL=https://scripture-daily.onrender.com/api/v1/
+STORE_FILE=/absolute/path/to/lumora-release.jks
+STORE_PASSWORD=your_store_password
+KEY_ALIAS=lumora
+KEY_PASSWORD=your_key_password
+```
+
+Add a `signingConfigs` block to `android/app/build.gradle.kts` inside the `android {}` block:
+
+```kotlin
+signingConfigs {
+    create("release") {
+        storeFile = file(providers.gradleProperty("STORE_FILE").get())
+        storePassword = providers.gradleProperty("STORE_PASSWORD").get()
+        keyAlias = providers.gradleProperty("KEY_ALIAS").get()
+        keyPassword = providers.gradleProperty("KEY_PASSWORD").get()
+    }
+}
+buildTypes {
+    release {
+        isMinifyEnabled = true
+        isShrinkResources = true
+        proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+        signingConfig = signingConfigs.getByName("release")
+    }
+}
+```
+
+Then clean and build the release APK:
+
+```bash
+cd android
+./gradlew clean
+./gradlew assembleRelease
+```
+
+The release APK (signed, minified, no Chucker) is written to:
+
+```
+android/app/build/outputs/apk/release/app-release.apk
+```
+```commandline
+Going forward — if this happens again, run these two commands before building:
+
+./gradlew --stop
+./gradlew clean assembleDebug --no-daemon
+```
+```commandline
+
+cd android
+./gradlew assembleDebug
+adb install app/build/outputs/apk/debug/app-debug.apk
+```
+
+For Play Store submission build an AAB instead:
+
+```bash
+./gradlew bundleRelease
+# output: android/app/build/outputs/bundle/release/app-release.aab
+```
+
+> Before publishing: set `android:usesCleartextTraffic="false"` in `AndroidManifest.xml`, switch the API URL to HTTPS, add a privacy policy, and configure crash telemetry.
 
 Place the Scripture Daily widget from the Android home-screen picker. On Android devices whose lock-screen host supports widgets, add it through the device's lock-screen customization/widget picker; this widget is declared for the keyguard category. Availability and setup are controlled by Android/OEM and are not present on every device. The cross-device fallback is a verse notification: open in-app Settings, enable **Verse reminders**, grant notification permission, and save. Android must also be allowed to show Scripture Daily notifications and sensitive content on the lock screen; users retain control over that privacy setting. WorkManager delivers updates approximately on the selected cadence; Android may defer execution to protect battery.
 

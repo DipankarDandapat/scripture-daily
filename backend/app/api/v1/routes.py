@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_access_token, hash_password, verify_password
-from app.models.entities import Religion, Language, Scripture, Verse, User, UserPreference, Favorite, Device
-from app.schemas.api import AuthInput, TokenOut, UserOut, CatalogOut, VerseOut, PreferenceInput, PreferenceOut, FavoriteInput, DeviceInput, VerseCreate
+from app.models.entities import Religion, Language, Scripture, Verse, User, UserPreference, Favorite, Device, Feedback
+from app.schemas.api import AuthInput, TokenOut, UserOut, CatalogOut, ReligionOut, ScriptureItem, VerseOut, PreferenceInput, PreferenceOut, FavoriteInput, DeviceInput, VerseCreate, FeedbackInput, FeedbackOut
 
 router = APIRouter()
 bearer = HTTPBearer()
@@ -64,7 +64,7 @@ def register(data: AuthInput, db: Session = Depends(get_db)):
     first_language = db.scalar(select(Language).order_by(Language.id))
     first_scripture = db.scalar(select(Scripture).order_by(Scripture.id))
     if first_religion and first_language and first_scripture:
-        db.add(UserPreference(user_id=user.id, religion_id=first_religion.id, language_id=first_language.id, scripture_id=first_scripture.id))
+        db.add(UserPreference(user_id=user.id, religion_id=first_religion.id, language_id=first_language.id, scripture_ids=str(first_scripture.id)))
     db.commit(); db.refresh(user)
     return {"access_token": create_access_token(user.id), "token_type": "bearer"}
 
@@ -81,9 +81,15 @@ def login(data: AuthInput, db: Session = Depends(get_db)):
 def me(user: User = Depends(current_user)): return user
 
 
-@router.get("/religions", response_model=list[CatalogOut])
+@router.get("/religions", response_model=list[ReligionOut])
 def religions(db: Session = Depends(get_db)):
-    return db.scalars(select(Religion).order_by(Religion.id)).all()
+    rows = db.scalars(select(Religion).order_by(Religion.id)).all()
+    return [
+        ReligionOut(
+            id=r.id, name=r.name, code=r.code,
+            scriptures=[ScriptureItem(id=s.id, name=s.name, code=s.code) for s in r.scriptures]
+        ) for r in rows
+    ]
 
 
 @router.get("/languages", response_model=list[CatalogOut])
@@ -99,8 +105,10 @@ def scriptures(religion_id: int | None = None, db: Session = Depends(get_db)):
 
 
 @router.get("/verses/today", response_model=VerseOut)
-def today(religion_id: int | None = None, scripture_id: int | None = None, language_id: int | None = None,
-          credentials: HTTPAuthorizationCredentials | None = Depends(optional_bearer), db: Session = Depends(get_db)):
+def today(credentials: HTTPAuthorizationCredentials | None = Depends(optional_bearer), db: Session = Depends(get_db)):
+    religion_id: int | None = None
+    scripture_id: int | None = None
+    language_id: int | None = None
     if credentials:
         try:
             payload = jwt.decode(credentials.credentials, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
@@ -111,9 +119,11 @@ def today(religion_id: int | None = None, scripture_id: int | None = None, langu
             raise HTTPException(status_code=401, detail="User no longer exists")
         prefs = db.get(UserPreference, user.id)
         if prefs:
-            religion_id = religion_id or prefs.religion_id
-            scripture_id = scripture_id or prefs.scripture_id
-            language_id = language_id or prefs.language_id
+            religion_id = prefs.religion_id
+            language_id = prefs.language_id
+            # Pick first scripture_id from comma-separated list
+            ids = [int(x) for x in prefs.scripture_ids.split(",") if x.strip().isdigit()]
+            scripture_id = ids[0] if ids else None
     if scripture_id is None:
         selected_scripture = db.scalar(select(Scripture).where(Scripture.religion_id == religion_id).order_by(Scripture.id)) if religion_id else db.scalar(select(Scripture).order_by(Scripture.id))
         if selected_scripture is None:
@@ -167,7 +177,7 @@ def get_or_create_preferences(user: User, db: Session) -> UserPreference:
     if prefs is None:
         religion = db.scalar(select(Religion).order_by(Religion.id)); language = db.scalar(select(Language).order_by(Language.id)); scripture = db.scalar(select(Scripture).order_by(Scripture.id))
         if not religion or not language or not scripture: raise HTTPException(status_code=503, detail="Scripture catalog is not initialized")
-        prefs = UserPreference(user_id=user.id, religion_id=religion.id, language_id=language.id, scripture_id=scripture.id)
+        prefs = UserPreference(user_id=user.id, religion_id=religion.id, language_id=language.id, scripture_ids=str(scripture.id))
         db.add(prefs); db.commit(); db.refresh(prefs)
     return prefs
 
@@ -180,8 +190,12 @@ def read_preferences(user: User = Depends(current_user), db: Session = Depends(g
 @router.put("/users/preferences", response_model=PreferenceOut)
 def save_preferences(data: PreferenceInput, user: User = Depends(current_user), db: Session = Depends(get_db)):
     if data.frequency not in {"daily", "6h", "1h"}: raise HTTPException(status_code=422, detail="frequency must be daily, 6h, or 1h")
-    scripture = db.get(Scripture, data.scripture_id)
-    if not scripture or scripture.religion_id != data.religion_id: raise HTTPException(status_code=422, detail="Scripture must belong to the selected religion")
+    ids = [int(x) for x in data.scripture_ids.split(",") if x.strip().isdigit()]
+    if not ids: raise HTTPException(status_code=422, detail="scripture_ids must contain at least one valid ID")
+    for sid in ids:
+        scripture = db.get(Scripture, sid)
+        if not scripture or scripture.religion_id != data.religion_id:
+            raise HTTPException(status_code=422, detail=f"Scripture {sid} must belong to the selected religion")
     if not db.get(Language, data.language_id): raise HTTPException(status_code=422, detail="Unknown language")
     prefs = get_or_create_preferences(user, db)
     for key, value in data.model_dump().items(): setattr(prefs, key, value)
@@ -216,6 +230,13 @@ def register_device(data: DeviceInput, user: User = Depends(current_user), db: S
     else: row.platform, row.device_model = data.platform, data.device_model
     db.commit()
     return {"ok": True}
+
+
+@router.post("/feedback", response_model=FeedbackOut, status_code=201)
+def submit_feedback(data: FeedbackInput, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    row = Feedback(user_id=user.id, rating=data.rating, comment=data.comment, consent=data.consent)
+    db.add(row); db.commit(); db.refresh(row)
+    return row
 
 
 @router.post("/admin/verses", response_model=VerseOut, status_code=201)

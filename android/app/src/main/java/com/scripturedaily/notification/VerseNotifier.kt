@@ -13,26 +13,40 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.scripturedaily.MainActivity
+import com.scripturedaily.lockscreen.LockScreenVerseActivity
 
-/** Posts the current verse as a user-controlled lock-screen notification. */
+/** Posts the current verse where the lock screen can show it. */
 object VerseNotifier {
-    private const val CHANNEL_ID = "scripture_verse_lock_screen_v1"
+    private const val CHANNEL_ID = "scripture_verse_lock_screen_v2"
+    private const val LEGACY_CHANNEL_ID = "scripture_verse_lock_screen_v1"
     private const val NOTIFICATION_ID = 1001
 
-    fun show(context: Context, scripture: String, text: String, reference: String) {
+    fun canUseFullScreenIntent(context: Context): Boolean =
+        NotificationManagerCompat.from(context).canUseFullScreenIntent()
+
+    fun show(
+        context: Context,
+        scripture: String,
+        text: String,
+        reference: String,
+        isDemo: Boolean = false,
+        launchCard: Boolean = false
+    ): Boolean {
         if (Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) return
+        ) return false
 
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            manager.deleteNotificationChannel(LEGACY_CHANNEL_ID)
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Scripture verse on lock screen",
-                NotificationManager.IMPORTANCE_DEFAULT
+                NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Your selected scripture verse and reference"
+                description = "Shows the selected scripture verse on the lock screen"
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
+                setShowBadge(false)
             }
             manager.createNotificationChannel(channel)
         }
@@ -46,23 +60,54 @@ object VerseNotifier {
             openApp,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+        val title = "Today’s $scripture verse"
+        val body = "$text\n$reference"
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_info_details)
-            .setContentTitle("Today's $scripture verse")
+            .setContentTitle(title)
             .setContentText("$text · $reference")
-            .setStyle(NotificationCompat.BigTextStyle().bigText("$text\n$reference"))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(contentIntent)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
             .setAutoCancel(false)
-            .build()
+            .setColor(0xFF183D32.toInt())
 
-        try {
-            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, notification)
+        if (launchCard && canUseFullScreenIntent(context)) {
+            val card = Intent(context, LockScreenVerseActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra(LockScreenVerseActivity.EXTRA_SCRIPTURE, scripture)
+                putExtra(LockScreenVerseActivity.EXTRA_TEXT, text)
+                putExtra(LockScreenVerseActivity.EXTRA_REFERENCE, reference)
+                putExtra(LockScreenVerseActivity.EXTRA_DEMO, isDemo)
+            }
+            val fullScreen = PendingIntent.getActivity(
+                context,
+                1,
+                card,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            builder.setFullScreenIntent(fullScreen, true)
+        }
+
+        val publicVersion = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_info_details)
+            .setContentTitle(title)
+            .setContentText("$text · $reference")
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .setContentIntent(contentIntent)
+            .build()
+        builder.setPublicVersion(publicVersion)
+
+        return try {
+            NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, builder.build())
+            true
         } catch (_: SecurityException) {
-            // Android/system notification permission or channel settings may change at runtime.
+            false
         }
     }
 

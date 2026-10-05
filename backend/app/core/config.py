@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./scripture_daily.db"
     jwt_secret: str = "change-this-development-secret-before-deploying"
     jwt_algorithm: str = "HS256"
-    access_token_minutes: int = 60 * 24 * 7
+    access_token_minutes: int = 0  # 0 = no expiry (device tokens are permanent)
     admin_token: str = "local-admin-token-change-me"
     cors_origins: str = "*"
 

@@ -8,7 +8,7 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import com.scripturedaily.notification.VerseNotifier
+import com.scripturedaily.lockscreen.LockScreenVerse
 import com.scripturedaily.widget.ScriptureWidget
 import java.util.concurrent.TimeUnit
 
@@ -19,12 +19,21 @@ class VerseSyncWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val language = prefs.getInt("language", 1)
         val scripture = prefs.getInt("scripture", religion)
         return try {
-            val verse = if (prefs.getString("frequency", "Daily") == "Daily") ApiClient.api.today(religion, language, scripture)
+            val verse = if (prefs.getString("frequency", "Daily") == "Daily") ApiClient.api.today()
                 else ApiClient.api.random(religion, language, scripture)
             val previous = ScriptureDatabase.get(applicationContext).verses().find(verse.id)
             ScriptureDatabase.get(applicationContext).verses().save(verse.toCached(scripture, language, previous?.favorite == true))
             ScriptureWidget().refreshAll(applicationContext)
-            if (prefs.getBoolean("reminders", false)) VerseNotifier.show(applicationContext, verse.scripture, verse.text, verse.reference())
+            LockScreenVerse.applyIfEnabled(
+                applicationContext,
+                verse.id,
+                verse.scripture,
+                verse.text,
+                verse.reference(),
+                verse.isDemo,
+                forceWallpaper = true,
+                launchCard = prefs.getBoolean("lock_screen", false)
+            )
             Result.success()
         } catch (_: Exception) { Result.retry() }
     }

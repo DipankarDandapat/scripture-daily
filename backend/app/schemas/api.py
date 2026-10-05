@@ -17,6 +17,19 @@ class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ScriptureItem(BaseModel):
+    id: int
+    name: str
+    code: str
+
+
+class ReligionOut(BaseModel):
+    id: int
+    name: str
+    code: str
+    scriptures: list[ScriptureItem] = []
+
+
 class CatalogOut(BaseModel):
     id: int
     name: str
@@ -42,13 +55,13 @@ class VerseOut(BaseModel):
 class PreferenceInput(BaseModel):
     religion_id: int
     language_id: int
-    scripture_id: int
+    scripture_ids: str = "1"  # comma-separated e.g. "2,3"
     frequency: str = "daily"
     notifications_enabled: bool = False
 
 
 class PreferenceOut(PreferenceInput):
-    pass
+    model_config = ConfigDict(from_attributes=True)
 
 
 class FavoriteInput(BaseModel):
@@ -59,6 +72,20 @@ class DeviceInput(BaseModel):
     device_token: str = Field(min_length=8, max_length=512)
     platform: str = "android"
     device_model: str | None = None
+
+
+class FeedbackInput(BaseModel):
+    rating: int = Field(ge=1, le=10)
+    comment: str | None = Field(default=None, max_length=1000)
+    consent: bool = False
+
+
+class FeedbackOut(BaseModel):
+    id: int
+    rating: int
+    comment: str | None
+    consent: bool
+    model_config = ConfigDict(from_attributes=True)
 
 
 class VerseCreate(BaseModel):

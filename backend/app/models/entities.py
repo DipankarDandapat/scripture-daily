@@ -62,7 +62,7 @@ class UserPreference(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     religion_id: Mapped[int] = mapped_column(ForeignKey("religions.id"), default=1)
     language_id: Mapped[int] = mapped_column(ForeignKey("languages.id"), default=1)
-    scripture_id: Mapped[int] = mapped_column(ForeignKey("scriptures.id"), default=1)
+    scripture_ids: Mapped[str] = mapped_column(String(255), default="1")  # comma-separated scripture IDs
     frequency: Mapped[str] = mapped_column(String(20), default="daily")
     notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     user: Mapped[User] = relationship(back_populates="preferences")
@@ -86,3 +86,14 @@ class Device(Base):
     device_token: Mapped[str] = mapped_column(String(512))
     platform: Mapped[str] = mapped_column(String(30), default="android")
     device_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
+
+
+class Feedback(Base):
+    __tablename__ = "feedback"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    rating: Mapped[int] = mapped_column(Integer)  # 1–10
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    consent: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    user: Mapped[User] = relationship()

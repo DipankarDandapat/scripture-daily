@@ -16,6 +16,7 @@ import androidx.glance.layout.Spacer
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.height
 import androidx.glance.layout.padding
+import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
@@ -31,17 +32,46 @@ class ScriptureWidget : GlanceAppWidget() {
     }
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
+        val prefs = context.getSharedPreferences("reader", Context.MODE_PRIVATE)
         val cached = ScriptureDatabase.get(context).verses().matching(
-            context.getSharedPreferences("reader", Context.MODE_PRIVATE).getInt("scripture", 1),
-            context.getSharedPreferences("reader", Context.MODE_PRIVATE).getInt("language", 1)
+            prefs.getInt("scripture", 1),
+            prefs.getInt("language", 1)
         )
         provideContent {
-            Column(GlanceModifier.fillMaxSize().background(ColorProvider(Color(0xFF183D32))).padding(16.dp).clickable(actionStartActivity(Intent(context, MainActivity::class.java)))) {
-                Text(cached?.scripture ?: "Scripture Daily", style = TextStyle(color = ColorProvider(Color(0xFFD8AC68)), fontSize = 12.sp))
+            Column(
+                GlanceModifier
+                    .fillMaxSize()
+                    .background(ColorProvider(Color(0xFF2D1B4E)))
+                    .padding(16.dp)
+                    .clickable(actionStartActivity(Intent(context, MainActivity::class.java)))
+            ) {
+                Text(
+                    text = cached?.scripture?.uppercase() ?: "WISDOMONE",
+                    style = TextStyle(
+                        color = ColorProvider(Color(0xFFD4A574)),
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                )
                 Spacer(GlanceModifier.height(8.dp))
-                Text(cached?.let { "“${it.text}”" } ?: "Open the app to download today's verse.", style = TextStyle(color = ColorProvider(Color.White), fontSize = 15.sp))
-                Spacer(GlanceModifier.height(6.dp))
-                Text(cached?.reference() ?: "Wisdom for every day", style = TextStyle(color = ColorProvider(Color(0xFFD0DAD3)), fontSize = 11.sp))
+                Text(
+                    text = cached?.let { "\u201c${it.text}\u201d" } ?: "Open the app to load today\u2019s verse.",
+                    style = TextStyle(
+                        color = ColorProvider(Color(0xFFF5F0E8)),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Normal
+                    ),
+                    maxLines = 6
+                )
+                Spacer(GlanceModifier.height(8.dp))
+                Text(
+                    text = cached?.reference() ?: "Wisdom for every day",
+                    style = TextStyle(
+                        color = ColorProvider(Color(0xFF8A8078)),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Normal
+                    )
+                )
             }
         }
     }
