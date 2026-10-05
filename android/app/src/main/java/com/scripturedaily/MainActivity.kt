@@ -47,6 +47,7 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Share
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -57,6 +58,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -486,11 +489,11 @@ private fun ScriptureApp() {
                     .padding(horizontal = 20.dp, vertical = 10.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
+                    Image(
                         painter = painterResource(R.drawable.ic_lumora_logo),
                         contentDescription = null,
-                        modifier = Modifier.size(44.dp).offset(y = (-2).dp),
-                        tint = Color.Unspecified
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.size(44.dp).clip(RoundedCornerShape(22.dp))
                     )
                     Spacer(Modifier.width(10.dp))
                     Column {
@@ -627,11 +630,16 @@ private fun ApiHealthScreen(state: HealthState, onRetry: () -> Unit) {
     Box(Modifier.fillMaxSize().background(Parchment), contentAlignment = Alignment.Center) {
         Box(Modifier.size(300.dp).clip(CircleShape).background(Brush.radialGradient(listOf(Amber.copy(alpha = 0.15f), Color.Transparent))))
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(0.dp)) {
-            Icon(
-                painter = painterResource(R.drawable.ic_lumora_logo), contentDescription = null,
-                modifier = Modifier.size(88.dp).graphicsLayer { alpha = if (state is HealthState.Failed) 1f else pulse },
-                tint = Color.Unspecified
-            )
+            Box(
+                modifier = Modifier.size(88.dp).graphicsLayer { alpha = if (state is HealthState.Failed) 1f else pulse }
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.ic_lumora_logo),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.size(88.dp).clip(RoundedCornerShape(44.dp))
+                )
+            }
             Spacer(Modifier.height(24.dp))
             when (state) {
                 is HealthState.Checking -> {
@@ -692,11 +700,16 @@ private fun SplashScreen(onContinue: () -> Unit) {
         Box(Modifier.size(320.dp).offset(x = 120.dp, y = (-80).dp).clip(CircleShape).background(Brush.radialGradient(listOf(Amber.copy(alpha = 0.18f), Color.Transparent))))
         Box(Modifier.size(260.dp).align(Alignment.BottomStart).offset(x = (-60).dp, y = 60.dp).clip(CircleShape).background(Brush.radialGradient(listOf(AmberLight.copy(alpha = 0.14f), Color.Transparent))))
         Column(Modifier.fillMaxSize().padding(horizontal = 32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                painter = painterResource(R.drawable.ic_lumora_logo), contentDescription = null,
-                modifier = Modifier.size(96.dp).graphicsLayer { alpha = logoAlpha.value; translationY = logoOffset.value },
-                tint = Color.Unspecified
-            )
+            Box(
+                modifier = Modifier.size(96.dp).graphicsLayer { alpha = logoAlpha.value; translationY = logoOffset.value }
+            ) {
+                Image(
+                    painter = painterResource(R.drawable.ic_lumora_logo),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.size(96.dp).clip(RoundedCornerShape(48.dp))
+                )
+            }
             Spacer(Modifier.height(20.dp))
             Column(Modifier.graphicsLayer { alpha = textAlpha.value; translationY = textOffset.value }, horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("A quieter moment,", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = Ink, textAlign = TextAlign.Center, lineHeight = 42.sp)
@@ -752,7 +765,7 @@ private fun Onboarding(
                 val selected = religion == item.id
                 val scriptureNames = item.scriptures.joinToString(", ") { it.name }
                 Box(
-                    Modifier.fillMaxWidth().padding(vertical = 5.dp).clip(RoundedCornerShape(18.dp))
+                    Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(18.dp))
                         .background(if (selected) Brush.linearGradient(listOf(Amber.copy(alpha = 0.18f), AmberLight.copy(alpha = 0.08f))) else Brush.linearGradient(listOf(Color.White, Color.White)))
                         .border(BorderStroke(if (selected) 1.5.dp else 1.dp, if (selected) Amber else Amber.copy(alpha = 0.15f)), RoundedCornerShape(18.dp))
                         .clickable { onReligion(item.id) }
@@ -820,8 +833,9 @@ private fun Onboarding(
             Text("Start reading", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
         }
         Spacer(Modifier.height(12.dp))
-        Text("You can change your tradition and language anytime in Settings.", fontSize = 12.sp, color = InkSoft, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-        Spacer(Modifier.height(32.dp))
+        Text("You can change your tradition and language anytime in Settings.", fontSize = 12.sp, color = InkSoft, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp))
+        Spacer(Modifier.navigationBarsPadding())
+        Spacer(Modifier.height(16.dp))
     }
 }
 
