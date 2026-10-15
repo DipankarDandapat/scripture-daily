@@ -1,0 +1,54 @@
+1362: private fun FavoritesScreen(items: List<CachedVerse>, onOpen: (CachedVerse) -> Unit, onRemove: (CachedVerse) -> Unit) {
+1363:     var expandedItems by remember { mutableStateOf(emptySet<Int>()) }
+1364:     Column(Modifier.fillMaxSize()) {
+1365:         Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Amber.copy(alpha = 0.06f), Color.Transparent))).padding(horizontal = 20.dp, vertical = 20.dp)) {
+1366:             Column {
+1367:                 Text("Saved Verses", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+1368:                 Text("${items.size} verse${if (items.size != 1) "s" else ""} saved", fontSize = 13.sp, color = InkSoft)
+1369:             }
+1370:         }
+1371:         if (items.isEmpty()) {
+1372:             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+1373:                 Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+1374:                     Box(Modifier.size(80.dp).clip(CircleShape).background(Amber.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
+1375:                         Icon(Icons.Outlined.FavoriteBorder, contentDescription = null, tint = Amber.copy(alpha = 0.5f), modifier = Modifier.size(36.dp))
+1376:                     }
+1377:                     Text("No saved verses yet", fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+1378:                     Text("Save a verse from the home screen\nto keep it close.", fontSize = 13.sp, color = InkSoft, textAlign = TextAlign.Center)
+1379:                 }
+1380:             }
+1381:         } else {
+1382:             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+1383:                 items(items) { item ->
+1384:                     val expanded = item.id in expandedItems
+1385:                     val displayReference = if (item.book?.equals(item.scripture, ignoreCase = true) == true)
+1386:                         item.reference().removePrefix("${item.book} · ") else item.reference()
+1387:                     Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surface).border(1.dp, Amber.copy(alpha = 0.12f), RoundedCornerShape(20.dp)).clickable {
+1388:                         expandedItems = if (expanded) expandedItems - item.id else expandedItems + item.id
+1389:                     }) {
+1390:                         Column {
+1391:                             Box(Modifier.fillMaxWidth().height(4.dp).background(Brush.horizontalGradient(listOf(Amber, AmberLight))))
+1392:                             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+1393:                                 Row(verticalAlignment = Alignment.CenterVertically) {
+1394:                                     Box(Modifier.clip(RoundedCornerShape(6.dp)).background(Amber.copy(alpha = 0.1f)).padding(horizontal = 8.dp, vertical = 3.dp)) {
+1395:                                         Text(item.scripture.uppercase(), color = Amber, fontSize = 10.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.Bold)
+1396:                                     }
+1397:                                     Spacer(Modifier.weight(1f))
+1398:                                     Text(displayReference, color = InkSoft, fontSize = 11.sp)
+1399:                                     Spacer(Modifier.width(8.dp))
+1400:                                     Box(
+1401:                                         Modifier.size(26.dp).clip(RoundedCornerShape(7.dp))
+1402:                                             .background(Color(0xFF9C463D).copy(alpha = 0.08f))
+1403:                                             .border(BorderStroke(1.dp, Color(0xFF9C463D).copy(alpha = 0.3f)), RoundedCornerShape(7.dp))
+1404:                                             .clickable { onRemove(item) },
+1405:                                         contentAlignment = Alignment.Center
+1406:                                     ) {
+1407:                                         Text("\u00d7", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF9C463D), lineHeight = 15.sp)
+1408:                                     }
+1409:                                 }
+1410:                                 Text(
+1411:                                     "\u201c${item.text}\u201d",
+1412:                                     fontSize = 15.sp,
+1413:                                     lineHeight = 23.sp,
+1414:                                     color = MaterialTheme.colorScheme.onSurface,
+1415:                                     maxLines = if (expanded) Int.MAX_VALUE else 4,

@@ -12,14 +12,11 @@ import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.TextUtils
+import com.scripturedaily.lockscreentime.TimePalette
 import com.scripturedaily.notification.VerseNotifier
 import java.io.IOException
 
-/**
- * Publishes a verse onto the lock screen surfaces Android exposes to apps:
- * the lock-screen wallpaper, and a public lock-screen notification that can
- * open a card over the keyguard.
- */
+/** Applies a static verse image to the lock-screen wallpaper and posts a regular notification. */
 object LockScreenVerse {
     private const val PREFS = "reader"
     private const val KEY_ENABLED = "lock_screen"
@@ -32,115 +29,117 @@ object LockScreenVerse {
         false
     }
 
-    fun canPostLockCard(context: Context): Boolean =
-        VerseNotifier.canUseFullScreenIntent(context)
-
-    /**
-     * Blocking. Call from a background thread.
-     * Returns a short message when the user should hear the result, or null when nothing was requested.
-     */
+    /** Blocking; call from a background thread. */
     fun applyIfEnabled(
         context: Context,
         verseId: Int,
         scripture: String,
         text: String,
         reference: String,
-        isDemo: Boolean,
-        forceWallpaper: Boolean,
-        launchCard: Boolean
+        forceWallpaper: Boolean = false
     ): String? {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val wallpaperEnabled = prefs.getBoolean(KEY_ENABLED, false)
         val notify = wallpaperEnabled || prefs.getBoolean("reminders", false)
         if (!wallpaperEnabled && !notify) return null
-        val wallpaper = wallpaperEnabled && (forceWallpaper || prefs.getInt(KEY_VERSE_ID, -1) != verseId)
-        val result = apply(context, scripture, text, reference, isDemo, wallpaper, notify, launchCard && wallpaperEnabled)
-        if (result.wallpaperSet) prefs.edit().putInt(KEY_VERSE_ID, verseId).apply()
-        return result.message
+
+        val shouldSetWallpaper = wallpaperEnabled &&
+            (forceWallpaper || prefs.getInt(KEY_VERSE_ID, -1) != verseId)
+        val wallpaperSet = if (shouldSetWallpaper) {
+            setLockWallpaper(context, scripture, text, reference).also { success ->
+                if (success) prefs.edit().putInt(KEY_VERSE_ID, verseId).apply()
+            }
+        } else false
+        val notified = notify && VerseNotifier.show(context, verseId, scripture, text, reference)
+        val message = when {
+            wallpaperSet && notified -> "Today's verse wallpaper and lock-screen notification are active."
+            wallpaperSet -> "Today's verse is on your lock screen. Notifications are off; enable them in Android Settings if you also want alerts."
+            shouldSetWallpaper && !wallpaperSet && notified -> "Android could not set the lock-screen wallpaper. The verse is available in notifications."
+            shouldSetWallpaper && !wallpaperSet -> "Android blocked the lock-screen wallpaper and notifications are unavailable. Check Android settings."
+            wallpaperEnabled && !notified -> "The verse wallpaper is active. Notifications are unavailable; check Android notification settings."
+            wallpaperEnabled -> "The verse wallpaper and lock-screen notification are active."
+            notified -> "Verse reminder updated. It is shown in the notification shade, not on the lock screen."
+            shouldSetWallpaper && !canSetLockWallpaper(context) -> "This phone blocked lock-screen wallpaper changes. Check Android wallpaper settings."
+            else -> "Allow notifications for WisdomOne to show the verse."
+        }
+        return message
     }
 
-    private data class ApplyResult(val message: String, val wallpaperSet: Boolean)
+    /** Refreshes only the palette/background on the existing verse wallpaper; never posts a notification. */
+    fun refreshWallpaperPalette(
+        context: Context,
+        verseId: Int,
+        scripture: String,
+        text: String,
+        reference: String
+    ) {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (!prefs.getBoolean(KEY_ENABLED, false)) return
+        if (setLockWallpaper(context, scripture, text, reference)) {
+            prefs.edit().putInt(KEY_VERSE_ID, verseId).apply()
+        }
+    }
 
-    fun clearWallpaper(context: Context) {
+    /** Clears only the lock-screen wallpaper; the home-screen wallpaper is untouched. */
+    fun clearLockScreenWallpaper(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(KEY_VERSE_ID).apply()
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
         try {
             WallpaperManager.getInstance(context).clear(WallpaperManager.FLAG_LOCK)
         } catch (_: IOException) {
-            // The device may have no separate lock wallpaper to clear.
+            // Some devices do not have a separately configurable lock-screen image.
         } catch (_: SecurityException) {
-            // A device policy can forbid wallpaper changes.
+            // A device policy may forbid wallpaper changes.
+        } catch (_: RuntimeException) {
+            // Leave the existing system wallpaper untouched if the service is unavailable.
         }
     }
 
-    private fun apply(
-        context: Context,
-        scripture: String,
-        text: String,
-        reference: String,
-        isDemo: Boolean,
-        wallpaper: Boolean,
-        notify: Boolean,
-        launchCard: Boolean
-    ): ApplyResult {
-        var wallpaperSet = false
-        var wallpaperBlocked = false
-        var notified = false
-        if (wallpaper) {
-            val bitmap = render(context, scripture, text, reference, isDemo)
-            try {
-                val manager = WallpaperManager.getInstance(context)
-                if (!manager.isWallpaperSupported || !manager.isSetWallpaperAllowed) {
-                    wallpaperBlocked = true
-                } else {
-                    manager.setBitmap(bitmap, null, true, WallpaperManager.FLAG_LOCK)
-                    wallpaperSet = true
-                }
-            } catch (_: IOException) {
-                wallpaperBlocked = true
-            } catch (_: SecurityException) {
-                wallpaperBlocked = true
-            } finally {
-                if (!bitmap.isRecycled) bitmap.recycle()
-            }
+    private fun setLockWallpaper(context: Context, scripture: String, text: String, reference: String): Boolean {
+        val bitmap = render(context, scripture, text, reference)
+        return try {
+            val manager = WallpaperManager.getInstance(context)
+            if (!manager.isWallpaperSupported || !manager.isSetWallpaperAllowed) return false
+            manager.setBitmap(bitmap, null, true, WallpaperManager.FLAG_LOCK)
+            true
+        } catch (_: IOException) {
+            false
+        } catch (_: SecurityException) {
+            false
+        } catch (_: RuntimeException) {
+            false
+        } finally {
+            if (!bitmap.isRecycled) bitmap.recycle()
         }
-        if (notify) {
-            notified = VerseNotifier.show(context, scripture, text, reference, isDemo, launchCard)
-        }
-        val message = when {
-            wallpaperSet -> "Today's verse is on your lock screen. Lock the phone to see it."
-            wallpaperBlocked && notified -> "This phone blocked the lock screen wallpaper. The verse is in your lock screen notifications."
-            notified -> "The verse was added to your lock screen notifications. Allow notification content on the lock screen."
-            wallpaperBlocked -> "This phone blocked the lock screen wallpaper. Allow notifications for Scripture Daily, then try again."
-            else -> "Allow notifications so the verse can appear on the lock screen."
-        }
-        return ApplyResult(message, wallpaperSet)
     }
 
-    private fun render(context: Context, scripture: String, text: String, reference: String, isDemo: Boolean): Bitmap {
+    private fun render(context: Context, scripture: String, text: String, reference: String): Bitmap {
         val metrics = context.resources.displayMetrics
         val width = metrics.widthPixels.coerceIn(480, 1440)
         val height = metrics.heightPixels.coerceIn(800, 3200)
+        val interval = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getInt("palette_interval_hours", 6)
+        val palette = TimePalette.now(interval)
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
-        canvas.drawColor(Color.parseColor("#183D32"))
+        canvas.drawColor(palette.background)
 
         val contentWidth = (width * 0.84f).toInt()
         val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#D8AC68")
+            color = palette.accent
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             if (scripture.all { it.code < 128 }) letterSpacing = 0.08f
         }
         val bodyPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#F8F5EC")
+            color = palette.primaryText
             typeface = Typeface.DEFAULT
         }
         val metaPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#D0DAD3")
+            color = palette.secondaryText
             typeface = Typeface.DEFAULT
         }
         val footerPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#A7CDB8")
+            color = palette.accent
             typeface = Typeface.DEFAULT
             textAlign = Paint.Align.CENTER
             textSize = width * 0.028f
@@ -148,22 +147,21 @@ object LockScreenVerse {
 
         val title = layout(scripture.uppercase(), titlePaint, width * 0.034f, contentWidth, 3)
         val referenceLayout = layout(reference, metaPaint, width * 0.032f, contentWidth, 3)
-        val demoLayout = null
-        val bandTop = height * 0.36f
-        val bandBottom = height * 0.78f
+        val bandTop = height * 0.34f
+        val bandBottom = height * 0.80f
         val gap = height * 0.028f
-        val fixed = title.height + referenceLayout.height + gap * 2
-        val maxBodyHeight = (bandBottom - bandTop - fixed).coerceAtLeast(height * 0.16f)
+        val fixedHeight = title.height + referenceLayout.height + gap * 2
+        val maxBodyHeight = (bandBottom - bandTop - fixedHeight).coerceAtLeast(height * 0.16f)
         var bodySize = width * 0.058f
         val minBodySize = width * 0.034f
-        var body = layout("“$text”", bodyPaint, bodySize, contentWidth, 16)
+        var body = layout("“$text”", bodyPaint, bodySize, contentWidth, 18)
         while (body.height > maxBodyHeight && bodySize > minBodySize) {
             bodySize -= width * 0.002f
-            body = layout("“$text”", bodyPaint, bodySize, contentWidth, 16)
+            body = layout("“$text”", bodyPaint, bodySize, contentWidth, 18)
         }
 
-        val block = title.height + gap + body.height + gap + referenceLayout.height
-        var y = bandTop + ((bandBottom - bandTop - block).coerceAtLeast(0f) / 2f)
+        val blockHeight = title.height + gap + body.height + gap + referenceLayout.height
+        var y = bandTop + ((bandBottom - bandTop - blockHeight).coerceAtLeast(0f) / 2f)
         val left = (width - contentWidth) / 2f
         canvas.save()
         canvas.translate(left, y)
@@ -174,7 +172,7 @@ object LockScreenVerse {
         canvas.translate(0f, body.height + gap)
         referenceLayout.draw(canvas)
         canvas.restore()
-        canvas.drawText("Scripture Daily", width / 2f, height * 0.92f, footerPaint)
+        canvas.drawText("WisdomOne", width / 2f, height * 0.92f, footerPaint)
         return bitmap
     }
 

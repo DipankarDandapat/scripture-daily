@@ -4,16 +4,26 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.scripturedaily.data.ScriptureDatabase
+import com.scripturedaily.data.PaletteRefreshWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-/** Restores the lock-screen verse after reboot. The wallpaper itself already survives reboot. */
+/** Restores the selected verse wallpaper and regular notification after reboot. */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
-        if (intent?.action != Intent.ACTION_BOOT_COMPLETED) return
+        val action = intent?.action
+        if (action != Intent.ACTION_BOOT_COMPLETED &&
+            action != Intent.ACTION_TIME_CHANGED &&
+            action != Intent.ACTION_TIMEZONE_CHANGED
+        ) return
         val pending = goAsync()
         val app = context.applicationContext
+        PaletteRefreshWorker.schedule(app)
+        if (action != Intent.ACTION_BOOT_COMPLETED) {
+            pending.finish()
+            return
+        }
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val prefs = app.getSharedPreferences("reader", Context.MODE_PRIVATE)
@@ -27,10 +37,7 @@ class BootReceiver : BroadcastReceiver() {
                     cached.id,
                     cached.scripture,
                     cached.text,
-                    cached.reference(),
-                    cached.isDemo,
-                    forceWallpaper = true,
-                    launchCard = false
+                    cached.reference()
                 )
             } finally {
                 pending.finish()

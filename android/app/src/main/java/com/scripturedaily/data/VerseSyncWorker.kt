@@ -29,10 +29,7 @@ class VerseSyncWorker(context: Context, params: WorkerParameters) : CoroutineWor
                 verse.id,
                 verse.scripture,
                 verse.text,
-                verse.reference(),
-                verse.isDemo,
-                forceWallpaper = true,
-                launchCard = prefs.getBoolean("lock_screen", false)
+                verse.reference()
             )
             Result.success()
         } catch (_: Exception) { Result.retry() }

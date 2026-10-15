@@ -1,7 +1,16 @@
+import secrets
+import string
 from datetime import datetime
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
+
+_UID_CHARS = string.ascii_letters + string.digits  # a-z A-Z 0-9 → 62 chars, 62^10 ≈ 839 trillion
+
+
+def _new_uid() -> str:
+    """Return a cryptographically random 10-char alphanumeric ID."""
+    return "".join(secrets.choice(_UID_CHARS) for _ in range(10))
 
 
 class Religion(Base):
@@ -50,7 +59,7 @@ class Verse(Base):
 
 class User(Base):
     __tablename__ = "users"
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[str] = mapped_column(String(10), primary_key=True, default=_new_uid)
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -59,7 +68,7 @@ class User(Base):
 
 class UserPreference(Base):
     __tablename__ = "user_preferences"
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(10), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     religion_id: Mapped[int] = mapped_column(ForeignKey("religions.id"), default=1)
     language_id: Mapped[int] = mapped_column(ForeignKey("languages.id"), default=1)
     scripture_ids: Mapped[str] = mapped_column(String(255), default="1")  # comma-separated scripture IDs
@@ -72,7 +81,7 @@ class Favorite(Base):
     __tablename__ = "favorites"
     __table_args__ = (UniqueConstraint("user_id", "verse_id", name="uq_user_favorite"),)
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[str] = mapped_column(String(10), ForeignKey("users.id", ondelete="CASCADE"), index=True)
     verse_id: Mapped[int] = mapped_column(ForeignKey("verses.id", ondelete="CASCADE"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     verse: Mapped[Verse] = relationship()
@@ -82,7 +91,7 @@ class Device(Base):
     __tablename__ = "devices"
     __table_args__ = (UniqueConstraint("user_id", "device_token", name="uq_user_device_token"),)
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[str] = mapped_column(String(10), ForeignKey("users.id", ondelete="CASCADE"), index=True)
     device_token: Mapped[str] = mapped_column(String(512))
     platform: Mapped[str] = mapped_column(String(30), default="android")
     device_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -91,7 +100,7 @@ class Device(Base):
 class Feedback(Base):
     __tablename__ = "feedback"
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[str] = mapped_column(String(10), ForeignKey("users.id", ondelete="CASCADE"), index=True)
     rating: Mapped[int] = mapped_column(Integer)  # 1–10
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     consent: Mapped[bool] = mapped_column(Boolean, default=False)

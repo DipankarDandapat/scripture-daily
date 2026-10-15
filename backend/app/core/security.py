@@ -14,7 +14,7 @@ def verify_password(password: str, hashed: str) -> bool:
     return _passwords.verify(password, hashed)
 
 
-def create_access_token(user_id: int) -> str:
+def create_access_token(user_id: str) -> str:
     # Device tokens are long-lived (10 years). No exp claim = never expires.
     payload: dict = {"sub": str(user_id)}
     if settings.access_token_minutes > 0:

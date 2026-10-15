@@ -47,11 +47,35 @@ interface VerseDao {
     @Query("SELECT * FROM cached_verses WHERE favorite = 1 ORDER BY savedAt DESC") suspend fun favorites(): List<CachedVerse>
     @Query("SELECT * FROM cached_verses WHERE scriptureId = :scriptureId AND languageId = :languageId ORDER BY savedAt DESC LIMIT 1") suspend fun matching(scriptureId: Int, languageId: Int): CachedVerse?
     @Query("UPDATE cached_verses SET favorite = :favorite WHERE id = :id") suspend fun setFavorite(id: Int, favorite: Boolean)
+    @Query("UPDATE cached_verses SET favorite = 0") suspend fun clearAllFavorites()
 }
 
-@Database(entities = [CachedVerse::class], version = 1, exportSchema = false)
+// ── Catalog cache (religions + languages, TTL 24 h) ───────────────────────────
+// type: "religion" | "language" | "scripture"
+@Entity(tableName = "cached_catalog")
+data class CachedCatalogItem(
+    @PrimaryKey val key: String,   // e.g. "religion_1", "language_2"
+    val type: String,
+    val itemId: Int,
+    val name: String,
+    val code: String,
+    val religion: String?,         // non-null for scriptures
+    val scripturesJson: String?,   // JSON array for religions: "[{id,name,code},…]"
+    val fetchedAt: Long = System.currentTimeMillis()
+)
+
+@Dao
+interface CatalogDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveAll(items: List<CachedCatalogItem>)
+    @Query("SELECT * FROM cached_catalog WHERE type = :type ORDER BY itemId") suspend fun byType(type: String): List<CachedCatalogItem>
+    @Query("SELECT MIN(fetchedAt) FROM cached_catalog WHERE type = :type") suspend fun oldestFetch(type: String): Long?
+    @Query("DELETE FROM cached_catalog WHERE type = :type") suspend fun deleteByType(type: String)
+}
+
+@Database(entities = [CachedVerse::class, CachedCatalogItem::class], version = 2, exportSchema = false)
 abstract class ScriptureDatabase : RoomDatabase() {
     abstract fun verses(): VerseDao
+    abstract fun catalog(): CatalogDao
     companion object {
         @Volatile private var instance: ScriptureDatabase? = null
         fun get(context: Context): ScriptureDatabase = instance ?: synchronized(this) {

@@ -9,7 +9,13 @@ import okhttp3.OkHttpClient
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
-import retrofit2.http.*
+import retrofit2.http.Body
+import retrofit2.http.DELETE
+import retrofit2.http.GET
+import retrofit2.http.POST
+import retrofit2.http.PUT
+import retrofit2.http.Path
+import retrofit2.http.Query
 
 data class Verse(
     val id: Int,
@@ -63,6 +69,35 @@ data class FeedbackInput(
     val consent: Boolean
 )
 
+data class FavoriteInput(
+    @SerializedName("verse_id") val verseId: Int
+)
+
+data class ChapterVerse(
+    val id: Int,
+    val scripture: String,
+    val religion: String,
+    val book: String?,
+    val chapter: Int,
+    @SerializedName("verse_number") val verseNumber: Int,
+    val language: String,
+    val text: String,
+    val translation: String?,
+    val source: String,
+    val license: String,
+    @SerializedName("is_demo") val isDemo: Boolean
+) {
+    fun toVerse() = Verse(id, scripture, religion, book, chapter, verseNumber, language, text, translation, source, license, isDemo)
+}
+
+data class PreferenceOut(
+    @SerializedName("religion_id") val religionId: Int,
+    @SerializedName("language_id") val languageId: Int,
+    @SerializedName("scripture_ids") val scriptureIds: String,
+    val frequency: String,
+    @SerializedName("notifications_enabled") val notificationsEnabled: Boolean
+)
+
 interface ScriptureApi {
     @GET("health")
     suspend fun health(): Response<HealthResponse>
@@ -92,15 +127,42 @@ interface ScriptureApi {
 
     @GET("verses/search")
     suspend fun search(
-        @Query("q") query: String
+        @Query("q") query: String,
+        @Query("language_id") languageId: Int? = null,
+        @Query("scripture_id") scriptureId: Int? = null
+    ): List<Verse>
+
+    @GET("verses/today/history")
+    suspend fun todayHistory(@Query("count") count: Int = 7): List<Verse>
+
+    @GET("scriptures/{scripture_id}/chapters")
+    suspend fun scriptureChapters(
+        @Path("scripture_id") scriptureId: Int,
+        @Query("language_id") languageId: Int? = null
+    ): List<Int>
+
+    @GET("scriptures/{scripture_id}/chapters/{chapter}/verses")
+    suspend fun chapterVerses(
+        @Path("scripture_id") scriptureId: Int,
+        @Path("chapter") chapter: Int,
+        @Query("language_id") languageId: Int? = null
     ): List<Verse>
 
     // User — token auto-attached by interceptor
     @GET("users/preferences")
-    suspend fun getPreferences(): Response<PreferenceInput>
+    suspend fun getPreferences(): Response<PreferenceOut>
 
     @PUT("users/preferences")
-    suspend fun savePreferences(@Body body: PreferenceInput): Response<PreferenceInput>
+    suspend fun savePreferences(@Body body: PreferenceInput): Response<PreferenceOut>
+
+    @GET("favorites")
+    suspend fun getFavorites(): List<Verse>
+
+    @POST("favorites")
+    suspend fun addFavorite(@Body body: FavoriteInput): Response<Unit>
+
+    @DELETE("favorites/{verse_id}")
+    suspend fun removeFavorite(@Path("verse_id") verseId: Int): Response<Unit>
 
     @POST("devices")
     suspend fun registerDevice(@Body body: DeviceRegInput): Response<Unit>

@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.graphics.Color
 import com.scripturedaily.MainActivity
 import com.scripturedaily.data.ScriptureDatabase
+import com.scripturedaily.lockscreentime.TimePalette
 
 class ScriptureWidget : GlanceAppWidget() {
     suspend fun refreshAll(context: Context) {
@@ -37,18 +38,24 @@ class ScriptureWidget : GlanceAppWidget() {
             prefs.getInt("scripture", 1),
             prefs.getInt("language", 1)
         )
+        val palette = TimePalette.now(prefs.getInt("palette_interval_hours", 6))
         provideContent {
             Column(
                 GlanceModifier
                     .fillMaxSize()
-                    .background(ColorProvider(Color(0xFF2D1B4E)))
+                    .background(ColorProvider(Color(palette.background)))
                     .padding(16.dp)
-                    .clickable(actionStartActivity(Intent(context, MainActivity::class.java)))
+                    .clickable(actionStartActivity(
+                        Intent(context, MainActivity::class.java).apply {
+                            cached?.id?.let { putExtra("verse_id", it) }
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        }
+                    ))
             ) {
                 Text(
                     text = cached?.scripture?.uppercase() ?: "WISDOMONE",
                     style = TextStyle(
-                        color = ColorProvider(Color(0xFFD4A574)),
+                        color = ColorProvider(Color(palette.accent)),
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -57,7 +64,7 @@ class ScriptureWidget : GlanceAppWidget() {
                 Text(
                     text = cached?.let { "\u201c${it.text}\u201d" } ?: "Open the app to load today\u2019s verse.",
                     style = TextStyle(
-                        color = ColorProvider(Color(0xFFF5F0E8)),
+                        color = ColorProvider(Color(palette.primaryText)),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Normal
                     ),
@@ -67,7 +74,7 @@ class ScriptureWidget : GlanceAppWidget() {
                 Text(
                     text = cached?.reference() ?: "Wisdom for every day",
                     style = TextStyle(
-                        color = ColorProvider(Color(0xFF8A8078)),
+                        color = ColorProvider(Color(palette.secondaryText)),
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Normal
                     )

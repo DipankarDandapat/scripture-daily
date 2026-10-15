@@ -12,7 +12,7 @@ class TokenOut(BaseModel):
 
 
 class UserOut(BaseModel):
-    id: int
+    id: str
     email: EmailStr
     model_config = ConfigDict(from_attributes=True)
 
