@@ -45,7 +45,7 @@ import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
-import androidx.compose.material.icons.outlined.MenuBook
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Share
@@ -133,10 +133,10 @@ data class ToastData(val message: String, val type: ToastType = ToastType.INFO)
 fun AppToastHost(hostState: SnackbarHostState) {
     SnackbarHost(hostState = hostState) { data ->
         val isError = data.visuals.message.lowercase().let {
-            it.contains("couldn't") || it.contains("error") || it.contains("failed") || it.contains("not")
+            it.contains("couldn't") || it.contains("error") || it.contains("failed") || it.contains("turned off") || it.contains("cleared")
         }
         val isSuccess = data.visuals.message.lowercase().let {
-            it.contains("saved") || it.contains("thank") || it.contains("removed") || it.contains("success")
+            it.contains("saved") || it.contains("thank") || it.contains("removed") || it.contains("success") || it.contains("enabled") || it.contains("wallpaper")
         }
         val bgColor = PurpleDark
         val icon = when {
@@ -416,10 +416,8 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
         val ttl = 24 * 60 * 60 * 1000L
         val now = System.currentTimeMillis()
         val cachedReligions = withContext(Dispatchers.IO) { catalogDao.byType("religion") }
-        val cachedLanguages = withContext(Dispatchers.IO) { catalogDao.byType("language") }
         val religionsFresh = cachedReligions.isNotEmpty() && (now - (cachedReligions.minOfOrNull { it.fetchedAt } ?: 0L)) < ttl
-        val languagesFresh = cachedLanguages.isNotEmpty() && (now - (cachedLanguages.minOfOrNull { it.fetchedAt } ?: 0L)) < ttl
-        if (religionsFresh && languagesFresh) {
+        if (religionsFresh) {
             religions = cachedReligions.map { row ->
                 val scriptures = row.scripturesJson?.let { json ->
                     try {
@@ -428,13 +426,10 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
                 } ?: emptyList()
                 ReligionItem(row.itemId, row.name, row.code, scriptures)
             }
-            languages = cachedLanguages.map { CatalogItem(it.itemId, it.name, it.code) }
         } else {
             try {
                 val r = ApiClient.api.religions()
-                val l = ApiClient.api.languages()
                 religions = r
-                languages = l
                 val gson = com.google.gson.Gson()
                 val fetchTime = System.currentTimeMillis()
                 withContext(Dispatchers.IO) {
@@ -443,23 +438,23 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
                         CachedCatalogItem("religion_${item.id}", "religion", item.id, item.name, item.code, null,
                             gson.toJson(item.scriptures), fetchTime)
                     })
-                    catalogDao.deleteByType("language")
-                    catalogDao.saveAll(l.map { item ->
-                        CachedCatalogItem("language_${item.id}", "language", item.id, item.name, item.code, null, null, fetchTime)
-                    })
                 }
             } catch (_: Exception) {
-                // Fall back to stale cache if available
                 if (cachedReligions.isNotEmpty()) religions = cachedReligions.map { row ->
                     val scriptures = row.scripturesJson?.let { json ->
                         try { com.google.gson.Gson().fromJson(json, Array<ScriptureItem>::class.java).toList() } catch (_: Exception) { emptyList() }
                     } ?: emptyList()
                     ReligionItem(row.itemId, row.name, row.code, scriptures)
                 }
-                if (cachedLanguages.isNotEmpty()) languages = cachedLanguages.map { CatalogItem(it.itemId, it.name, it.code) }
             }
         }
         if (religion == 0 && religions.isNotEmpty()) religion = religions.first().id
+        // Load languages scoped to the current religion
+        if (religion != 0) {
+            try {
+                languages = ApiClient.api.languages(religion)
+            } catch (_: Exception) {}
+        }
         if (language == 0 && languages.isNotEmpty()) language = languages.first().id
         catalogLoading = false
 
@@ -670,11 +665,21 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
             VerseNotifier.cancelLockScreen(context)
             if (store.getBoolean("reminders", false)) applyCurrentLockVerse()
             else VerseNotifier.cancel(context)
+            snackbarHostState.showSnackbar("Lock screen verse turned off")
         }
     }
 
-    LaunchedEffect(configured, religion, language, scriptureId, page) {
+    var homeLoadKey by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(homeLoadKey) {
         if (configured && page == "Home") loadToday()
+    }
+
+    // Reload verse when user taps Home tab from another tab (not from Save)
+    var prevPage by remember { mutableStateOf("Home") }
+    LaunchedEffect(page) {
+        if (page == "Home" && prevPage != "Home" && configured) loadToday()
+        prevPage = page
     }
 
     if (!configured) {
@@ -717,6 +722,7 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
                         PaletteRefreshWorker.schedule(context)
                         configured = true
                         setupGuidePending = true
+                        homeLoadKey++
                     } else error = "Connect to the internet to load the selected scripture catalog."
                 }
             }
@@ -906,8 +912,7 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
                                     .putInt("palette_interval_hours", paletteIntervalHours)
                                     .putBoolean("reminders", reminders).putBoolean("lock_screen", lockScreen)
                                     .apply()
-                                // Sync to server best-effort
-                        val token = getToken()
+                                val token = getToken()
                                 if (token != null) {
                                     try {
                                         val freqApi = when (frequency) { "Every 6 hours" -> "6h"; "Every hour" -> "1h"; else -> "daily" }
@@ -924,8 +929,13 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
                                         )
                                     } else VerseNotifier.cancel(context)
                                 }
+                                snackbarHostState.showSnackbar("Preferences saved")
                                 page = "Home"
-                            } else error = "Couldn't reach the scripture catalog. Your saved settings were not changed."
+                                homeLoadKey++
+                            } else {
+                                error = "Couldn't reach the scripture catalog. Your saved settings were not changed."
+                                snackbarHostState.showSnackbar("Couldn't save preferences. Please try again.")
+                            }
                         }
                     },
                         onFontSize = { sz -> fontSize = sz; store.edit().putInt("font_size", sz).apply() },
@@ -1174,6 +1184,22 @@ private fun Onboarding(
     onLanguage: (Int) -> Unit,
     onContinue: () -> Unit
 ) {
+    val scope = rememberCoroutineScope()
+    var localLanguages by remember(languages) { mutableStateOf(languages) }
+    var langLoading by remember { mutableStateOf(false) }
+
+    fun reloadLanguages(religionId: Int) {
+        scope.launch {
+            langLoading = true
+            try {
+                val fetched = withContext(Dispatchers.IO) { ApiClient.api.languages(religionId) }
+                localLanguages = fetched
+                if (fetched.isNotEmpty()) onLanguage(fetched.first().id)
+            } catch (_: Exception) {}
+            langLoading = false
+        }
+    }
+
     Column(
         Modifier.fillMaxSize().background(Parchment).verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp).statusBarsPadding()
@@ -1195,52 +1221,86 @@ private fun Onboarding(
             religions.forEach { item ->
                 val selected = religion == item.id
                 val scriptureNames = item.scriptures.joinToString(", ") { it.name }
+                val traditionIconRes = when (item.code.lowercase()) {
+                    "hinduism"       -> R.drawable.tradition_hinduism
+                    "christianity"   -> R.drawable.tradition_christianity
+                    "islam"          -> R.drawable.tradition_islam
+                    "buddhism"       -> R.drawable.tradition_buddhism
+                    else             -> R.drawable.tradition_general_wisdom
+                }
                 Box(
-                    Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(18.dp))
-                        .background(if (selected) Brush.linearGradient(listOf(Amber.copy(alpha = 0.18f), AmberLight.copy(alpha = 0.08f))) else Brush.linearGradient(listOf(Color.White, Color.White)))
-                        .border(BorderStroke(if (selected) 1.5.dp else 1.dp, if (selected) Amber else Amber.copy(alpha = 0.15f)), RoundedCornerShape(18.dp))
-                        .clickable { onReligion(item.id) }
-                        .padding(horizontal = 18.dp, vertical = 16.dp)
+                    Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(16.dp))
+                        .background(if (selected) Amber.copy(alpha = 0.07f) else Color.White)
+                        .border(BorderStroke(if (selected) 1.5.dp else 1.dp, if (selected) Amber else Color(0xFFE8E0D8)), RoundedCornerShape(16.dp))
+                        .clickable { onReligion(item.id); reloadLanguages(item.id) }
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier.size(44.dp).clip(RoundedCornerShape(12.dp))
+                                .background(if (selected) Amber.copy(alpha = 0.15f) else Color(0xFFF0EBE3)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(painter = painterResource(traditionIconRes), contentDescription = null, tint = if (selected) Amber else Color(0xFF8A7A6A), modifier = Modifier.size(26.dp))
+                        }
+                        Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(item.name, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = if (selected) Ink else InkMid)
-                            if (scriptureNames.isNotEmpty()) Text(scriptureNames, fontSize = 13.sp, color = if (selected) Amber else InkSoft)
+                            Text(item.name, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, fontSize = 15.sp, color = if (selected) Ink else InkMid)
+                            if (scriptureNames.isNotEmpty()) Text(scriptureNames, fontSize = 12.sp, color = InkSoft)
                         }
                         Box(
                             Modifier.size(22.dp).clip(CircleShape)
                                 .background(if (selected) Amber else Color.Transparent)
-                                .border(BorderStroke(1.5.dp, if (selected) Amber else Amber.copy(alpha = 0.3f)), CircleShape),
+                                .border(BorderStroke(1.5.dp, if (selected) Amber else Color(0xFFCCC4D8)), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             if (selected) Box(Modifier.size(8.dp).clip(CircleShape).background(Color.White))
                         }
+                        Spacer(Modifier.width(8.dp))
+                        Icon(
+                            painter = painterResource(R.drawable.chevron_right),
+                            contentDescription = null,
+                            tint = if (selected) Amber else InkSoft.copy(alpha = 0.4f),
+                            modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = if (selected) 90f else 0f }
+                        )
                     }
                 }
             }
         }
 
         Spacer(Modifier.height(28.dp))
-        Text("LANGUAGE", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = InkSoft, letterSpacing = 1.4.sp)
+        Text("LANGUAGE", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Amber, letterSpacing = 1.4.sp)
         Spacer(Modifier.height(10.dp))
 
-        if (catalogLoading) {
+        if (catalogLoading || langLoading) {
             Box(Modifier.fillMaxWidth().height(56.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(color = Amber, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
             }
         } else {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                languages.forEach { item ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                localLanguages.forEach { item ->
                     val selected = language == item.id
                     Box(
                         Modifier.weight(1f).clip(RoundedCornerShape(14.dp))
-                            .background(if (selected) Amber else Color.White)
-                            .border(BorderStroke(1.5.dp, if (selected) Amber else Amber.copy(alpha = 0.2f)), RoundedCornerShape(14.dp))
+                            .background(if (selected) Amber.copy(alpha = 0.08f) else Color.White)
+                            .border(BorderStroke(if (selected) 1.5.dp else 1.dp, if (selected) Amber else Color(0xFFE8E0D8)), RoundedCornerShape(14.dp))
                             .clickable { onLanguage(item.id) }
-                            .padding(vertical = 14.dp),
-                        contentAlignment = Alignment.Center
+                            .padding(horizontal = 10.dp, vertical = 12.dp)
                     ) {
-                        Text(item.name, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, fontSize = 15.sp, color = if (selected) Color.White else InkMid)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                Modifier.size(18.dp).clip(CircleShape)
+                                    .background(if (selected) Amber else Color.Transparent)
+                                    .border(BorderStroke(1.5.dp, if (selected) Amber else Color(0xFFCCC4D8)), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (selected) Box(Modifier.size(7.dp).clip(CircleShape).background(Color.White))
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Column {
+                                Text(item.name, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, fontSize = 13.sp, color = if (selected) Ink else InkMid)
+                                Text(item.nativeScript.ifEmpty { languageNativeScript(item.name) }, fontSize = 11.sp, color = if (selected) Amber else InkSoft)
+                            }
+                        }
                     }
                 }
             }
@@ -1256,7 +1316,7 @@ private fun Onboarding(
         Spacer(Modifier.height(32.dp))
         Button(
             onClick = onContinue,
-            enabled = !catalogLoading && religion != 0 && language != 0,
+            enabled = !catalogLoading && !langLoading && religion != 0 && language != 0,
             modifier = Modifier.fillMaxWidth().height(56.dp),
             shape = RoundedCornerShape(18.dp),
             colors = ButtonDefaults.buttonColors(containerColor = Ink)
@@ -1534,6 +1594,7 @@ private fun SettingsScreen(
     onFontSize: (Int) -> Unit, onFeedback: () -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val pinWidgetSupported = remember { AppWidgetManager.getInstance(context).isRequestPinAppWidgetSupported }
     val homeWidgetAdded = remember(resumeTick) {
         AppWidgetManager.getInstance(context)
@@ -1541,179 +1602,297 @@ private fun SettingsScreen(
             .isNotEmpty()
     }
 
+    var localLanguages by remember(languages) { mutableStateOf(languages) }
+    var langLoading by remember { mutableStateOf(false) }
+
+    fun reloadLanguages(religionId: Int) {
+        scope.launch {
+            langLoading = true
+            try {
+                val fetched = withContext(Dispatchers.IO) { ApiClient.api.languages(religionId) }
+                localLanguages = fetched
+                // Always auto-select first language of the new tradition
+                if (fetched.isNotEmpty()) onLanguage(fetched.first().id)
+            } catch (_: Exception) {}
+            langLoading = false
+        }
+    }
+
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Amber.copy(alpha = 0.06f), Color.Transparent))).padding(horizontal = 20.dp, vertical = 20.dp)) {
+        // Header
+        Box(
+            Modifier.fillMaxWidth()
+                .background(Color(0xFFFAF6F0))
+                .padding(horizontal = 20.dp, vertical = 20.dp)
+        ) {
             Column {
-                Text("Settings", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                Text("Personalise your experience", fontSize = 13.sp, color = InkSoft)
+                Text("Personalise Your Experience", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Ink)
+                Spacer(Modifier.height(4.dp))
+                Text("Choose your tradition, language and preferences for daily inspiration", fontSize = 13.sp, color = InkSoft, lineHeight = 19.sp)
             }
         }
         Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Spacer(Modifier.height(4.dp))
             SettingsSectionLabel("YOUR TRADITION")
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 religions.forEach { item ->
                     val selected = religion == item.id
+                    val traditionIconRes = when (item.code.lowercase()) {
+                        "hinduism"       -> R.drawable.tradition_hinduism
+                        "christianity"   -> R.drawable.tradition_christianity
+                        "islam"          -> R.drawable.tradition_islam
+                        "buddhism"       -> R.drawable.tradition_buddhism
+                        else             -> R.drawable.tradition_general_wisdom
+                    }
                     Box(
                         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                            .background(if (selected) Amber.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface)
-                            .border(BorderStroke(if (selected) 1.5.dp else 1.dp, if (selected) Amber else Amber.copy(alpha = 0.2f)), RoundedCornerShape(16.dp))
-                            .clickable { onReligion(item.id) }
+                            .background(if (selected) Amber.copy(alpha = 0.07f) else MaterialTheme.colorScheme.surface)
+                            .border(BorderStroke(if (selected) 1.5.dp else 1.dp, if (selected) Amber else Color(0xFFE8E0D8)), RoundedCornerShape(16.dp))
+                            .clickable { onReligion(item.id); reloadLanguages(item.id) }
                     ) {
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(selected = selected, onClick = { onReligion(item.id) }, colors = RadioButtonDefaults.colors(selectedColor = Amber))
-                            Spacer(Modifier.width(8.dp))
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                Modifier.size(44.dp).clip(RoundedCornerShape(12.dp))
+                                    .background(if (selected) Amber.copy(alpha = 0.15f) else Color(0xFFF0EBE3)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(painter = painterResource(traditionIconRes), contentDescription = null, tint = if (selected) Amber else Color(0xFF8A7A6A), modifier = Modifier.size(26.dp))
+                            }
+                            Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(item.name, fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, color = if (selected) Ink else InkMid)
                                 val scriptureNames = item.scriptures.joinToString(", ") { it.name }
                                 if (scriptureNames.isNotEmpty()) Text(scriptureNames, fontSize = 12.sp, color = InkSoft)
+                            }
+                            Box(
+                                Modifier.size(22.dp).clip(CircleShape)
+                                    .background(if (selected) Amber else Color.Transparent)
+                                    .border(BorderStroke(1.5.dp, if (selected) Amber else Color(0xFFCCC4D8)), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (selected) Box(Modifier.size(8.dp).clip(CircleShape).background(Color.White))
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Icon(
+                                painter = painterResource(R.drawable.chevron_right),
+                                contentDescription = null,
+                                tint = if (selected) Amber else InkSoft.copy(alpha = 0.4f),
+                                modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = if (selected) 90f else 0f }
+                            )
+                        }
+                    }
+                }
+            }
+
+            SettingsSectionLabel("SELECT LANGUAGE")
+            if (langLoading) {
+                Box(Modifier.fillMaxWidth().height(50.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(color = Amber, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                }
+            } else {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    localLanguages.forEach { item ->
+                        val selected = language == item.id
+                        Box(
+                            Modifier.weight(1f).clip(RoundedCornerShape(14.dp))
+                                .background(if (selected) Amber.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface)
+                                .border(BorderStroke(if (selected) 1.5.dp else 1.dp, if (selected) Amber else Color(0xFFE8E0D8)), RoundedCornerShape(14.dp))
+                                .clickable { onLanguage(item.id) }
+                                .padding(horizontal = 10.dp, vertical = 12.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    Modifier.size(18.dp).clip(CircleShape)
+                                        .background(if (selected) Amber else Color.Transparent)
+                                        .border(BorderStroke(1.5.dp, if (selected) Amber else Color(0xFFCCC4D8)), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (selected) Box(Modifier.size(7.dp).clip(CircleShape).background(Color.White))
+                                }
+                                Spacer(Modifier.width(8.dp))
+                                Column {
+                                    Text(item.name, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, fontSize = 13.sp, color = if (selected) Ink else InkMid)
+                                    Text(item.nativeScript, fontSize = 11.sp, color = if (selected) Amber else InkSoft)
+                                }
                             }
                         }
                     }
                 }
             }
 
-            SettingsSectionLabel("LANGUAGE")
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                languages.forEach { item ->
-                    val selected = language == item.id
-                    Button(
-                        onClick = { onLanguage(item.id) },
-                        modifier = Modifier.weight(1f).height(50.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = if (selected) Amber else MaterialTheme.colorScheme.surface, contentColor = if (selected) Color.White else InkMid),
-                        border = BorderStroke(1.5.dp, if (selected) Amber else Amber.copy(alpha = 0.2f))
-                    ) { Text(item.name, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, fontSize = 15.sp) }
-                }
-            }
-
             SettingsSectionLabel("VERSE FREQUENCY")
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("Daily", "Every 6 hours", "Every hour").forEach { label ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(
+                    Triple("Daily", "Once a day", "📅"),
+                    Triple("Every 6 hours", "3 times a day", "⏰"),
+                    Triple("Every hour", "24 times a day", "⏰")
+                ).forEach { (label, sub, icon) ->
                     val selected = frequency == label
                     Box(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                        Modifier.weight(1f).clip(RoundedCornerShape(14.dp))
                             .background(if (selected) Amber.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface)
-                            .border(BorderStroke(if (selected) 1.5.dp else 1.dp, if (selected) Amber else Amber.copy(alpha = 0.2f)), RoundedCornerShape(16.dp))
+                            .border(BorderStroke(if (selected) 1.5.dp else 1.dp, if (selected) Amber else Color(0xFFE8E0D8)), RoundedCornerShape(14.dp))
                             .clickable { onFrequency(label) }
+                            .padding(horizontal = 8.dp, vertical = 12.dp)
                     ) {
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                            RadioButton(selected = selected, onClick = { onFrequency(label) }, colors = RadioButtonDefaults.colors(selectedColor = Amber))
-                            Spacer(Modifier.width(8.dp))
-                            Text(label, fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, color = if (selected) Ink else InkMid)
+                        Column(horizontalAlignment = Alignment.Start) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(icon, fontSize = 16.sp)
+                                Spacer(Modifier.width(4.dp))
+                                Text(label, fontSize = 12.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, color = if (selected) Ink else InkMid, lineHeight = 16.sp)
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                Text(sub, fontSize = 10.sp, color = InkSoft)
+                                Box(
+                                    Modifier.size(16.dp).clip(CircleShape)
+                                        .background(if (selected) Amber else Color.Transparent)
+                                        .border(BorderStroke(1.5.dp, if (selected) Amber else Color(0xFFCCC4D8)), CircleShape),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (selected) Box(Modifier.size(6.dp).clip(CircleShape).background(Color.White))
+                                }
+                            }
                         }
                     }
                 }
             }
 
             SettingsSectionLabel("NOTIFICATIONS & WIDGET")
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.surface)
-                        .border(BorderStroke(1.dp, Amber.copy(alpha = 0.2f)), RoundedCornerShape(16.dp))
-                ) {
-                    SettingsToggleRow("Verse reminders", "Updates the verse notification at the selected verse frequency.", reminders, onReminders)
-                }
-                Box(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.surface)
-                        .border(BorderStroke(1.dp, Amber.copy(alpha = 0.2f)), RoundedCornerShape(16.dp))
-                ) {
-                    SettingsToggleRow("Lock screen verse", "Sets today's verse as the lock-screen wallpaper and posts a regular notification. Android controls notification privacy. Turning this off clears the lock-screen image (your home-screen wallpaper is unchanged). Android may keep the static image after uninstall, so turn this off before uninstalling if you want it removed. If reminders stay on, their notifications remain in the shade but are hidden while locked.", lockScreen, onLockScreen)
-                }
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(BorderStroke(1.dp, Color(0xFFE8E0D8)), RoundedCornerShape(16.dp)),
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                SettingsToggleRow(
+                    "Verse reminders",
+                    "Send notification at selected frequency",
+                    icon = { Icon(painter = painterResource(R.drawable.notification_bell), contentDescription = null, tint = Amber, modifier = Modifier.size(20.dp)) },
+                    checked = reminders, onChecked = onReminders
+                )
+                HorizontalDivider(color = Color(0xFFE8E0D8), thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 16.dp))
+                SettingsToggleRow(
+                    "Lock screen verse",
+                    "Shows today's verse on your lock screen",
+                    icon = { Icon(painter = painterResource(R.drawable.lock_screen), contentDescription = null, tint = Amber, modifier = Modifier.size(20.dp)) },
+                    checked = lockScreen, onChecked = onLockScreen
+                )
                 if (lockScreen || homeWidgetAdded) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SettingsSectionLabel("LOCK SCREEN & WIDGET COLOR CHANGE FREQUENCY")
-                        Text("Choose how often the lock-screen wallpaper and home-screen widget palette changes. Six hours keeps the Night, Morning, Afternoon, and Evening rhythm. Changes apply without changing the verse.", fontSize = 12.sp, lineHeight = 18.sp, color = InkSoft)
+                    HorizontalDivider(color = Color(0xFFE8E0D8), thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 16.dp))
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Lock screen & widget colour frequency", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Ink)
+                        Text("How often the wallpaper and widget palette changes.", fontSize = 11.sp, color = InkSoft)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf(1, 6, 12, 24).forEach { hours ->
-                                val selected = paletteIntervalHours == hours
+                                val sel = paletteIntervalHours == hours
                                 Box(
-                                    Modifier.weight(1f).clip(RoundedCornerShape(13.dp))
-                                        .background(if (selected) Amber.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surface)
-                                        .border(BorderStroke(if (selected) 1.5.dp else 1.dp, if (selected) Amber else Amber.copy(alpha = 0.2f)), RoundedCornerShape(13.dp))
+                                    Modifier.weight(1f).clip(RoundedCornerShape(10.dp))
+                                        .background(if (sel) Amber.copy(alpha = 0.12f) else Color(0xFFF5F0EA))
+                                        .border(BorderStroke(if (sel) 1.5.dp else 1.dp, if (sel) Amber else Color(0xFFE8E0D8)), RoundedCornerShape(10.dp))
                                         .clickable { onPaletteInterval(hours) }
-                                        .padding(vertical = 13.dp),
+                                        .padding(vertical = 10.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text("${hours}h", fontSize = 14.sp, fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium, color = if (selected) Amber else InkMid)
+                                    Text("${hours}h", fontSize = 13.sp, fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal, color = if (sel) Amber else InkMid)
                                 }
                             }
                         }
-                        Text("Current palette: ${TimePalette.now(paletteIntervalHours).period} · every ${paletteIntervalHours}h", fontSize = 12.sp, lineHeight = 18.sp, color = InkSoft)
+                        Text("Current: ${TimePalette.now(paletteIntervalHours).period} · every ${paletteIntervalHours}h", fontSize = 11.sp, color = InkSoft)
                     }
                 }
-                Box(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.surface)
-                        .border(BorderStroke(1.dp, Amber.copy(alpha = 0.2f)), RoundedCornerShape(16.dp))
-                        .padding(horizontal = 16.dp, vertical = 14.dp)
-                ) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Home screen widget", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Ink)
-                            Text(
-                                if (homeWidgetAdded) "Scripture Daily is on your home screen. Its colors refresh automatically."
-                                else if (pinWidgetSupported) "Tap to add the verse widget to your home screen."
-                                else "Long-press your home screen → Widgets to add manually.",
-                                fontSize = 12.sp, color = InkSoft
-                            )
-                        }
-                        if (pinWidgetSupported) {
-                            Spacer(Modifier.width(12.dp))
-                            Button(
-                                onClick = {
-                                    val provider = ComponentName(context, ScriptureWidgetReceiver::class.java)
-                                    AppWidgetManager.getInstance(context).requestPinAppWidget(provider, null, null)
-                                },
-                                shape = RoundedCornerShape(10.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = Amber),
-                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
-                            ) {
-                                Text(if (homeWidgetAdded) "Add another" else "Add", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
-                            }
+                HorizontalDivider(color = Color(0xFFE8E0D8), thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 16.dp))
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier.size(38.dp).clip(RoundedCornerShape(10.dp)).background(Amber.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) { Icon(painter = painterResource(R.drawable.home_widget), contentDescription = null, tint = Amber, modifier = Modifier.size(20.dp)) }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Home screen widget", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Ink)
+                        Text(
+                            if (homeWidgetAdded) "Widget is on your home screen"
+                            else "Tap to add the verse widget to your home screen",
+                            fontSize = 12.sp, color = InkSoft
+                        )
+                    }
+                    if (pinWidgetSupported) {
+                        Spacer(Modifier.width(8.dp))
+                        OutlinedButton(
+                            onClick = {
+                                val provider = ComponentName(context, ScriptureWidgetReceiver::class.java)
+                                AppWidgetManager.getInstance(context).requestPinAppWidget(provider, null, null)
+                            },
+                            shape = RoundedCornerShape(20.dp),
+                            border = BorderStroke(1.5.dp, Amber),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Amber),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                        ) {
+                            Text(if (homeWidgetAdded) "Add another" else "Add Widget", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
             }
 
-            SettingsSectionLabel("SYSTEM")
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Box(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.surface)
-                        .border(BorderStroke(1.dp, Amber.copy(alpha = 0.2f)), RoundedCornerShape(16.dp))
-                ) {
-                    SettingsLinkRow("Notification settings") { context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply { putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName) }) }
+            SettingsSectionLabel("READING PREFERENCES")
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(BorderStroke(1.dp, Color(0xFFE8E0D8)), RoundedCornerShape(16.dp))
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        Modifier.size(38.dp).clip(RoundedCornerShape(10.dp)).background(Amber.copy(alpha = 0.12f)),
+                        contentAlignment = Alignment.Center
+                    ) { Icon(painter = painterResource(R.drawable.reading_font_size), contentDescription = null, tint = Amber, modifier = Modifier.size(20.dp)) }
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text("Verse font size", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Ink)
+                        Text("Adjust the text size for better readability", fontSize = 12.sp, color = InkSoft)
+                    }
                 }
-                Box(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                        .background(MaterialTheme.colorScheme.surface)
-                        .border(BorderStroke(1.dp, Amber.copy(alpha = 0.2f)), RoundedCornerShape(16.dp))
-                ) {
-                    SettingsLinkRow("Battery settings") { context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("A", fontSize = 13.sp, color = InkSoft, fontWeight = FontWeight.Normal)
+                    Spacer(Modifier.width(4.dp))
+                    Slider(
+                        value = fontSize.toFloat(),
+                        onValueChange = { onFontSize(it.toInt()) },
+                        valueRange = 16f..32f,
+                        steps = 7,
+                        modifier = Modifier.weight(1f),
+                        colors = SliderDefaults.colors(thumbColor = Amber, activeTrackColor = Amber, inactiveTrackColor = Amber.copy(alpha = 0.2f))
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text("A", fontSize = 22.sp, color = InkSoft, fontWeight = FontWeight.Bold)
                 }
-            }
-
-            SettingsSectionLabel("READING")
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("Verse font size", fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Ink)
-                    Text("${fontSize}sp", fontSize = 13.sp, color = Amber, fontWeight = FontWeight.SemiBold)
-                }
-                Slider(
-                    value = fontSize.toFloat(),
-                    onValueChange = { onFontSize(it.toInt()) },
-                    valueRange = 16f..32f,
-                    steps = 7,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = SliderDefaults.colors(thumbColor = Amber, activeTrackColor = Amber, inactiveTrackColor = Amber.copy(alpha = 0.2f))
-                )
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text("Small", fontSize = 11.sp, color = InkSoft)
+                    Text("Medium", fontSize = 11.sp, color = Amber, fontWeight = FontWeight.SemiBold)
                     Text("Large", fontSize = 11.sp, color = InkSoft)
                 }
             }
+            SettingsSectionLabel("SYSTEM")
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.surface)
+                    .border(BorderStroke(1.dp, Color(0xFFE8E0D8)), RoundedCornerShape(16.dp)),
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                SettingsLinkRow(
+                    "Notification settings",
+                    "Open Android notification settings",
+                    icon = { Icon(painter = painterResource(R.drawable.system_settings), contentDescription = null, tint = Amber, modifier = Modifier.size(20.dp)) }
+                ) { context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply { putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName) }) }
+                HorizontalDivider(color = Color(0xFFE8E0D8), thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 16.dp))
+                SettingsLinkRow(
+                    "Battery settings",
+                    "Optimise for uninterrupted verse delivery",
+                    icon = { Icon(painter = painterResource(R.drawable.battery_settings), contentDescription = null, tint = Amber, modifier = Modifier.size(20.dp)) }
+                ) { context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+            }
+
             if (notice != null) {
                 Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color(0xFF9C463D).copy(alpha = 0.08f)).padding(14.dp)) {
                     Text(notice, color = Color(0xFF9C463D), fontSize = 13.sp)
@@ -1724,9 +1903,11 @@ private fun SettingsScreen(
                 onClick = onSave,
                 modifier = Modifier.fillMaxWidth().height(56.dp),
                 shape = RoundedCornerShape(18.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Ink)
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2D1B4E))
             ) {
-                Text("Save preferences", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                Icon(painter = painterResource(R.drawable.save_preferences), contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
+                Spacer(Modifier.width(8.dp))
+                Text("Save preferences", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Color.White)
             }
 
             HorizontalDivider(
@@ -1829,14 +2010,44 @@ private fun FeedbackScreen(onDismiss: () -> Unit, onSubmit: (Int, String, Boolea
     }
 }
 
-@Composable
-private fun SettingsSectionLabel(label: String) {
-    Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = InkSoft, letterSpacing = 1.4.sp)
+private fun traditionIcon(code: String): String = when (code.lowercase()) {
+    "hinduism"       -> "🛕"
+    "christianity"   -> "✝"
+    "islam"          -> "☽"
+    "buddhism"       -> "❁"
+    "general wisdom" -> "✿"
+    else             -> "✶"
+}
+
+private fun languageNativeScript(name: String): String = when (name.lowercase()) {
+    "hindi"   -> "हिन्दी"
+    "english" -> "English"
+    "bengali" -> "বাংলা"
+    "arabic"  -> "عربي"
+    "tamil"   -> "தமிழ்"
+    "telugu"  -> "తెలుగు"
+    "marathi" -> "मराठी"
+    else      -> name
 }
 
 @Composable
-private fun SettingsToggleRow(title: String, subtitle: String, checked: Boolean, onChecked: (Boolean) -> Unit) {
+private fun SettingsSectionLabel(label: String, showInfo: Boolean = false) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = Amber, letterSpacing = 1.4.sp, modifier = Modifier.weight(1f))
+        if (showInfo) {
+            Icon(painter = painterResource(R.drawable.info), contentDescription = null, tint = InkSoft.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
+        }
+    }
+}
+
+@Composable
+private fun SettingsToggleRow(title: String, subtitle: String, icon: @Composable () -> Unit, checked: Boolean, onChecked: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier.size(38.dp).clip(RoundedCornerShape(10.dp)).background(Amber.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center
+        ) { icon() }
+        Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
             Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Ink)
             Text(subtitle, fontSize = 12.sp, color = InkSoft)
@@ -1846,16 +2057,21 @@ private fun SettingsToggleRow(title: String, subtitle: String, checked: Boolean,
 }
 
 @Composable
-private fun SettingsLinkRow(label: String, onClick: () -> Unit) {
+private fun SettingsLinkRow(label: String, subtitle: String, icon: @Composable () -> Unit, onClick: () -> Unit) {
     Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 18.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label, fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f), color = Amber)
-        Icon(Icons.Outlined.Share, contentDescription = null, tint = Amber.copy(alpha = 0.5f), modifier = Modifier.size(16.dp))
+        Box(
+            Modifier.size(38.dp).clip(RoundedCornerShape(10.dp)).background(Amber.copy(alpha = 0.12f)),
+            contentAlignment = Alignment.Center
+        ) { icon() }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(label, fontSize = 15.sp, fontWeight = FontWeight.Medium, color = Ink)
+            Text(subtitle, fontSize = 12.sp, color = InkSoft)
+        }
+        Icon(painter = painterResource(R.drawable.chevron_right), contentDescription = null, tint = InkSoft.copy(alpha = 0.5f), modifier = Modifier.size(18.dp))
     }
 }
 
@@ -2041,7 +2257,7 @@ private fun ChapterBrowserScreen(
                 .background(Parchment).clickable(enabled = false) {}
         ) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.MenuBook, contentDescription = null, tint = Amber, modifier = Modifier.size(20.dp))
+                Icon(Icons.AutoMirrored.Outlined.MenuBook, contentDescription = null, tint = Amber, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(10.dp))
                 Text("Browse Chapters", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Ink, modifier = Modifier.weight(1f))
                 Box(Modifier.size(32.dp).clip(CircleShape).background(Ink.copy(alpha = 0.08f)).clickable(onClick = onDismiss), contentAlignment = Alignment.Center) {

@@ -9,20 +9,28 @@ from app.api.v1.routes import router
 
 
 def _ensure_schema() -> None:
-    """For SQLite dev mode: if the users.id column is still INTEGER (old schema),
-    drop all tables and let create_all rebuild them with the current models.
-    This is safe because SQLite is local-only; never runs against PostgreSQL."""
+    """For SQLite dev mode: migrate schema changes without dropping data."""
     if not settings.database_url.startswith("sqlite"):
         return
     from sqlalchemy import inspect, text
     insp = inspect(engine)
     if "users" not in insp.get_table_names():
         return  # fresh DB — create_all will handle it
+    # Drop and rebuild if old integer user PK or missing religion_languages table
     cols = {c["name"]: c for c in insp.get_columns("users")}
     user_id_col = cols.get("id", {})
-    # SQLAlchemy reflects SQLite INTEGER PK as type 'INTEGER'
-    if str(user_id_col.get("type", "")).upper().startswith("INTEGER"):
+    old_int_pk = str(user_id_col.get("type", "")).upper().startswith("INTEGER")
+    missing_rl_table = "religion_languages" not in insp.get_table_names()
+    if old_int_pk or missing_rl_table:
         Base.metadata.drop_all(bind=engine)
+        return
+    # Add missing columns to existing tables (non-destructive)
+    if "languages" in insp.get_table_names():
+        lang_cols = {c["name"] for c in insp.get_columns("languages")}
+        with engine.connect() as conn:
+            if "native_script" not in lang_cols:
+                conn.execute(text("ALTER TABLE languages ADD COLUMN native_script VARCHAR(80) NOT NULL DEFAULT ''"))
+                conn.commit()
 
 
 @asynccontextmanager

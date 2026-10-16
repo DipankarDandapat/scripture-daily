@@ -35,6 +35,7 @@ class CatalogOut(BaseModel):
     name: str
     code: str
     religion: str | None = None
+    native_script: str = ""
 
 
 class VerseOut(BaseModel):

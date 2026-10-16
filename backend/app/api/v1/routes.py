@@ -93,8 +93,23 @@ def religions(db: Session = Depends(get_db)):
 
 
 @router.get("/languages", response_model=list[CatalogOut])
-def languages(db: Session = Depends(get_db)):
-    return db.scalars(select(Language).order_by(Language.id)).all()
+def languages(religion_id: int | None = None, db: Session = Depends(get_db)):
+    if religion_id is not None:
+        from sqlalchemy import join
+        religion = db.get(Religion, religion_id)
+        if religion is None:
+            raise HTTPException(status_code=404, detail="Religion not found")
+        from app.models.entities import ReligionLanguage
+        query = (
+            select(Language)
+            .join(ReligionLanguage, ReligionLanguage.language_id == Language.id)
+            .where(ReligionLanguage.religion_id == religion_id)
+            .order_by(ReligionLanguage.sort_order)
+        )
+        langs = db.scalars(query).all()
+    else:
+        langs = db.scalars(select(Language).order_by(Language.id)).all()
+    return [{"id": l.id, "name": l.name, "code": l.code, "native_script": l.native_script} for l in langs]
 
 
 @router.get("/scriptures", response_model=list[CatalogOut])

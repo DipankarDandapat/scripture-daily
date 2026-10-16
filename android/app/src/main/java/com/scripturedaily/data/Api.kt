@@ -34,7 +34,7 @@ data class Verse(
     fun reference(): String = "${book?.let { "$it · " } ?: ""}Chapter $chapter · Verse $verseNumber"
 }
 
-data class CatalogItem(val id: Int, val name: String, val code: String, val religion: String? = null)
+data class CatalogItem(val id: Int, val name: String, val code: String, val religion: String? = null, @SerializedName("native_script") val nativeScript: String = "")
 
 data class ScriptureItem(val id: Int, val name: String, val code: String)
 
@@ -111,7 +111,7 @@ interface ScriptureApi {
 
     // Catalog — public
     @GET("religions") suspend fun religions(): List<ReligionItem>
-    @GET("languages") suspend fun languages(): List<CatalogItem>
+    @GET("languages") suspend fun languages(@Query("religion_id") religionId: Int? = null): List<CatalogItem>
     @GET("scriptures") suspend fun scriptures(@Query("religion_id") religion: Int): List<CatalogItem>
 
     // Verses — token auto-attached by interceptor

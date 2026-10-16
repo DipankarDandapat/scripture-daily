@@ -5,11 +5,10 @@ from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, Uni
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 
-_UID_CHARS = string.ascii_letters + string.digits  # a-z A-Z 0-9 → 62 chars, 62^10 ≈ 839 trillion
+_UID_CHARS = string.ascii_letters + string.digits
 
 
 def _new_uid() -> str:
-    """Return a cryptographically random 10-char alphanumeric ID."""
     return "".join(secrets.choice(_UID_CHARS) for _ in range(10))
 
 
@@ -19,6 +18,7 @@ class Religion(Base):
     name: Mapped[str] = mapped_column(String(80), unique=True)
     code: Mapped[str] = mapped_column(String(40), unique=True)
     scriptures: Mapped[list["Scripture"]] = relationship(back_populates="religion")
+    languages: Mapped[list["Language"]] = relationship(secondary="religion_languages", back_populates="religions")
 
 
 class Language(Base):
@@ -26,6 +26,17 @@ class Language(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(80), unique=True)
     code: Mapped[str] = mapped_column(String(12), unique=True)
+    native_script: Mapped[str] = mapped_column(String(80), default="")
+    religions: Mapped[list["Religion"]] = relationship(secondary="religion_languages", back_populates="languages")
+
+
+class ReligionLanguage(Base):
+    __tablename__ = "religion_languages"
+    __table_args__ = (UniqueConstraint("religion_id", "language_id", name="uq_religion_language"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    religion_id: Mapped[int] = mapped_column(ForeignKey("religions.id", ondelete="CASCADE"), index=True)
+    language_id: Mapped[int] = mapped_column(ForeignKey("languages.id", ondelete="CASCADE"), index=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class Scripture(Base):
@@ -71,7 +82,7 @@ class UserPreference(Base):
     user_id: Mapped[str] = mapped_column(String(10), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     religion_id: Mapped[int] = mapped_column(ForeignKey("religions.id"), default=1)
     language_id: Mapped[int] = mapped_column(ForeignKey("languages.id"), default=1)
-    scripture_ids: Mapped[str] = mapped_column(String(255), default="1")  # comma-separated scripture IDs
+    scripture_ids: Mapped[str] = mapped_column(String(255), default="1")
     frequency: Mapped[str] = mapped_column(String(20), default="daily")
     notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     user: Mapped[User] = relationship(back_populates="preferences")
@@ -101,7 +112,7 @@ class Feedback(Base):
     __tablename__ = "feedback"
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[str] = mapped_column(String(10), ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    rating: Mapped[int] = mapped_column(Integer)  # 1–10
+    rating: Mapped[int] = mapped_column(Integer)
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     consent: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
