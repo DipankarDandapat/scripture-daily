@@ -1,4 +1,4 @@
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager  # noqa: F401
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
@@ -33,12 +33,15 @@ def _ensure_schema() -> None:
                 conn.commit()
 
 
+# Run at import time so Passenger WSGI and uvicorn both initialise the schema
+_ensure_schema()
+Base.metadata.create_all(bind=engine)
+with SessionLocal() as _db:
+    seed_database(_db)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    _ensure_schema()
-    Base.metadata.create_all(bind=engine)
-    with SessionLocal() as db:
-        seed_database(db)
     yield
 
 

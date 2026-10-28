@@ -85,6 +85,8 @@ import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.TextUtils
 import androidx.core.content.FileProvider
+import android.content.Intent
+import android.net.Uri
 import com.scripturedaily.data.ApiClient
 import com.scripturedaily.data.AuthInput
 import com.scripturedaily.data.CachedCatalogItem
@@ -176,6 +178,56 @@ fun AppToastHost(hostState: SnackbarHostState) {
         }
     }
 }
+// ── Force-update screen ──────────────────────────────────────────────────────
+@Composable
+private fun ForceUpdateScreen() {
+    val context = LocalContext.current
+    Box(
+        Modifier.fillMaxSize().background(Parchment),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(Modifier.size(320.dp).clip(CircleShape).background(Brush.radialGradient(listOf(Amber.copy(alpha = 0.15f), Color.Transparent))))
+        Column(
+            Modifier.padding(horizontal = 36.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(0.dp)
+        ) {
+            Box(
+                Modifier.size(88.dp).clip(CircleShape)
+                    .background(Amber.copy(alpha = 0.12f))
+                    .border(BorderStroke(1.5.dp, Amber.copy(alpha = 0.3f)), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("↑", fontSize = 38.sp, color = Amber, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.height(28.dp))
+            Text(
+                "Update Required",
+                fontSize = 26.sp, fontWeight = FontWeight.Bold,
+                color = Ink, textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "A new version of WisdomOne is available. Please update to continue.",
+                fontSize = 15.sp, color = InkSoft,
+                textAlign = TextAlign.Center, lineHeight = 23.sp
+            )
+            Spacer(Modifier.height(36.dp))
+            Button(
+                onClick = {
+                    val uri = Uri.parse("https://play.google.com/store/apps/details?id=${context.packageName}")
+                    context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                },
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(18.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Ink)
+            ) {
+                Text("Update Now", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
+            }
+        }
+    }
+}
+
 private sealed class HealthState {
     object Checking : HealthState()
     data class Retrying(val attempt: Int) : HealthState()
@@ -340,6 +392,19 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
     val catalogDao = remember { ScriptureDatabase.get(context).catalog() }
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // ── Force-update check ───────────────────────────────────────────────────
+    var forceUpdate by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        val latest = ForceUpdateManager.fetchLatestVersion()
+        forceUpdate = ForceUpdateManager.isUpdateRequired(BuildConfig.VERSION_NAME, latest)
+    }
+
+    if (forceUpdate) {
+        ForceUpdateScreen()
+        return
+    }
 
     // ── Health check ──────────────────────────────────────────────────────────
     var healthState by remember { mutableStateOf<HealthState>(HealthState.Checking) }
@@ -621,7 +686,8 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
                     yesterday -> store.getInt("streak", 0) + 1
                     else -> 1
                 }
-                store.edit().putString("last_streak_date", today).putInt("streak", newStreak).apply()
+                store.edit().putString("last_streak_date", today).putInt("streak", newStreak)
+                    .putBoolean("read_$today", true).apply()
                 streak = newStreak
             }
             ScriptureWidget().refreshAll(context)
@@ -842,8 +908,9 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
                     onFavorite = { verse?.let { v -> scope.launch { toggleFavorite(v) } } },
                     onShare = { verse?.let { v -> shareVerseImage(context, v) } },
                     onShareText = { verse?.let { v ->
+                        val formatted = "❝ ${v.text} ❞\n\n— ${v.scripture} · ${v.reference()}\n\nvia WisdomOne"
                         val send = Intent(Intent.ACTION_SEND).setType("text/plain")
-                            .putExtra(Intent.EXTRA_TEXT, "${v.text}\n\n${v.scripture} · ${v.reference()}")
+                            .putExtra(Intent.EXTRA_TEXT, formatted)
                         context.startActivity(Intent.createChooser(send, "Share verse"))
                     }},
                     onShowLockScreen = { enableLockScreen() },
@@ -861,12 +928,34 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
                         val cm = context.getSystemService(android.content.ClipboardManager::class.java)
                         cm.setPrimaryClip(android.content.ClipData.newPlainText("verse", v.text))
                         scope.launch { snackbarHostState.showSnackbar("Verse copied to clipboard") }
-                    }}
+                    }},
+                    onTheme = { theme ->
+                        scope.launch {
+                            loading = true
+                            try {
+                                val hits = ApiClient.api.search(theme, language, scriptureId)
+                                val pick = hits.randomOrNull()
+                                if (pick != null) {
+                                    val old = dao.find(pick.id)
+                                    dao.save(pick.toCached(scriptureId, language, old?.favorite == true))
+                                    verse = pick
+                                }
+                            } catch (_: Exception) {}
+                            loading = false
+                        }
+                    }
                 )
                 "Favorites" -> FavoritesScreen(
                     savedVerses,
                     onOpen = { cached -> verse = cached.toVerse(); page = "Home" },
-                    onRemove = { cached -> scope.launch { toggleFavorite(cached.toVerse()) } }
+                    onRemove = { cached -> scope.launch { toggleFavorite(cached.toVerse()) } },
+                    onMarkRead = { cached ->
+                        scope.launch {
+                            val today = java.time.LocalDate.now().toString()
+                            val newDate = if (cached.readDate == today) null else today
+                            withContext(Dispatchers.IO) { dao.setReadDate(cached.id, newDate) }
+                        }
+                    }
                 )
                 "Explore" -> ExploreScreen(
                     query, { query = it }, results, loading, favoriteIds,
@@ -1337,7 +1426,7 @@ private fun HomeScreen(
     fontSize: Int, streak: Int,
     onRandom: () -> Unit, onFavorite: () -> Unit, onShare: () -> Unit, onShareText: () -> Unit,
     onCopy: () -> Unit, onShowLockScreen: () -> Unit, onHideLockScreen: () -> Unit,
-    onHistory: () -> Unit, onChapterBrowser: () -> Unit
+    onHistory: () -> Unit, onChapterBrowser: () -> Unit, onTheme: (String) -> Unit
 ) {
     val scrollState = rememberScrollState()
     val pullState = rememberPullToRefreshState()
@@ -1360,6 +1449,54 @@ private fun HomeScreen(
                     Text("🔥", fontSize = 13.sp)
                     Spacer(Modifier.width(5.dp))
                     Text("$streak day streak", fontSize = 12.sp, color = Amber, fontWeight = FontWeight.SemiBold)
+                }
+                // ── Week streak card ─────────────────────────────────────
+                val context2 = LocalContext.current
+                val store2 = remember { context2.getSharedPreferences("reader", 0) }
+                val activeDays = remember {
+                    val set = mutableSetOf<Int>()
+                    val today = java.time.LocalDate.now()
+                    for (i in 0..6) {
+                        val day = today.minusDays(i.toLong())
+                        val key = "read_${day}"
+                        if (store2.getBoolean(key, false)) set.add(day.dayOfWeek.value % 7) // 0=Sun
+                    }
+                    set
+                }
+                val dayLabels = listOf("S", "M", "T", "W", "T", "F", "S")
+                val todayDow = remember { java.time.LocalDate.now().dayOfWeek.value % 7 }
+                Box(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                        .background(Amber.copy(alpha = 0.07f))
+                        .border(BorderStroke(1.dp, Amber.copy(alpha = 0.18f)), RoundedCornerShape(16.dp))
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("This week", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Amber, letterSpacing = 0.8.sp)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            dayLabels.forEachIndexed { idx, label ->
+                                val isToday = idx == todayDow
+                                val isActive = idx in activeDays
+                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Box(
+                                        Modifier.size(32.dp).clip(CircleShape)
+                                            .background(
+                                                when {
+                                                    isActive -> Amber
+                                                    isToday  -> Amber.copy(alpha = 0.2f)
+                                                    else     -> Amber.copy(alpha = 0.06f)
+                                                }
+                                            )
+                                            .border(BorderStroke(if (isToday) 1.5.dp else 0.dp, Amber.copy(alpha = 0.5f)), CircleShape),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (isActive) Text("✓", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                                    }
+                                    Text(label, fontSize = 10.sp, color = if (isToday) Amber else InkSoft, fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal)
+                                }
+                            }
+                        }
+                    }
                 }
             }
             if (loading && verse == null) {
@@ -1433,6 +1570,21 @@ private fun HomeScreen(
                 Spacer(Modifier.width(8.dp))
                 Text(if (loading) "Finding a verse…" else "Discover another verse", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
             }
+            // ── Theme shortcut chips ─────────────────────────────────────────
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf("🕊 Peace", "💪 Strength", "🙏 Gratitude", "❤ Love").forEach { chip ->
+                    Box(
+                        Modifier.weight(1f).clip(RoundedCornerShape(50))
+                            .background(MaterialTheme.colorScheme.surface)
+                            .border(BorderStroke(1.dp, Amber.copy(alpha = 0.3f)), RoundedCornerShape(50))
+                            .clickable(enabled = !loading) { onTheme(chip.substringAfter(" ").lowercase()) }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(chip, fontSize = 11.sp, color = InkMid, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
+                    }
+                }
+            }
             Text("Take a breath. Carry the thought with you.", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center, color = InkSoft, fontSize = 13.sp)
             Spacer(Modifier.height(8.dp))
         }
@@ -1440,7 +1592,12 @@ private fun HomeScreen(
 }
 
 @Composable
-private fun FavoritesScreen(items: List<CachedVerse>, onOpen: (CachedVerse) -> Unit, onRemove: (CachedVerse) -> Unit) {
+private fun FavoritesScreen(
+    items: List<CachedVerse>,
+    onOpen: (CachedVerse) -> Unit,
+    onRemove: (CachedVerse) -> Unit,
+    onMarkRead: (CachedVerse) -> Unit
+) {
     var expandedItems by remember { mutableStateOf(emptySet<Int>()) }
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Amber.copy(alpha = 0.06f), Color.Transparent))).padding(horizontal = 20.dp, vertical = 20.dp)) {
@@ -1465,19 +1622,39 @@ private fun FavoritesScreen(items: List<CachedVerse>, onOpen: (CachedVerse) -> U
                     val expanded = item.id in expandedItems
                     val displayReference = if (item.book?.equals(item.scripture, ignoreCase = true) == true)
                         item.reference().removePrefix("${item.book} · ") else item.reference()
+                    val today2 = remember { java.time.LocalDate.now().toString() }
+                    val isReadToday = item.readDate == today2
                     Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surface).border(1.dp, Amber.copy(alpha = 0.12f), RoundedCornerShape(20.dp)).clickable {
                         expandedItems = if (expanded) expandedItems - item.id else expandedItems + item.id
                     }) {
                         Column {
-                            Box(Modifier.fillMaxWidth().height(4.dp).background(Brush.horizontalGradient(listOf(Amber, AmberLight))))
+                            Box(Modifier.fillMaxWidth().height(4.dp).background(
+                                if (isReadToday) Brush.horizontalGradient(listOf(Color(0xFF4A8C5C), Color(0xFF6DBF82)))
+                                else Brush.horizontalGradient(listOf(Amber, AmberLight))
+                            ))
                             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Box(Modifier.clip(RoundedCornerShape(6.dp)).background(Amber.copy(alpha = 0.1f)).padding(horizontal = 8.dp, vertical = 3.dp)) {
                                         Text(item.scripture.uppercase(), color = Amber, fontSize = 10.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.Bold)
                                     }
+                                    if (isReadToday) {
+                                        Spacer(Modifier.width(6.dp))
+                                        Box(Modifier.size(7.dp).clip(CircleShape).background(Color(0xFF4A8C5C)))
+                                    }
                                     Spacer(Modifier.weight(1f))
                                     Text(displayReference, color = InkSoft, fontSize = 11.sp)
-                                    Spacer(Modifier.width(8.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Box(
+                                        Modifier.size(26.dp).clip(RoundedCornerShape(7.dp))
+                                            .background(if (isReadToday) Color(0xFF4A8C5C).copy(alpha = 0.12f) else Amber.copy(alpha = 0.08f))
+                                            .border(BorderStroke(1.dp, if (isReadToday) Color(0xFF4A8C5C).copy(alpha = 0.5f) else Amber.copy(alpha = 0.3f)), RoundedCornerShape(7.dp))
+                                            .clickable { onMarkRead(item) },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("\u2713", fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                                            color = if (isReadToday) Color(0xFF4A8C5C) else InkSoft)
+                                    }
+                                    Spacer(Modifier.width(6.dp))
                                     Box(
                                         Modifier.size(26.dp).clip(RoundedCornerShape(7.dp))
                                             .background(Color(0xFF9C463D).copy(alpha = 0.08f))
@@ -1724,8 +1901,8 @@ private fun SettingsScreen(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(
                     Triple("Daily", "Once a day", "📅"),
-                    Triple("Every 6 hours", "3 times a day", "⏰"),
-                    Triple("Every hour", "24 times a day", "⏰")
+                    Triple("Every 6 hours", "3× a day", "⏰"),
+                    Triple("Every hour", "24× a day", "⏰")
                 ).forEach { (label, sub, icon) ->
                     val selected = frequency == label
                     Box(
@@ -1735,23 +1912,28 @@ private fun SettingsScreen(
                             .clickable { onFrequency(label) }
                             .padding(horizontal = 8.dp, vertical = 12.dp)
                     ) {
-                        Column(horizontalAlignment = Alignment.Start) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(icon, fontSize = 16.sp)
-                                Spacer(Modifier.width(4.dp))
-                                Text(label, fontSize = 12.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, color = if (selected) Ink else InkMid, lineHeight = 16.sp)
-                            }
-                            Spacer(Modifier.height(4.dp))
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                                Text(sub, fontSize = 10.sp, color = InkSoft)
-                                Box(
-                                    Modifier.size(16.dp).clip(CircleShape)
-                                        .background(if (selected) Amber else Color.Transparent)
-                                        .border(BorderStroke(1.5.dp, if (selected) Amber else Color(0xFFCCC4D8)), CircleShape),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    if (selected) Box(Modifier.size(6.dp).clip(CircleShape).background(Color.White))
-                                }
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(icon, fontSize = 18.sp)
+                            Text(
+                                label,
+                                fontSize = 11.sp,
+                                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                color = if (selected) Ink else InkMid,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 15.sp
+                            )
+                            Text(sub, fontSize = 10.sp, color = InkSoft, textAlign = TextAlign.Center)
+                            Box(
+                                Modifier.size(16.dp).clip(CircleShape)
+                                    .background(if (selected) Amber else Color.Transparent)
+                                    .border(BorderStroke(1.5.dp, if (selected) Amber else Color(0xFFCCC4D8)), CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (selected) Box(Modifier.size(6.dp).clip(CircleShape).background(Color.White))
                             }
                         }
                     }
@@ -1767,7 +1949,7 @@ private fun SettingsScreen(
             ) {
                 SettingsToggleRow(
                     "Verse reminders",
-                    "Send notification at selected frequency",
+                    "Notify me each time a new verse arrives (cadence set by Verse Frequency above)",
                     icon = { Icon(painter = painterResource(R.drawable.notification_bell), contentDescription = null, tint = Amber, modifier = Modifier.size(20.dp)) },
                     checked = reminders, onChecked = onReminders
                 )

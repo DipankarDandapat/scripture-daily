@@ -153,6 +153,15 @@ For Play Store submission build an AAB instead:
 # output: android/app/build/outputs/bundle/release/app-release.aab
 ```
 
+```commandline
+
+Build your release
+For APK:
+.\gradlew.bat assembleRelease
+
+For Google Play AAB:
+.\gradlew.bat bundleRelease
+```
 > Before publishing: set `android:usesCleartextTraffic="false"` in `AndroidManifest.xml`, switch the API URL to HTTPS, add a privacy policy, and configure crash telemetry.
 
 Place the Scripture Daily widget from the Android home-screen picker. On Android devices whose lock-screen host supports widgets, add it through the device's lock-screen customization/widget picker; this widget is declared for the keyguard category. Availability and setup are controlled by Android/OEM and are not present on every device. The cross-device fallback is a verse notification: open in-app Settings, enable **Verse reminders**, grant notification permission, and save. Android must also be allowed to show Scripture Daily notifications and sensitive content on the lock screen; users retain control over that privacy setting. WorkManager delivers updates approximately on the selected cadence; Android may defer execution to protect battery.

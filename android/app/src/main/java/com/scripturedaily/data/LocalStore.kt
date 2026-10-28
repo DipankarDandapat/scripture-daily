@@ -28,7 +28,8 @@ data class CachedVerse(
     val source: String,
     val isDemo: Boolean,
     val savedAt: Long = System.currentTimeMillis(),
-    val favorite: Boolean = false
+    val favorite: Boolean = false,
+    val readDate: String? = null  // "YYYY-MM-DD" when marked read
 ) {
     fun reference() = "${book?.let { "$it · " } ?: ""}Chapter $chapter · Verse $verseNumber"
     fun toVerse() = Verse(id, scripture, religion, book, chapter, verseNumber, language, text, translation, source, "", isDemo)
@@ -47,6 +48,7 @@ interface VerseDao {
     @Query("SELECT * FROM cached_verses WHERE favorite = 1 ORDER BY savedAt DESC") suspend fun favorites(): List<CachedVerse>
     @Query("SELECT * FROM cached_verses WHERE scriptureId = :scriptureId AND languageId = :languageId ORDER BY savedAt DESC LIMIT 1") suspend fun matching(scriptureId: Int, languageId: Int): CachedVerse?
     @Query("UPDATE cached_verses SET favorite = :favorite WHERE id = :id") suspend fun setFavorite(id: Int, favorite: Boolean)
+    @Query("UPDATE cached_verses SET readDate = :date WHERE id = :id") suspend fun setReadDate(id: Int, date: String?)
     @Query("UPDATE cached_verses SET favorite = 0") suspend fun clearAllFavorites()
 }
 
@@ -72,7 +74,7 @@ interface CatalogDao {
     @Query("DELETE FROM cached_catalog WHERE type = :type") suspend fun deleteByType(type: String)
 }
 
-@Database(entities = [CachedVerse::class, CachedCatalogItem::class], version = 2, exportSchema = false)
+@Database(entities = [CachedVerse::class, CachedCatalogItem::class], version = 3, exportSchema = false)
 abstract class ScriptureDatabase : RoomDatabase() {
     abstract fun verses(): VerseDao
     abstract fun catalog(): CatalogDao
