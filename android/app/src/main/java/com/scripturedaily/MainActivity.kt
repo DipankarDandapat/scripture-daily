@@ -85,7 +85,6 @@ import android.text.StaticLayout
 import android.text.TextPaint
 import android.text.TextUtils
 import androidx.core.content.FileProvider
-import android.content.Intent
 import android.net.Uri
 import com.scripturedaily.data.ApiClient
 import com.scripturedaily.data.AuthInput
