@@ -8,7 +8,7 @@ object ForceUpdateManager {
 
     private const val KEY = "latestAppVersion"
     // Fetch fresh values every 1 hour in production (0 for debug)
-    private const val FETCH_INTERVAL_SECONDS = 3600L
+    private val FETCH_INTERVAL_SECONDS = if (BuildConfig.DEBUG) 0L else 3600L
 
     private val remoteConfig: FirebaseRemoteConfig by lazy {
         FirebaseRemoteConfig.getInstance().also { rc ->

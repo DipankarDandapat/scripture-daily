@@ -48,6 +48,7 @@ import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -734,6 +735,18 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
         }
     }
 
+    // Android has no "app is being uninstalled" callback, so the lock-screen wallpaper (which the system keeps
+    // after uninstall) is cleared here first, then the system uninstall prompt is opened.
+    fun uninstallApp() {
+        lockScreen = false
+        store.edit().putBoolean("lock_screen", false).apply()
+        scope.launch {
+            withContext(Dispatchers.IO) { LockScreenVerse.clearLockScreenWallpaper(context) }
+            VerseNotifier.cancel(context)
+            context.startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:${context.packageName}")))
+        }
+    }
+
     var homeLoadKey by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(homeLoadKey) {
@@ -1027,7 +1040,8 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
                         }
                     },
                         onFontSize = { sz -> fontSize = sz; store.edit().putInt("font_size", sz).apply() },
-                        onFeedback = { showFeedback = true }
+                        onFeedback = { showFeedback = true },
+                        onUninstall = { uninstallApp() }
                     )
                     }
                 }
@@ -1767,7 +1781,7 @@ private fun SettingsScreen(
     resumeTick: Int, notice: String?,
     onReligion: (Int) -> Unit, onLanguage: (Int) -> Unit, onFrequency: (String) -> Unit, onPaletteInterval: (Int) -> Unit,
     onReminders: (Boolean) -> Unit, onLockScreen: (Boolean) -> Unit, onSave: () -> Unit,
-    onFontSize: (Int) -> Unit, onFeedback: () -> Unit
+    onFontSize: (Int) -> Unit, onFeedback: () -> Unit, onUninstall: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -2072,6 +2086,13 @@ private fun SettingsScreen(
                     "Optimise for uninterrupted verse delivery",
                     icon = { Icon(painter = painterResource(R.drawable.battery_settings), contentDescription = null, tint = Amber, modifier = Modifier.size(20.dp)) }
                 ) { context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+                HorizontalDivider(color = Color(0xFFE8E0D8), thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 16.dp))
+                SettingsLinkRow(
+                    "Uninstall WisdomOne",
+                    "Clears the lock-screen verse wallpaper first, then opens Android's uninstall prompt",
+                    icon = { Icon(Icons.Outlined.DeleteOutline, contentDescription = null, tint = Amber, modifier = Modifier.size(20.dp)) },
+                    onClick = onUninstall
+                )
             }
 
             if (notice != null) {
