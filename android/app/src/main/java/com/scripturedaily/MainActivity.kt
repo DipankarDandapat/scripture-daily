@@ -49,6 +49,8 @@ import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteOutline
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.BatteryChargingFull
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -77,6 +79,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -226,8 +229,8 @@ private fun ForceUpdateScreen() {
             }
         }
     }
-}
 
+}
 private sealed class HealthState {
     object Checking : HealthState()
     data class Retrying(val attempt: Int) : HealthState()
@@ -387,6 +390,7 @@ private fun shareVerseImage(context: android.content.Context, verse: Verse) {
 @Composable
 private fun ScriptureApp(deepLinkVerseId: Int? = null) {
     val context = LocalContext.current
+    val activity = context as Activity
     val store = remember { context.getSharedPreferences("reader", 0) }
     val dao = remember { ScriptureDatabase.get(context).verses() }
     val catalogDao = remember { ScriptureDatabase.get(context).catalog() }
@@ -407,27 +411,17 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
     }
 
     // ── Health check ──────────────────────────────────────────────────────────
-    var healthState by remember { mutableStateOf<HealthState>(HealthState.Checking) }
+    var apiOffline by remember { mutableStateOf(false) }
 
-    suspend fun runHealthCheck() {
-        healthState = HealthState.Checking
+    LaunchedEffect(Unit) {
         repeat(3) { attempt ->
-            if (healthState == HealthState.Ready) return
-            if (attempt > 0) healthState = HealthState.Retrying(attempt)
             try {
                 val resp = ApiClient.api.health()
-                if (resp.isSuccessful) { healthState = HealthState.Ready; return }
+                if (resp.isSuccessful) { apiOffline = false; return@LaunchedEffect }
             } catch (_: Exception) {}
             if (attempt < 2) kotlinx.coroutines.delay(2000L)
         }
-        if (healthState != HealthState.Ready) healthState = HealthState.Failed
-    }
-
-    LaunchedEffect(Unit) { runHealthCheck() }
-
-    if (healthState != HealthState.Ready) {
-        ApiHealthScreen(healthState, onRetry = { scope.launch { runHealthCheck() } })
-        return
+        apiOffline = true
     }
 
     // ── State (declared before LaunchedEffect so they are accessible inside it) ────
@@ -658,15 +652,17 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
     suspend fun toggleFavorite(v: Verse) {
         val existing = dao.find(v.id)
         val nowFavorite = existing?.favorite != true
-        // Optimistic local update
         if (existing != null) dao.setFavorite(v.id, nowFavorite)
         else dao.save(v.toCached(scripture, language, favorite = true, savedAt = 0L))
-        // Sync to server best-effort
         try {
             if (nowFavorite) ApiClient.api.addFavorite(FavoriteInput(v.id))
             else ApiClient.api.removeFavorite(v.id)
         } catch (_: Exception) {}
         snackbarHostState.showSnackbar(if (nowFavorite) "Saved verse" else "Removed from saved verses")
+        // Trigger in-app review after 3rd save
+        if (nowFavorite && savedVerses.size + 1 >= 3) {
+            RatingManager.tryLaunchReview(activity)
+        }
     }
 
     suspend fun loadToday(random: Boolean = false) {
@@ -689,6 +685,10 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
                 store.edit().putString("last_streak_date", today).putInt("streak", newStreak)
                     .putBoolean("read_$today", true).apply()
                 streak = newStreak
+                // Trigger in-app review on 7-day streak milestone
+                if (newStreak == 7 || newStreak == 30) {
+                    RatingManager.tryLaunchReview(activity)
+                }
             }
             ScriptureWidget().refreshAll(context)
             withContext(Dispatchers.IO) {
@@ -834,8 +834,8 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
                         Image(
                             painter = painterResource(R.drawable.ic_wisdomone_ui_logo),
                             contentDescription = null,
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier.fillMaxSize().padding(3.dp).clip(CircleShape)
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize().clip(CircleShape)
                         )
                     }
                     Spacer(Modifier.width(10.dp))
@@ -843,7 +843,6 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
                         Text("WisdomOne", fontWeight = FontWeight.Bold, fontSize = 21.sp, color = Ink, letterSpacing = 0.3.sp)
                     }
                 }
-                HorizontalDivider(modifier = Modifier.align(Alignment.BottomCenter), color = Amber.copy(alpha = 0.2f), thickness = 1.dp)
             }
         },
         bottomBar = {
@@ -918,12 +917,30 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
                     verse, loading, error, favoriteIds.contains(verse?.id), lockScreen,
                     onRandom = { scope.launch { loadToday(true) } },
                     onFavorite = { verse?.let { v -> scope.launch { toggleFavorite(v) } } },
-                    onShare = { verse?.let { v -> shareVerseImage(context, v) } },
+                    onShare = { verse?.let { v ->
+                        shareVerseImage(context, v)
+                        scope.launch {
+                            val result = snackbarHostState.showSnackbar(
+                                message = "Glad you're sharing! Mind leaving a quick rating? ⭐",
+                                actionLabel = "Rate",
+                                duration = SnackbarDuration.Long
+                            )
+                            if (result == SnackbarResult.ActionPerformed) RatingManager.openPlayStore(context)
+                        }
+                    }},
                     onShareText = { verse?.let { v ->
                         val formatted = "❝ ${v.text} ❞\n\n— ${v.scripture} · ${v.reference()}\n\nvia WisdomOne"
                         val send = Intent(Intent.ACTION_SEND).setType("text/plain")
                             .putExtra(Intent.EXTRA_TEXT, formatted)
                         context.startActivity(Intent.createChooser(send, "Share verse"))
+                        scope.launch {
+                            val result = snackbarHostState.showSnackbar(
+                                message = "Glad you're sharing! Mind leaving a quick rating? ⭐",
+                                actionLabel = "Rate",
+                                duration = SnackbarDuration.Long
+                            )
+                            if (result == SnackbarResult.ActionPerformed) RatingManager.openPlayStore(context)
+                        }
                     }},
                     onShowLockScreen = { enableLockScreen() },
                     onHideLockScreen = { disableLockScreen() },
@@ -1041,6 +1058,7 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
                     },
                         onFontSize = { sz -> fontSize = sz; store.edit().putInt("font_size", sz).apply() },
                         onFeedback = { showFeedback = true },
+                        onRate = { RatingManager.openPlayStore(context) },
                         onUninstall = { uninstallApp() }
                     )
                     }
@@ -1130,8 +1148,8 @@ private fun ApiHealthScreen(state: HealthState, onRetry: () -> Unit) {
                 Image(
                     painter = painterResource(R.drawable.ic_wisdomone_ui_logo),
                     contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().padding(4.dp).clip(CircleShape)
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().clip(CircleShape)
                 )
             }
             Spacer(Modifier.height(24.dp))
@@ -1200,8 +1218,8 @@ private fun SplashScreen(onContinue: () -> Unit) {
                 Image(
                     painter = painterResource(R.drawable.ic_wisdomone_ui_logo),
                     contentDescription = null,
-                    contentScale = ContentScale.Fit,
-                    modifier = Modifier.fillMaxSize().padding(4.dp).clip(CircleShape)
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize().clip(CircleShape)
                 )
             }
             Spacer(Modifier.height(20.dp))
@@ -1449,7 +1467,6 @@ private fun HomeScreen(
         state = pullState,
         modifier = Modifier.fillMaxSize()
     ) {
-        Box(Modifier.fillMaxWidth().height(260.dp).background(Brush.verticalGradient(listOf(Amber.copy(alpha = 0.07f), Color.Transparent))))
         Column(Modifier.fillMaxSize().verticalScroll(scrollState).padding(horizontal = 20.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
             val today = remember { java.text.SimpleDateFormat("EEEE, MMMM d", java.util.Locale.getDefault()).format(java.util.Date()) }
             Row(Modifier.clip(RoundedCornerShape(50)).background(Amber.copy(alpha = 0.1f)).padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1613,7 +1630,7 @@ private fun FavoritesScreen(
 ) {
     var expandedItems by remember { mutableStateOf(emptySet<Int>()) }
     Column(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Amber.copy(alpha = 0.06f), Color.Transparent))).padding(horizontal = 20.dp, vertical = 20.dp)) {
+        Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(horizontal = 20.dp, vertical = 20.dp)) {
             Column {
                 Text("Saved Verses", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 Text("${items.size} verse${if (items.size != 1) "s" else ""} saved", fontSize = 13.sp, color = InkSoft)
@@ -1700,7 +1717,7 @@ private fun FavoritesScreen(
 @Composable
 private fun ExploreScreen(query: String, onQuery: (String) -> Unit, results: List<Verse>, loading: Boolean, favoriteIds: Set<Int>, languages: List<CatalogItem>, scriptures: List<CatalogItem>, languageFilter: Int?, scriptureFilter: Int?, onSearch: () -> Unit, onFavorite: (Verse) -> Unit, onQueryChange: (String) -> Unit, onLanguageFilter: (Int?) -> Unit, onScriptureFilter: (Int?) -> Unit) {
     Column(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(Amber.copy(alpha = 0.06f), Color.Transparent))).padding(horizontal = 20.dp, vertical = 20.dp)) {
+        Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(horizontal = 20.dp, vertical = 20.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Explore", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                 Text("Search across all scriptures", fontSize = 13.sp, color = InkSoft)
@@ -1781,7 +1798,7 @@ private fun SettingsScreen(
     resumeTick: Int, notice: String?,
     onReligion: (Int) -> Unit, onLanguage: (Int) -> Unit, onFrequency: (String) -> Unit, onPaletteInterval: (Int) -> Unit,
     onReminders: (Boolean) -> Unit, onLockScreen: (Boolean) -> Unit, onSave: () -> Unit,
-    onFontSize: (Int) -> Unit, onFeedback: () -> Unit, onUninstall: () -> Unit
+    onFontSize: (Int) -> Unit, onFeedback: () -> Unit, onRate: () -> Unit, onUninstall: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -1812,7 +1829,7 @@ private fun SettingsScreen(
         // Header
         Box(
             Modifier.fillMaxWidth()
-                .background(Color(0xFFFAF6F0))
+                .background(MaterialTheme.colorScheme.background)
                 .padding(horizontal = 20.dp, vertical = 20.dp)
         ) {
             Column {
@@ -2068,6 +2085,17 @@ private fun SettingsScreen(
                     Text("Large", fontSize = 11.sp, color = InkSoft)
                 }
             }
+            Button(
+                onClick = onSave,
+                modifier = Modifier.fillMaxWidth().height(56.dp),
+                shape = RoundedCornerShape(18.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2D1B4E))
+            ) {
+                Icon(painter = painterResource(R.drawable.save_preferences), contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
+                Spacer(Modifier.width(8.dp))
+                Text("Save preferences", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Color.White)
+            }
+
             SettingsSectionLabel("SYSTEM")
             Column(
                 Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
@@ -2078,14 +2106,21 @@ private fun SettingsScreen(
                 SettingsLinkRow(
                     "Notification settings",
                     "Open Android notification settings",
-                    icon = { Icon(painter = painterResource(R.drawable.system_settings), contentDescription = null, tint = Amber, modifier = Modifier.size(20.dp)) }
+                    icon = { Icon(Icons.Outlined.Notifications, contentDescription = null, tint = Amber, modifier = Modifier.size(22.dp)) }
                 ) { context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply { putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName) }) }
                 HorizontalDivider(color = Color(0xFFE8E0D8), thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 16.dp))
                 SettingsLinkRow(
                     "Battery settings",
                     "Optimise for uninterrupted verse delivery",
-                    icon = { Icon(painter = painterResource(R.drawable.battery_settings), contentDescription = null, tint = Amber, modifier = Modifier.size(20.dp)) }
+                    icon = { Icon(Icons.Outlined.BatteryChargingFull, contentDescription = null, tint = Amber, modifier = Modifier.size(22.dp)) }
                 ) { context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+                HorizontalDivider(color = Color(0xFFE8E0D8), thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 16.dp))
+                SettingsLinkRow(
+                    "Rate WisdomOne ⭐",
+                    "Enjoying the app? Leave us a rating on the Play Store",
+                    icon = { Icon(Icons.Outlined.AutoAwesome, contentDescription = null, tint = Amber, modifier = Modifier.size(20.dp)) },
+                    onClick = onRate
+                )
                 HorizontalDivider(color = Color(0xFFE8E0D8), thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 16.dp))
                 SettingsLinkRow(
                     "Uninstall WisdomOne",
@@ -2099,17 +2134,6 @@ private fun SettingsScreen(
                 Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color(0xFF9C463D).copy(alpha = 0.08f)).padding(14.dp)) {
                     Text(notice, color = Color(0xFF9C463D), fontSize = 13.sp)
                 }
-            }
-
-            Button(
-                onClick = onSave,
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(18.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF2D1B4E))
-            ) {
-                Icon(painter = painterResource(R.drawable.save_preferences), contentDescription = null, modifier = Modifier.size(18.dp), tint = Color.White)
-                Spacer(Modifier.width(8.dp))
-                Text("Save preferences", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Color.White)
             }
 
             HorizontalDivider(
