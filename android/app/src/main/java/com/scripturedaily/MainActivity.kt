@@ -612,8 +612,21 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
 
     // Live wallpaper mode: the system wallpaper preview opens and the user taps "Set wallpaper" > Lock screen.
     // If the phone has no live-wallpaper picker, fall back to the static wallpaper.
+    var showLiveGuide by remember { mutableStateOf(false) }
+    var showHomeFix by remember { mutableStateOf(false) }
+
     fun openLiveWallpaperChooser() {
         if (!store.getBoolean(LockScreenVerse.KEY_LIVE, false) || LockScreenVerse.isLiveWallpaperActive(context)) return
+        showLiveGuide = true // explain "choose Lock screen" first; the system screen covers any message shown after it
+    }
+
+    // Lock-screen-only static image: never touches the home screen, but Android keeps it after uninstall.
+    fun useStaticLockWallpaper() {
+        store.edit().putBoolean(LockScreenVerse.KEY_LIVE, false).apply()
+        scope.launch { applyCurrentLockVerse(forceWallpaper = true)?.let { snackbarHostState.showSnackbar(it) } }
+    }
+
+    fun launchLiveWallpaperChooser() {
         try {
             context.startActivity(LockScreenVerse.liveWallpaperChooserIntent(context))
         } catch (_: Exception) {
@@ -1089,6 +1102,42 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
                 }
             }
         }
+    }
+
+    // The verse wallpaper is meant for the lock screen only. If the user picked "Home and lock screen",
+    // offer to put the home screen back to the default wallpaper.
+    LaunchedEffect(settingsResume) {
+        if (store.getBoolean(LockScreenVerse.KEY_LIVE, false) && LockScreenVerse.isLiveWallpaperOnHomeScreen(context)) showHomeFix = true
+    }
+
+    if (showLiveGuide) {
+        AlertDialog(
+            onDismissRequest = { showLiveGuide = false; useStaticLockWallpaper() },
+            title = { Text("How should the verse wallpaper be set?") },
+            text = {
+                Text(
+                    "Live wallpaper: Android removes it automatically when you uninstall the app. On the next screen choose Lock screen; some phones only offer \"Home & Lock screen\" and will change your home wallpaper too.\n\n" +
+                        "Lock screen only: a static image that never touches your home screen. Android keeps it after uninstall unless you turn this setting off first or use Settings > Uninstall WisdomOne."
+                )
+            },
+            confirmButton = { TextButton(onClick = { showLiveGuide = false; launchLiveWallpaperChooser() }) { Text("Live wallpaper") } },
+            dismissButton = { TextButton(onClick = { showLiveGuide = false; useStaticLockWallpaper() }) { Text("Lock screen only") } }
+        )
+    }
+
+    if (showHomeFix) {
+        AlertDialog(
+            onDismissRequest = { showHomeFix = false },
+            title = { Text("Verse is on your home screen too") },
+            text = { Text("Your phone applied the live wallpaper to both screens, and the app cannot restore your old home wallpaper. Reset the home screen to the default wallpaper? The lock screen keeps today's verse.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showHomeFix = false
+                    scope.launch { withContext(Dispatchers.IO) { LockScreenVerse.resetHomeScreenWallpaper(context) } }
+                }) { Text("Reset home screen") }
+            },
+            dismissButton = { TextButton(onClick = { showHomeFix = false }) { Text("Keep") } }
+        )
     }
 
     if (showFeedback) {

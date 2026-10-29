@@ -40,6 +40,26 @@ object LockScreenVerse {
         false
     }
 
+    /** True when the verse wallpaper is also the home-screen wallpaper (user picked "Home and lock screen"). */
+    fun isLiveWallpaperOnHomeScreen(context: Context): Boolean = try {
+        val manager = WallpaperManager.getInstance(context)
+        val info = if (Build.VERSION.SDK_INT >= 34) manager.getWallpaperInfo(WallpaperManager.FLAG_SYSTEM) else manager.wallpaperInfo
+        info?.packageName == context.packageName
+    } catch (_: RuntimeException) {
+        false
+    }
+
+    /** Puts the home screen back to the default wallpaper; the lock screen keeps the verse. */
+    fun resetHomeScreenWallpaper(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
+        try {
+            WallpaperManager.getInstance(context).clear(WallpaperManager.FLAG_SYSTEM)
+        } catch (_: IOException) {
+        } catch (_: SecurityException) {
+        } catch (_: RuntimeException) {
+        }
+    }
+
     /** Opens Android's live-wallpaper preview for the verse wallpaper; the user taps "Set wallpaper" there. */
     fun liveWallpaperChooserIntent(context: Context): Intent =
         Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER)
