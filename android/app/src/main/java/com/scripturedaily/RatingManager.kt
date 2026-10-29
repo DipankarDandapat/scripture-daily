@@ -14,8 +14,8 @@ object RatingManager {
     private const val KEY_RATED        = "has_rated"
     private const val KEY_PROMPTED     = "prompt_count"
     private const val KEY_LAST_PROMPT  = "last_prompt_ms"
-    private const val MIN_GAP_MS       = 7 * 24 * 60 * 60 * 1000L  // 7 days between prompts
-    private const val MAX_PROMPTS      = 3
+    private const val MIN_GAP_MS       = 3 * 24 * 60 * 60 * 1000L  // 3 days between prompts
+    private const val MAX_PROMPTS      = 5
 
     /** Returns true if we should show the in-app review flow right now. */
     fun shouldPrompt(context: Context): Boolean {
@@ -48,7 +48,6 @@ object RatingManager {
 
     /** Open Play Store listing directly. */
     fun openPlayStore(context: Context) {
-        markRated(context)
         val uri = Uri.parse("https://play.google.com/store/apps/details?id=${context.packageName}")
         context.startActivity(Intent(Intent.ACTION_VIEW, uri).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

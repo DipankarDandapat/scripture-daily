@@ -157,10 +157,10 @@ For Play Store submission build an AAB instead:
 
 Build your release
 For APK:
-.\gradlew.bat assembleRelease
+.\gradlew assembleRelease
 
 For Google Play AAB:
-.\gradlew.bat bundleRelease
+.\gradlew bundleRelease
 ```
 > Before publishing: set `android:usesCleartextTraffic="false"` in `AndroidManifest.xml`, switch the API URL to HTTPS, add a privacy policy, and configure crash telemetry.
 

@@ -48,7 +48,6 @@ import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.ContentCopy
-import androidx.compose.material.icons.outlined.DeleteOutline
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.BatteryChargingFull
 import androidx.compose.material.icons.outlined.Share
@@ -107,7 +106,6 @@ import com.scripturedaily.data.Verse
 import com.scripturedaily.data.VerseSyncWorker
 import com.scripturedaily.data.toCached
 import com.scripturedaily.lockscreen.LockScreenVerse
-import com.scripturedaily.lockscreentime.TimePalette
 import com.scripturedaily.notification.VerseNotifier
 import com.scripturedaily.widget.ScriptureWidget
 import com.scripturedaily.widget.ScriptureWidgetReceiver
@@ -574,6 +572,10 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
                         .forEach { dao.setFavorite(it.id, false) }
                 }
             } catch (_: Exception) { /* offline — show cached */ }
+            // Prompt review when user has built a meaningful collection
+            if (savedVerses.size >= 10) {
+                RatingManager.tryLaunchReview(activity)
+            }
         }
     }
 
@@ -659,9 +661,12 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
             else ApiClient.api.removeFavorite(v.id)
         } catch (_: Exception) {}
         snackbarHostState.showSnackbar(if (nowFavorite) "Saved verse" else "Removed from saved verses")
-        // Trigger in-app review after 3rd save
-        if (nowFavorite && savedVerses.size + 1 >= 3) {
-            RatingManager.tryLaunchReview(activity)
+        // Trigger in-app review at 3rd, 10th, 25th save
+        if (nowFavorite) {
+            val newCount = savedVerses.size + 1
+            if (newCount == 3 || newCount == 10 || newCount == 25) {
+                RatingManager.tryLaunchReview(activity)
+            }
         }
     }
 
@@ -732,18 +737,6 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
             if (store.getBoolean("reminders", false)) applyCurrentLockVerse()
             else VerseNotifier.cancel(context)
             snackbarHostState.showSnackbar("Lock screen verse turned off")
-        }
-    }
-
-    // Android has no "app is being uninstalled" callback, so the lock-screen wallpaper (which the system keeps
-    // after uninstall) is cleared here first, then the system uninstall prompt is opened.
-    fun uninstallApp() {
-        lockScreen = false
-        store.edit().putBoolean("lock_screen", false).apply()
-        scope.launch {
-            withContext(Dispatchers.IO) { LockScreenVerse.clearLockScreenWallpaper(context) }
-            VerseNotifier.cancel(context)
-            context.startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:${context.packageName}")))
         }
     }
 
@@ -1058,8 +1051,7 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
                     },
                         onFontSize = { sz -> fontSize = sz; store.edit().putInt("font_size", sz).apply() },
                         onFeedback = { showFeedback = true },
-                        onRate = { RatingManager.openPlayStore(context) },
-                        onUninstall = { uninstallApp() }
+                        onRate = { RatingManager.openPlayStore(context) }
                     )
                     }
                 }
@@ -1798,7 +1790,7 @@ private fun SettingsScreen(
     resumeTick: Int, notice: String?,
     onReligion: (Int) -> Unit, onLanguage: (Int) -> Unit, onFrequency: (String) -> Unit, onPaletteInterval: (Int) -> Unit,
     onReminders: (Boolean) -> Unit, onLockScreen: (Boolean) -> Unit, onSave: () -> Unit,
-    onFontSize: (Int) -> Unit, onFeedback: () -> Unit, onRate: () -> Unit, onUninstall: () -> Unit
+    onFontSize: (Int) -> Unit, onFeedback: () -> Unit, onRate: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -2010,7 +2002,6 @@ private fun SettingsScreen(
                                 }
                             }
                         }
-                        Text("Current: ${TimePalette.now(paletteIntervalHours).period} · every ${paletteIntervalHours}h", fontSize = 11.sp, color = InkSoft)
                     }
                 }
                 HorizontalDivider(color = Color(0xFFE8E0D8), thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 16.dp))
@@ -2120,13 +2111,6 @@ private fun SettingsScreen(
                     "Enjoying the app? Leave us a rating on the Play Store",
                     icon = { Icon(Icons.Outlined.AutoAwesome, contentDescription = null, tint = Amber, modifier = Modifier.size(20.dp)) },
                     onClick = onRate
-                )
-                HorizontalDivider(color = Color(0xFFE8E0D8), thickness = 0.5.dp, modifier = Modifier.padding(horizontal = 16.dp))
-                SettingsLinkRow(
-                    "Uninstall WisdomOne",
-                    "Clears the lock-screen verse wallpaper first, then opens Android's uninstall prompt",
-                    icon = { Icon(Icons.Outlined.DeleteOutline, contentDescription = null, tint = Amber, modifier = Modifier.size(20.dp)) },
-                    onClick = onUninstall
                 )
             }
 
