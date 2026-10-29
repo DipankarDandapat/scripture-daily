@@ -1,7 +1,10 @@
 package com.scripturedaily.lockscreen
 
 import android.app.WallpaperManager
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
@@ -20,7 +23,28 @@ import java.io.IOException
 object LockScreenVerse {
     private const val PREFS = "reader"
     private const val KEY_ENABLED = "lock_screen"
-    private const val KEY_VERSE_ID = "lock_screen_verse_id"
+    internal const val KEY_VERSE_ID = "lock_screen_verse_id"
+    /** True once the user chose the live wallpaper, which Android removes automatically on uninstall. */
+    const val KEY_LIVE = "lock_live_mode"
+    /** Bumped to tell the live wallpaper to redraw (palette change, boot). */
+    internal const val KEY_LIVE_REV = "lock_live_rev"
+
+    fun liveWallpaperSupported(context: Context): Boolean =
+        context.packageManager.hasSystemFeature(PackageManager.FEATURE_LIVE_WALLPAPER)
+
+    fun isLiveWallpaperActive(context: Context): Boolean = try {
+        val manager = WallpaperManager.getInstance(context)
+        val info = if (Build.VERSION.SDK_INT >= 34) manager.getWallpaperInfo(WallpaperManager.FLAG_LOCK) else manager.wallpaperInfo
+        info?.packageName == context.packageName
+    } catch (_: RuntimeException) {
+        false
+    }
+
+    /** Opens Android's live-wallpaper preview for the verse wallpaper; the user taps "Set wallpaper" there. */
+    fun liveWallpaperChooserIntent(context: Context): Intent =
+        Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER)
+            .putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT, ComponentName(context, VerseWallpaperService::class.java))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
     fun canSetLockWallpaper(context: Context): Boolean = try {
         val manager = WallpaperManager.getInstance(context)
@@ -43,8 +67,11 @@ object LockScreenVerse {
         val notify = wallpaperEnabled || prefs.getBoolean("reminders", false)
         if (!wallpaperEnabled && !notify) return null
 
+        val livePending = wallpaperEnabled && prefs.getBoolean(KEY_LIVE, false) && !isLiveWallpaperActive(context)
         val shouldSetWallpaper = wallpaperEnabled &&
             (forceWallpaper || prefs.getInt(KEY_VERSE_ID, -1) != verseId)
+        // Live mode: the wallpaper service reads this id, so record it even before the user finishes picking it.
+        if (shouldSetWallpaper && prefs.getBoolean(KEY_LIVE, false)) prefs.edit().putInt(KEY_VERSE_ID, verseId).apply()
         val wallpaperSet = if (shouldSetWallpaper) {
             setLockWallpaper(context, scripture, text, reference).also { success ->
                 if (success) prefs.edit().putInt(KEY_VERSE_ID, verseId).apply()
@@ -52,6 +79,7 @@ object LockScreenVerse {
         } else false
         val notified = notify && VerseNotifier.show(context, verseId, scripture, text, reference)
         val message = when {
+            livePending -> "Tap Set wallpaper, then choose Lock screen. Android removes this wallpaper automatically if you uninstall the app."
             wallpaperSet && notified -> "Today's verse wallpaper and lock-screen notification are active."
             wallpaperSet -> "Today's verse is on your lock screen. Notifications are off; enable them in Android Settings if you also want alerts."
             shouldSetWallpaper && !wallpaperSet && notified -> "Android could not set the lock-screen wallpaper. The verse is available in notifications."
@@ -82,7 +110,7 @@ object LockScreenVerse {
 
     /** Clears only the lock-screen wallpaper; the home-screen wallpaper is untouched. */
     fun clearLockScreenWallpaper(context: Context) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(KEY_VERSE_ID).apply()
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(KEY_VERSE_ID).remove(KEY_LIVE).apply()
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return
         try {
             WallpaperManager.getInstance(context).clear(WallpaperManager.FLAG_LOCK)
@@ -96,6 +124,13 @@ object LockScreenVerse {
     }
 
     private fun setLockWallpaper(context: Context, scripture: String, text: String, reference: String): Boolean {
+        val livePrefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (livePrefs.getBoolean(KEY_LIVE, false)) {
+            // Live mode: the wallpaper service draws the verse itself. Never overwrite it with a static image.
+            if (!isLiveWallpaperActive(context)) return false
+            livePrefs.edit().putLong(KEY_LIVE_REV, System.currentTimeMillis()).apply()
+            return true
+        }
         val bitmap = render(context, scripture, text, reference)
         return try {
             val manager = WallpaperManager.getInstance(context)
@@ -113,7 +148,7 @@ object LockScreenVerse {
         }
     }
 
-    private fun render(context: Context, scripture: String, text: String, reference: String): Bitmap {
+    internal fun render(context: Context, scripture: String, text: String, reference: String): Bitmap {
         val metrics = context.resources.displayMetrics
         val width = metrics.widthPixels.coerceIn(480, 1440)
         val height = metrics.heightPixels.coerceIn(800, 3200)

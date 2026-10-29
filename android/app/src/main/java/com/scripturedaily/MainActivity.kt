@@ -70,6 +70,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.Image
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -124,7 +126,7 @@ private val GoldLight = Color(0xFFE8C49A)
 private val Parchment = Color(0xFFF7F2EE)
 private val Ink = Color(0xFF1A1025)
 private val InkMid = Color(0xFF4A3D5C)
-private val InkSoft = Color(0xFF8A7A9A)
+private val InkSoft = Color(0xFF6F5F80) // darker than #8A7A9A for readable contrast on the cream background
 private val Amber = Gold
 private val AmberLight = GoldLight
 private val Forest = PurpleDark
@@ -401,8 +403,12 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
     var forceUpdate by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        val latest = ForceUpdateManager.fetchLatestVersion()
-        forceUpdate = ForceUpdateManager.isUpdateRequired(BuildConfig.VERSION_NAME, latest)
+        val versions = ForceUpdateManager.fetchVersions()
+        forceUpdate = ForceUpdateManager.isForced(BuildConfig.VERSION_NAME, versions.latest, versions.minRequired)
+        // Newer version exists but this one is still allowed: show a one-time, dismissible notice.
+        if (!forceUpdate && ForceUpdateManager.isUpdateRequired(BuildConfig.VERSION_NAME, versions.latest)) {
+            snackbarHostState.showSnackbar("A new version of WisdomOne is available on Google Play.")
+        }
     }
 
     if (forceUpdate) {
@@ -604,6 +610,18 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
         }
     }
 
+    // Live wallpaper mode: the system wallpaper preview opens and the user taps "Set wallpaper" > Lock screen.
+    // If the phone has no live-wallpaper picker, fall back to the static wallpaper.
+    fun openLiveWallpaperChooser() {
+        if (!store.getBoolean(LockScreenVerse.KEY_LIVE, false) || LockScreenVerse.isLiveWallpaperActive(context)) return
+        try {
+            context.startActivity(LockScreenVerse.liveWallpaperChooserIntent(context))
+        } catch (_: Exception) {
+            store.edit().putBoolean(LockScreenVerse.KEY_LIVE, false).apply()
+            scope.launch { applyCurrentLockVerse(forceWallpaper = true) }
+        }
+    }
+
     var permissionTarget by remember { mutableStateOf<String?>(null) }
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         when (permissionTarget) {
@@ -623,6 +641,7 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
                 VerseSyncWorker.schedule(context, frequency)
             }
             "lock" -> {
+                openLiveWallpaperChooser()
                 if (granted) {
                     scope.launch {
                         applyCurrentLockVerse()?.let { snackbarHostState.showSnackbar(it) }
@@ -685,6 +704,7 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
                 store.edit().putString("last_streak_date", today).putInt("streak", newStreak)
                     .putBoolean("read_$today", true).apply()
                 streak = newStreak
+                if (newStreak > store.getInt("best_streak", 0)) store.edit().putInt("best_streak", newStreak).apply()
                 // Trigger in-app review on 7-day streak milestone
                 if (newStreak == 7 || newStreak == 30) {
                     RatingManager.tryLaunchReview(activity)
@@ -707,7 +727,8 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
 
     fun enableLockScreen() {
         lockScreen = true
-        store.edit().putBoolean("lock_screen", true).apply()
+        store.edit().putBoolean("lock_screen", true)
+            .putBoolean(LockScreenVerse.KEY_LIVE, LockScreenVerse.liveWallpaperSupported(context)).apply()
         val needsPermission = Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         scope.launch {
@@ -719,7 +740,10 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
             if (needsPermission) {
                 permissionTarget = "lock"
                 notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-            } else message?.let { snackbarHostState.showSnackbar(it) }
+            } else {
+                openLiveWallpaperChooser()
+                message?.let { snackbarHostState.showSnackbar(it) }
+            }
         }
     }
 
@@ -1250,7 +1274,7 @@ private fun FirstRunSetupScreen(
     val titles = listOf("Stay in the moment", "Choose what appears", "Keep a verse close")
     val descriptions = listOf(
         "Allow notifications if you want a verse reminder. You can skip this and enable it later in Settings.",
-        "Enabling Lock screen verse sets a static verse image and posts a notification. Android controls notification privacy, and its static wallpaper may remain after uninstall—turn the feature off first to clear it. You can skip this and change it later.",
+        "Enabling Lock screen verse sets a static verse image and posts a notification. Android controls notification privacy. The verse wallpaper is a live wallpaper, so Android removes it when you uninstall the app. You can skip this and change it later.",
         "Add the Scripture Daily home-screen widget from here, or skip and add it later by long-pressing an empty area of your home screen. Lock-screen widgets are available only on supported Android devices."
     )
     Column(
@@ -1478,7 +1502,11 @@ private fun HomeScreen(
                 Row(Modifier.clip(RoundedCornerShape(50)).background(Amber.copy(alpha = 0.15f)).padding(horizontal = 12.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("🔥", fontSize = 13.sp)
                     Spacer(Modifier.width(5.dp))
-                    Text("$streak day streak", fontSize = 12.sp, color = Amber, fontWeight = FontWeight.SemiBold)
+                    val bestStreak = LocalContext.current.getSharedPreferences("reader", 0).getInt("best_streak", streak).coerceAtLeast(streak)
+                    Text(
+                        if (bestStreak > streak) "$streak day streak · best $bestStreak" else "$streak day streak",
+                        fontSize = 12.sp, color = Amber, fontWeight = FontWeight.SemiBold
+                    )
                 }
                 // ── Week streak card ─────────────────────────────────────
                 val context2 = LocalContext.current
@@ -1675,7 +1703,7 @@ private fun FavoritesScreen(
                                     Text(displayReference, color = InkSoft, fontSize = 11.sp)
                                     Spacer(Modifier.width(6.dp))
                                     Box(
-                                        Modifier.size(26.dp).clip(RoundedCornerShape(7.dp))
+                                        Modifier.size(40.dp).semantics { contentDescription = if (isReadToday) "Mark as unread" else "Mark as read" }.clip(RoundedCornerShape(7.dp))
                                             .background(if (isReadToday) Color(0xFF4A8C5C).copy(alpha = 0.12f) else Amber.copy(alpha = 0.08f))
                                             .border(BorderStroke(1.dp, if (isReadToday) Color(0xFF4A8C5C).copy(alpha = 0.5f) else Amber.copy(alpha = 0.3f)), RoundedCornerShape(7.dp))
                                             .clickable { onMarkRead(item) },
@@ -1686,7 +1714,7 @@ private fun FavoritesScreen(
                                     }
                                     Spacer(Modifier.width(6.dp))
                                     Box(
-                                        Modifier.size(26.dp).clip(RoundedCornerShape(7.dp))
+                                        Modifier.size(40.dp).semantics { contentDescription = "Remove from saved" }.clip(RoundedCornerShape(7.dp))
                                             .background(Color(0xFF9C463D).copy(alpha = 0.08f))
                                             .border(BorderStroke(1.dp, Color(0xFF9C463D).copy(alpha = 0.3f)), RoundedCornerShape(7.dp))
                                             .clickable { onRemove(item) },

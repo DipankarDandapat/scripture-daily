@@ -7,6 +7,10 @@ import kotlinx.coroutines.tasks.await
 object ForceUpdateManager {
 
     private const val KEY = "latestAppVersion"
+    /** Optional. Versions below this are blocked; versions between this and [KEY] only see a notice. */
+    private const val KEY_MIN = "minRequiredVersion"
+
+    data class Versions(val latest: String, val minRequired: String)
     // Fetch fresh values every 1 hour in production (0 for debug)
     private val FETCH_INTERVAL_SECONDS = if (BuildConfig.DEBUG) 0L else 3600L
 
@@ -18,7 +22,7 @@ object ForceUpdateManager {
                     .build()
             )
             // Default: same as current build so no false-positive on first launch
-            rc.setDefaultsAsync(mapOf(KEY to BuildConfig.VERSION_NAME))
+            rc.setDefaultsAsync(mapOf(KEY to BuildConfig.VERSION_NAME, KEY_MIN to ""))
         }
     }
 
@@ -32,6 +36,15 @@ object ForceUpdateManager {
             remoteConfig.getString(KEY).trim().ifEmpty { BuildConfig.VERSION_NAME }
         }
     }
+
+    /** Fetches both keys. A missing or blank [KEY_MIN] keeps the old behaviour: [KEY] alone forces the update. */
+    suspend fun fetchVersions(): Versions {
+        val latest = fetchLatestVersion()
+        return Versions(latest, remoteConfig.getString(KEY_MIN).trim())
+    }
+
+    fun isForced(currentVersion: String, latestVersion: String, minRequired: String): Boolean =
+        isUpdateRequired(currentVersion, minRequired.ifBlank { latestVersion })
 
     /**
      * Returns true when [latestVersion] is strictly newer than [currentVersion].
