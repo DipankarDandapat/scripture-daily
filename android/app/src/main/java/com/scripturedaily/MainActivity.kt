@@ -26,7 +26,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
@@ -48,6 +47,7 @@ import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.BatteryChargingFull
 import androidx.compose.material.icons.outlined.Share
@@ -65,6 +65,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.Image
@@ -237,29 +238,37 @@ private sealed class HealthState {
 }
 
 class MainActivity : ComponentActivity() {
+
+    private val deepLinkVerseId = mutableStateOf<Int?>(null)
+
+    private val shortcutTab = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         ApiClient.init(this) {
             getSharedPreferences("reader", 0).getString("bearer_token", null)
         }
-        val deepLinkVerseId = intent?.getIntExtra("verse_id", -1)?.takeIf { it > 0 }
+        deepLinkVerseId.value = intent?.getIntExtra("verse_id", -1)?.takeIf { it > 0 }
+        shortcutTab.value = intent?.getStringExtra("shortcut_tab")
         setContent {
-            val dark = isSystemInDarkTheme()
-            val colors = if (dark)
-                darkColorScheme(
-                    primary = Color(0xFFD4A574), secondary = Color(0xFFE8C49A),
-                    background = Color(0xFF120D1E), surface = Color(0xFF1E1530),
-                    onSurface = Color(0xFFF0EAF8), onBackground = Color(0xFFF0EAF8)
-                )
-            else
-                lightColorScheme(
-                    primary = Color(0xFF3D2060), secondary = Color(0xFFD4A574),
-                    background = Color(0xFFF7F2EE), surface = Color(0xFFFFFFFF),
-                    onSurface = Color(0xFF1A1025), onBackground = Color(0xFF1A1025)
-                )
-            MaterialTheme(colorScheme = colors) { ScriptureApp(deepLinkVerseId) }
+            val colors = lightColorScheme(
+                primary = Purple,
+                secondary = Gold,
+                background = Parchment,
+                surface = Color.White,
+                onSurface = Ink,
+                onBackground = Ink
+            )
+            MaterialTheme(colorScheme = colors) { ScriptureApp(deepLinkVerseId, shortcutTab) }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        deepLinkVerseId.value = intent.getIntExtra("verse_id", -1).takeIf { it > 0 }
+        shortcutTab.value = intent.getStringExtra("shortcut_tab")
     }
 }
 
@@ -386,9 +395,14 @@ private fun shareVerseImage(context: android.content.Context, verse: Verse) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ScriptureApp(deepLinkVerseId: Int? = null) {
+private fun ScriptureApp(
+    deepLinkVerseIdState: androidx.compose.runtime.MutableState<Int?>,
+    shortcutTabState: androidx.compose.runtime.MutableState<String?>
+) {
     val context = LocalContext.current
     val activity = context as Activity
+    val deepLinkVerseId by deepLinkVerseIdState
+    val shortcutTab by shortcutTabState
     val store = remember { context.getSharedPreferences("reader", 0) }
     val dao = remember { ScriptureDatabase.get(context).verses() }
     val catalogDao = remember { ScriptureDatabase.get(context).catalog() }
@@ -581,19 +595,35 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
 
     // Deep-link: widget/notification tap with a specific verse_id
     LaunchedEffect(deepLinkVerseId) {
-        if (deepLinkVerseId != null && configured) {
-            val cached = withContext(Dispatchers.IO) { dao.find(deepLinkVerseId) }
+        val verseId = deepLinkVerseId
+        if (verseId != null && configured) {
+            val cached = withContext(Dispatchers.IO) { dao.find(verseId) }
             if (cached != null) {
                 verse = cached.toVerse()
                 page = "Home"
             } else {
                 try {
                     val remote = withContext(Dispatchers.IO) { ApiClient.api.random(religion, language, scriptureId) }
-                    // fetch specific verse via search isn't available, use the cached or skip
                     verse = remote; page = "Home"
                 } catch (_: Exception) {}
             }
         }
+    }
+
+    // App shortcut: navigate to the tapped tab
+    LaunchedEffect(shortcutTab) {
+        val tab = shortcutTab ?: return@LaunchedEffect
+        if (!configured) return@LaunchedEffect
+        when (tab) {
+            "Home"      -> { page = "Home" }
+            "Favorites" -> { page = "Favorites" }
+            "Explore"   -> { page = "Explore" }
+            "Share"     -> {
+                page = "Home"
+                verse?.let { v -> shareVerseImage(context, v) }
+            }
+        }
+        shortcutTabState.value = null
     }
 
     suspend fun applyCurrentLockVerse(forceWallpaper: Boolean = false): String? {
@@ -670,13 +700,18 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
         }
     }
 
-    suspend fun loadToday(random: Boolean = false) {
+    suspend fun loadToday(random: Boolean = false, forceLanguage: Int? = null, forceScriptureId: Int? = null) {
         loading = true; error = null
+        val langToUse = forceLanguage ?: language
+        val scriptureToUse = forceScriptureId ?: scriptureId
         try {
-            val remote = if (random) ApiClient.api.random(religion, language, scriptureId)
+            val remote = if (random) ApiClient.api.random(religion, langToUse, scriptureToUse)
                          else ApiClient.api.today()
-            val old = dao.find(remote.id)
-            dao.save(remote.toCached(scriptureId, language, old?.favorite == true))
+            val old = withContext(Dispatchers.IO) { dao.find(remote.id) }
+            val cached = remote.toCached(scriptureToUse, langToUse, old?.favorite == true)
+            withContext(Dispatchers.IO) { dao.save(cached) }
+            ScriptureWidget.cacheVerseForWidget(context, cached)
+            store.edit().putInt("last_verse_id", remote.id).apply()
             verse = remote
             if (!random) {
                 val today = java.time.LocalDate.now().toString()
@@ -700,7 +735,7 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
                 LockScreenVerse.applyIfEnabled(context, remote.id, remote.scripture, remote.text, remote.reference())
             }
         } catch (_: Exception) {
-            val local = dao.matching(scriptureId, language)
+            val local = dao.matching(scriptureToUse, langToUse)
             if (local != null) verse = local.toVerse()
             else error = "You're offline. Connect once to download your first verse."
         } finally { loading = false }
@@ -742,14 +777,44 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
 
     var homeLoadKey by remember { mutableIntStateOf(0) }
 
+    // ── Unsaved settings guard ────────────────────────────────────────────────
+    val savedReligion = store.getInt("religion", 0)
+    val savedLanguage = store.getInt("language", 0)
+    val savedFrequency = store.getString("frequency", "Daily") ?: "Daily"
+    val savedReminders = store.getBoolean("reminders", false)
+    val savedPaletteHours = store.getInt("palette_interval_hours", 6).takeIf { it in setOf(1, 6, 12, 24) } ?: 6
+    val settingsDirty = page == "Settings" && (
+        religion != savedReligion || language != savedLanguage ||
+        frequency != savedFrequency || reminders != savedReminders ||
+        paletteIntervalHours != savedPaletteHours
+    )
+    var pendingNavRoute by remember { mutableStateOf<String?>(null) }
+    var showUnsavedDialog by remember { mutableStateOf(false) }
+
     LaunchedEffect(homeLoadKey) {
-        if (configured && page == "Home") loadToday()
+        if (configured && page == "Home") {
+            val lastId = store.getInt("last_verse_id", -1)
+            if (lastId > 0) {
+                val cached = withContext(Dispatchers.IO) { dao.find(lastId) }
+                if (cached != null) {
+                    verse = cached.toVerse()
+                    return@LaunchedEffect
+                }
+            }
+            loadToday()
+        }
     }
 
     // Reload verse when user taps Home tab from another tab (not from Save)
     var prevPage by remember { mutableStateOf("Home") }
     LaunchedEffect(page) {
-        if (page == "Home" && prevPage != "Home" && configured) loadToday()
+        if (page == "Home" && prevPage != "Home" && configured && verse == null && store.getInt("last_verse_id", -1) <= 0) loadToday()
+        if (prevPage == "Explore" && page != "Explore") {
+            query = ""
+            results = emptyList()
+            searchLanguageFilter = null
+            searchScriptureFilter = null
+        }
         prevPage = page
     }
 
@@ -849,7 +914,12 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
                         val selected = page == route
                         NavigationBarItem(
                             selected = selected,
-                            onClick = { page = route },
+                            onClick = {
+                                if (settingsDirty && route != "Settings") {
+                                    pendingNavRoute = route
+                                    showUnsavedDialog = true
+                                } else page = route
+                            },
                             icon = { Icon(painter = painterResource(iconRes), contentDescription = label, modifier = Modifier.size(22.dp), tint = if (selected) Amber else InkSoft) },
                             label = { Text(label, fontSize = 11.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, color = if (selected) Amber else InkSoft) },
                             colors = NavigationBarItemDefaults.colors(selectedIconColor = Amber, selectedTextColor = Amber, unselectedIconColor = InkSoft, unselectedTextColor = InkSoft, indicatorColor = Amber.copy(alpha = 0.12f))
@@ -866,7 +936,12 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
                         val selected = page == route
                         NavigationRailItem(
                             selected = selected,
-                            onClick = { page = route },
+                            onClick = {
+                                if (settingsDirty && route != "Settings") {
+                                    pendingNavRoute = route
+                                    showUnsavedDialog = true
+                                } else page = route
+                            },
                             icon = { Icon(painter = painterResource(iconRes), contentDescription = label, modifier = Modifier.size(22.dp), tint = if (selected) Amber else InkSoft) },
                             label = { Text(label, fontSize = 11.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, color = if (selected) Amber else InkSoft) },
                             alwaysShowLabel = true
@@ -950,22 +1025,7 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
                         val cm = context.getSystemService(android.content.ClipboardManager::class.java)
                         cm.setPrimaryClip(android.content.ClipData.newPlainText("verse", v.text))
                         scope.launch { snackbarHostState.showSnackbar("Verse copied to clipboard") }
-                    }},
-                    onTheme = { theme ->
-                        scope.launch {
-                            loading = true
-                            try {
-                                val hits = ApiClient.api.search(theme, language, scriptureId)
-                                val pick = hits.randomOrNull()
-                                if (pick != null) {
-                                    val old = dao.find(pick.id)
-                                    dao.save(pick.toCached(scriptureId, language, old?.favorite == true))
-                                    verse = pick
-                                }
-                            } catch (_: Exception) {}
-                            loading = false
-                        }
-                    }
+                    }}
                 )
                 "Favorites" -> FavoritesScreen(
                     savedVerses,
@@ -1041,8 +1101,11 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
                                     } else VerseNotifier.cancel(context)
                                 }
                                 snackbarHostState.showSnackbar("Preferences saved")
+                                val savedLang = language
+                                val savedScript = selected.id
                                 page = "Home"
-                                homeLoadKey++
+                                store.edit().remove("last_verse_id").apply()
+                                loadToday(random = true, forceLanguage = savedLang, forceScriptureId = savedScript)
                             } else {
                                 error = "Couldn't reach the scripture catalog. Your saved settings were not changed."
                                 snackbarHostState.showSnackbar("Couldn't save preferences. Please try again.")
@@ -1057,6 +1120,76 @@ private fun ScriptureApp(deepLinkVerseId: Int? = null) {
                 }
             }
         }
+    }
+
+    if (showUnsavedDialog) {
+        AlertDialog(
+            onDismissRequest = { showUnsavedDialog = false },
+            containerColor = Parchment,
+            title = { Text("Unsaved changes", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Ink) },
+            text = { Text("You've changed your preferences. Save before leaving?", fontSize = 14.sp, color = InkSoft, lineHeight = 21.sp) },
+            dismissButton = {
+                TextButton(onClick = {
+                    showUnsavedDialog = false
+                    // Discard: reset all fields back to stored values
+                    religion = store.getInt("religion", 0)
+                    language = store.getInt("language", 0)
+                    frequency = store.getString("frequency", "Daily") ?: "Daily"
+                    reminders = store.getBoolean("reminders", false)
+                    paletteIntervalHours = store.getInt("palette_interval_hours", 6).takeIf { it in setOf(1, 6, 12, 24) } ?: 6
+                    page = pendingNavRoute ?: "Home"
+                    pendingNavRoute = null
+                }) {
+                    Text("Discard", color = InkSoft, fontWeight = FontWeight.SemiBold)
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showUnsavedDialog = false
+                        val targetRoute = pendingNavRoute ?: "Home"
+                        pendingNavRoute = null
+                        scope.launch {
+                            val allScriptures = try { ApiClient.api.scriptures(religion) } catch (_: Exception) { emptyList() }
+                            val selected = allScriptures.firstOrNull()
+                            if (selected != null) {
+                                scriptureId = selected.id
+                                val scriptureIdsStr = allScriptures.joinToString(",") { it.id.toString() }
+                                store.edit()
+                                    .putInt("religion", religion).putInt("language", language)
+                                    .putInt("scripture", selected.id).putString("frequency", frequency)
+                                    .putInt("palette_interval_hours", paletteIntervalHours)
+                                    .putBoolean("reminders", reminders).putBoolean("lock_screen", lockScreen)
+                                    .apply()
+                                val token = getToken()
+                                if (token != null) {
+                                    try {
+                                        val freqApi = when (frequency) { "Every 6 hours" -> "6h"; "Every hour" -> "1h"; else -> "daily" }
+                                        ApiClient.api.savePreferences(PreferenceInput(religion, language, scriptureIdsStr, freqApi, reminders))
+                                    } catch (_: Exception) {}
+                                }
+                                VerseSyncWorker.schedule(context, frequency)
+                                PaletteRefreshWorker.schedule(context)
+                                snackbarHostState.showSnackbar("Preferences saved")
+                                val savedLang = language
+                                val savedScript = selected.id
+                                store.edit().remove("last_verse_id").apply()
+                                // Always fetch new verse in background so Home is ready when user navigates there
+                                loadToday(random = true, forceLanguage = savedLang, forceScriptureId = savedScript)
+                                page = targetRoute
+                            } else {
+                                snackbarHostState.showSnackbar("Couldn't save preferences. Please try again.")
+                                // Stay on Settings — do not navigate
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Ink),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Save", fontWeight = FontWeight.SemiBold, color = Color.White)
+                }
+            }
+        )
     }
 
     if (showFeedback) {
@@ -1238,11 +1371,34 @@ private fun FirstRunSetupScreen(
     onAddWidget: () -> Unit,
     onFinish: () -> Unit
 ) {
+    val context = LocalContext.current
     var step by remember { mutableIntStateOf(0) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var resumeTick by remember { mutableIntStateOf(0) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) resumeTick++
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    // Step 0: re-check notification permission on every resume so button hides when granted
+    val notifGranted = remember(resumeTick) {
+        Build.VERSION.SDK_INT < 33 ||
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+    }
+    // Step 2: re-check widget on every resume so button label updates after user adds widget
+    val widgetAdded = remember(resumeTick) {
+        AppWidgetManager.getInstance(context)
+            .getAppWidgetIds(ComponentName(context, ScriptureWidgetReceiver::class.java))
+            .isNotEmpty()
+    }
+
     val titles = listOf("Stay in the moment", "Choose what appears", "Keep a verse close")
     val descriptions = listOf(
         "Allow notifications if you want a verse reminder. You can skip this and enable it later in Settings.",
-        "Enabling Lock screen verse sets a static verse image and posts a notification. Android controls notification privacy, and its static wallpaper may remain after uninstall—turn the feature off first to clear it. You can skip this and change it later.",
+        "Enabling Lock screen verse sets a static verse image and posts a notification. Android controls notification privacy, and its static wallpaper may remain after uninstall — turn the feature off first to clear it. You can skip this and change it later.",
         "Add the Scripture Daily home-screen widget from here, or skip and add it later by long-pressing an empty area of your home screen. Lock-screen widgets are available only on supported Android devices."
     )
     Column(
@@ -1262,14 +1418,27 @@ private fun FirstRunSetupScreen(
         Text(descriptions[step], fontSize = 15.sp, lineHeight = 23.sp, color = InkSoft)
         Spacer(Modifier.height(26.dp))
         when (step) {
-            0 -> OutlinedButton(onClick = onRequestNotifications, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(15.dp)) {
-                Text("Allow notifications", color = Purple, fontWeight = FontWeight.SemiBold)
+            0 -> {
+                if (!notifGranted) {
+                    OutlinedButton(onClick = onRequestNotifications, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(15.dp)) {
+                        Text("Allow notifications", color = Purple, fontWeight = FontWeight.SemiBold)
+                    }
+                } else {
+                    Box(
+                        Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(15.dp))
+                            .background(Color(0xFF4A8C5C).copy(alpha = 0.1f))
+                            .border(BorderStroke(1.dp, Color(0xFF4A8C5C).copy(alpha = 0.4f)), RoundedCornerShape(15.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("✓ Notifications allowed", color = Color(0xFF4A8C5C), fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    }
+                }
             }
             1 -> OutlinedButton(onClick = onOpenNotificationSettings, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(15.dp)) {
                 Text("Open notification settings", color = Purple, fontWeight = FontWeight.SemiBold)
             }
             else -> OutlinedButton(onClick = onAddWidget, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(15.dp)) {
-                Text("Add home-screen widget", color = Purple, fontWeight = FontWeight.SemiBold)
+                Text(if (widgetAdded) "Add another widget" else "Home screen widget", color = Purple, fontWeight = FontWeight.SemiBold)
             }
         }
         Spacer(Modifier.height(14.dp))
@@ -1449,7 +1618,7 @@ private fun HomeScreen(
     fontSize: Int, streak: Int,
     onRandom: () -> Unit, onFavorite: () -> Unit, onShare: () -> Unit, onShareText: () -> Unit,
     onCopy: () -> Unit, onShowLockScreen: () -> Unit, onHideLockScreen: () -> Unit,
-    onHistory: () -> Unit, onChapterBrowser: () -> Unit, onTheme: (String) -> Unit
+    onHistory: () -> Unit, onChapterBrowser: () -> Unit
 ) {
     val scrollState = rememberScrollState()
     val pullState = rememberPullToRefreshState()
@@ -1542,17 +1711,22 @@ private fun HomeScreen(
                     Box(Modifier.size(120.dp).align(Alignment.TopEnd).offset(x = 30.dp, y = (-30).dp).clip(CircleShape).border(BorderStroke(1.dp, Amber.copy(alpha = 0.12f)), CircleShape))
                     Box(Modifier.size(80.dp).align(Alignment.BottomStart).offset(x = (-20).dp, y = 20.dp).clip(CircleShape).border(BorderStroke(1.dp, Amber.copy(alpha = 0.1f)), CircleShape))
                     Box(Modifier.fillMaxWidth().height(1.dp).align(Alignment.TopCenter).offset(y = 56.dp).background(Brush.horizontalGradient(listOf(Color.Transparent, Amber.copy(alpha = 0.25f), Amber.copy(alpha = 0.25f), Color.Transparent))))
-                    Column(Modifier.padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 26.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(Modifier.clip(RoundedCornerShape(8.dp)).background(Amber.copy(alpha = 0.18f)).border(BorderStroke(1.dp, Amber.copy(alpha = 0.3f)), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 5.dp)) {
-                                Text(verse.scripture.uppercase(), color = Amber, fontSize = 10.sp, letterSpacing = 1.8.sp, fontWeight = FontWeight.Bold)
+                    Box(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 26.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(bottom = 36.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(Modifier.clip(RoundedCornerShape(8.dp)).background(Amber.copy(alpha = 0.18f)).border(BorderStroke(1.dp, Amber.copy(alpha = 0.3f)), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 5.dp)) {
+                                    Text(verse.scripture.uppercase(), color = Amber, fontSize = 10.sp, letterSpacing = 1.8.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Spacer(Modifier.weight(1f))
+                                Icon(Icons.Outlined.AutoAwesome, contentDescription = null, tint = Amber.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
                             }
-                            Spacer(Modifier.weight(1f))
-                            Icon(Icons.Outlined.AutoAwesome, contentDescription = null, tint = Amber.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
+                            Text("\u201c${verse.text}\u201d", color = Color(0xFFF5F0E8), fontSize = fontSize.sp, lineHeight = (fontSize + 12).sp, fontWeight = FontWeight.Normal)
                         }
-                        Text("\u201c${verse.text}\u201d", color = Color(0xFFF5F0E8), fontSize = fontSize.sp, lineHeight = (fontSize + 12).sp, fontWeight = FontWeight.Normal)
-                        Box(Modifier.fillMaxWidth(0.3f).height(1.dp).background(Brush.horizontalGradient(listOf(Amber.copy(alpha = 0.5f), Color.Transparent))))
-                        Text(verse.reference(), color = Color(0xFF8A8078), fontSize = 13.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.3.sp)
+                        Column(Modifier.align(Alignment.BottomEnd), horizontalAlignment = Alignment.End) {
+                            Box(Modifier.fillMaxWidth(0.3f).height(1.dp).background(Brush.horizontalGradient(listOf(Color.Transparent, Amber.copy(alpha = 0.5f)))))
+                            Spacer(Modifier.height(8.dp))
+                            Text(verse.reference(), textAlign = TextAlign.End, color = Color(0xFF8A8078), fontSize = 11.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.3.sp)
+                        }
                     }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1592,21 +1766,6 @@ private fun HomeScreen(
                 Spacer(Modifier.width(8.dp))
                 Text(if (loading) "Finding a verse…" else "Discover another verse", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
             }
-            // ── Theme shortcut chips ─────────────────────────────────────────
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("🕊 Peace", "💪 Strength", "🙏 Gratitude", "❤ Love").forEach { chip ->
-                    Box(
-                        Modifier.weight(1f).clip(RoundedCornerShape(50))
-                            .background(MaterialTheme.colorScheme.surface)
-                            .border(BorderStroke(1.dp, Amber.copy(alpha = 0.3f)), RoundedCornerShape(50))
-                            .clickable(enabled = !loading) { onTheme(chip.substringAfter(" ").lowercase()) }
-                            .padding(vertical = 8.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(chip, fontSize = 11.sp, color = InkMid, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
-                    }
-                }
-            }
             Text("Take a breath. Carry the thought with you.", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center, color = InkSoft, fontSize = 13.sp)
             Spacer(Modifier.height(8.dp))
         }
@@ -1645,57 +1804,98 @@ private fun FavoritesScreen(
                     val displayReference = if (item.book?.equals(item.scripture, ignoreCase = true) == true)
                         item.reference().removePrefix("${item.book} · ") else item.reference()
                     val today2 = remember { java.time.LocalDate.now().toString() }
-                    val isReadToday = item.readDate == today2
-                    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surface).border(1.dp, Amber.copy(alpha = 0.12f), RoundedCornerShape(20.dp)).clickable {
-                        expandedItems = if (expanded) expandedItems - item.id else expandedItems + item.id
-                    }) {
+                    val isReadToday = item.readDate == today2 || item.savedAt.let { saved ->
+                        saved > 0L && java.time.Instant.ofEpochMilli(saved)
+                            .atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString() == today2
+                    }
+                    // Shimmer animation for collapsed state
+                    val shimmerTransition = rememberInfiniteTransition(label = "shimmer")
+                    val shimmerX by shimmerTransition.animateFloat(
+                        initialValue = -300f, targetValue = 300f,
+                        animationSpec = infiniteRepeatable(tween(1400), RepeatMode.Restart),
+                        label = "shimmerX"
+                    )
+                    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
+                        .background(MaterialTheme.colorScheme.surface)
+                        .border(1.dp, if (isReadToday) Color(0xFF4A8C5C).copy(alpha = 0.4f) else Amber.copy(alpha = 0.12f), RoundedCornerShape(20.dp))
+                    ) {
                         Column {
+                            // Top accent bar — green if read, gold if not
                             Box(Modifier.fillMaxWidth().height(4.dp).background(
                                 if (isReadToday) Brush.horizontalGradient(listOf(Color(0xFF4A8C5C), Color(0xFF6DBF82)))
                                 else Brush.horizontalGradient(listOf(Amber, AmberLight))
                             ))
-                            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                // Top row
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Box(Modifier.clip(RoundedCornerShape(6.dp)).background(Amber.copy(alpha = 0.1f)).padding(horizontal = 8.dp, vertical = 3.dp)) {
                                         Text(item.scripture.uppercase(), color = Amber, fontSize = 10.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.Bold)
                                     }
                                     if (isReadToday) {
-                                        Spacer(Modifier.width(6.dp))
-                                        Box(Modifier.size(7.dp).clip(CircleShape).background(Color(0xFF4A8C5C)))
+                                        Spacer(Modifier.width(8.dp))
+                                        Box(Modifier.clip(RoundedCornerShape(6.dp)).background(Color(0xFF4A8C5C).copy(alpha = 0.12f)).border(BorderStroke(1.dp, Color(0xFF4A8C5C).copy(alpha = 0.4f)), RoundedCornerShape(6.dp)).padding(horizontal = 7.dp, vertical = 2.dp)) {
+                                            Text("✓ Today", fontSize = 10.sp, color = Color(0xFF4A8C5C), fontWeight = FontWeight.SemiBold)
+                                        }
                                     }
                                     Spacer(Modifier.weight(1f))
-                                    Text(displayReference, color = InkSoft, fontSize = 11.sp)
-                                    Spacer(Modifier.width(6.dp))
-                                    Box(
-                                        Modifier.size(26.dp).clip(RoundedCornerShape(7.dp))
-                                            .background(if (isReadToday) Color(0xFF4A8C5C).copy(alpha = 0.12f) else Amber.copy(alpha = 0.08f))
-                                            .border(BorderStroke(1.dp, if (isReadToday) Color(0xFF4A8C5C).copy(alpha = 0.5f) else Amber.copy(alpha = 0.3f)), RoundedCornerShape(7.dp))
-                                            .clickable { onMarkRead(item) },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text("\u2713", fontSize = 13.sp, fontWeight = FontWeight.Bold,
-                                            color = if (isReadToday) Color(0xFF4A8C5C) else InkSoft)
-                                    }
-                                    Spacer(Modifier.width(6.dp))
-                                    Box(
-                                        Modifier.size(26.dp).clip(RoundedCornerShape(7.dp))
-                                            .background(Color(0xFF9C463D).copy(alpha = 0.08f))
-                                            .border(BorderStroke(1.dp, Color(0xFF9C463D).copy(alpha = 0.3f)), RoundedCornerShape(7.dp))
-                                            .clickable { onRemove(item) },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Text("\u00d7", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF9C463D), lineHeight = 15.sp)
+                                    // Remove button only in collapsed (unread) state
+                                    if (!isReadToday) {
+                                        Box(
+                                            Modifier.size(26.dp).clip(RoundedCornerShape(7.dp))
+                                                .background(Color(0xFF9C463D).copy(alpha = 0.08f))
+                                                .border(BorderStroke(1.dp, Color(0xFF9C463D).copy(alpha = 0.3f)), RoundedCornerShape(7.dp))
+                                                .clickable { onRemove(item) },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text("\u00d7", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color(0xFF9C463D), lineHeight = 15.sp)
+                                        }
                                     }
                                 }
-                                Text(
-                                    "\u201c${item.text}\u201d",
-                                    fontSize = 15.sp,
-                                    lineHeight = 23.sp,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = if (expanded) Int.MAX_VALUE else 4,
-                                    overflow = if (expanded) TextOverflow.Clip else TextOverflow.Ellipsis
-                                )
-                                Text(if (expanded) "Show less" else "Read full verse", color = Amber, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                if (!isReadToday) {
+                                    // Collapsed state: shimmer placeholder lines
+                                    val shimmerBrush = Brush.horizontalGradient(
+                                        colors = listOf(InkSoft.copy(alpha = 0.08f), InkSoft.copy(alpha = 0.18f), InkSoft.copy(alpha = 0.08f)),
+                                        startX = shimmerX, endX = shimmerX + 300f
+                                    )
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Box(Modifier.fillMaxWidth().height(12.dp).clip(RoundedCornerShape(6.dp)).background(shimmerBrush))
+                                        Box(Modifier.fillMaxWidth(0.65f).height(12.dp).clip(RoundedCornerShape(6.dp)).background(shimmerBrush))
+                                        Box(Modifier.fillMaxWidth(0.80f).height(12.dp).clip(RoundedCornerShape(6.dp)).background(shimmerBrush))
+                                    }
+                                    // Reveal button
+                                    OutlinedButton(
+                                        onClick = { onMarkRead(item) },
+                                        modifier = Modifier.fillMaxWidth().height(44.dp),
+                                        shape = RoundedCornerShape(14.dp),
+                                        border = BorderStroke(1.5.dp, Amber.copy(alpha = 0.6f)),
+                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Amber)
+                                    ) {
+                                        Icon(Icons.Outlined.Visibility, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("Reveal today's verse", fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                                    }
+                                } else {
+                                    // Revealed state: show verse text
+                                    val isLong = item.text.length > 160
+                                    Text(
+                                        "\u201c${item.text}\u201d",
+                                        fontSize = 14.sp, lineHeight = 22.sp,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = if (expanded) Int.MAX_VALUE else 4,
+                                        overflow = if (expanded) TextOverflow.Clip else TextOverflow.Ellipsis
+                                    )
+                                    if (isLong) {
+                                        Text(
+                                            if (expanded) "Show less" else "Read full verse",
+                                            color = Amber, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                                            modifier = Modifier.clickable {
+                                                expandedItems = if (expanded) expandedItems - item.id else expandedItems + item.id
+                                            }
+                                        )
+                                    }
+                                }
+                                // Reference always visible at bottom
+                                Text(displayReference, color = InkSoft, fontSize = 11.sp)
                             }
                         }
                     }
@@ -1708,6 +1908,11 @@ private fun FavoritesScreen(
 
 @Composable
 private fun ExploreScreen(query: String, onQuery: (String) -> Unit, results: List<Verse>, loading: Boolean, favoriteIds: Set<Int>, languages: List<CatalogItem>, scriptures: List<CatalogItem>, languageFilter: Int?, scriptureFilter: Int?, onSearch: () -> Unit, onFavorite: (Verse) -> Unit, onQueryChange: (String) -> Unit, onLanguageFilter: (Int?) -> Unit, onScriptureFilter: (Int?) -> Unit) {
+    val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    var searched by remember { mutableStateOf(false) }
+
+    // Reset searched state when query is cleared externally
+    LaunchedEffect(query) { if (query.isEmpty()) searched = false }
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.background).padding(horizontal = 20.dp, vertical = 20.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1728,10 +1933,22 @@ private fun ExploreScreen(query: String, onQuery: (String) -> Unit, results: Lis
                 value = query, onValueChange = { onQuery(it); onQueryChange(it) }, modifier = Modifier.weight(1f),
                 placeholder = { Text("Search a word or idea…", color = InkSoft, fontSize = 14.sp) },
                 singleLine = true,
-                colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent)
+                enabled = !searched,
+                colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
+                    disabledContainerColor = Color.Transparent, disabledIndicatorColor = Color.Transparent, disabledTextColor = Ink)
             )
-            if (query.length >= 2) {
-                IconButton(onClick = onSearch, enabled = !loading, modifier = Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(Amber)) {
+            if (searched) {
+                // Show clear button after search
+                IconButton(onClick = { onQueryChange(""); searched = false }, modifier = Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(InkSoft.copy(alpha = 0.15f))) {
+                    Icon(Icons.Outlined.Close, contentDescription = "Clear", tint = InkMid, modifier = Modifier.size(16.dp))
+                }
+            } else if (query.length >= 2) {
+                // Show search button while typing
+                IconButton(onClick = {
+                    keyboardController?.hide()
+                    searched = true
+                    onSearch()
+                }, enabled = !loading, modifier = Modifier.size(36.dp).clip(RoundedCornerShape(10.dp)).background(Amber)) {
                     if (loading) CircularProgressIndicator(color = Color.White, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                     else Icon(Icons.Outlined.Search, contentDescription = "Search", tint = Color.White, modifier = Modifier.size(16.dp))
                 }
@@ -1756,15 +1973,12 @@ private fun ExploreScreen(query: String, onQuery: (String) -> Unit, results: Lis
                         Column {
                             Box(Modifier.fillMaxWidth().height(3.dp).background(Brush.horizontalGradient(listOf(Amber, AmberLight))))
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                // Top row: badge + save button only
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Box(Modifier.clip(RoundedCornerShape(6.dp)).background(Amber.copy(alpha = 0.1f)).padding(horizontal = 8.dp, vertical = 3.dp)) {
                                         Text(v.scripture.uppercase(), color = Amber, fontSize = 10.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.Bold)
                                     }
                                     Spacer(Modifier.weight(1f))
-                                    Text(v.reference(), color = InkSoft, fontSize = 11.sp)
-                                }
-                                Text("\u201c${v.text}\u201d", fontSize = 15.sp, lineHeight = 23.sp, color = MaterialTheme.colorScheme.onSurface, maxLines = 4, overflow = TextOverflow.Ellipsis)
-                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                                     val saveBg by animateColorAsState(if (saved) Amber else Color.Transparent, tween(250), label = "saveBg")
                                     val saveContent by animateColorAsState(if (saved) Color.White else Ink, tween(250), label = "saveContent")
                                     Button(onClick = { onFavorite(v) }, modifier = Modifier.height(34.dp), shape = RoundedCornerShape(10.dp), colors = ButtonDefaults.buttonColors(containerColor = saveBg, contentColor = saveContent), border = BorderStroke(1.dp, Amber.copy(alpha = 0.5f)), contentPadding = PaddingValues(horizontal = 14.dp, vertical = 0.dp)) {
@@ -1773,6 +1987,9 @@ private fun ExploreScreen(query: String, onQuery: (String) -> Unit, results: Lis
                                         Text(if (saved) "Saved" else "Save", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                                     }
                                 }
+                                Text("\u201c${v.text}\u201d", fontSize = 14.sp, lineHeight = 22.sp, color = MaterialTheme.colorScheme.onSurface, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                                // Reference at bottom
+                                Text(v.reference(), color = InkSoft, fontSize = 11.sp)
                             }
                         }
                     }
@@ -2239,6 +2456,7 @@ private fun languageNativeScript(name: String): String = when (name.lowercase())
     "marathi" -> "मराठी"
     else      -> name
 }
+
 
 @Composable
 private fun SettingsSectionLabel(label: String, showInfo: Boolean = false) {

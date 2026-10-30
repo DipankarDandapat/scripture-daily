@@ -46,7 +46,8 @@ interface VerseDao {
     @Query("SELECT * FROM cached_verses WHERE id = :id LIMIT 1") suspend fun find(id: Int): CachedVerse?
     @Query("SELECT * FROM cached_verses WHERE favorite = 1 ORDER BY savedAt DESC") fun observeFavorites(): Flow<List<CachedVerse>>
     @Query("SELECT * FROM cached_verses WHERE favorite = 1 ORDER BY savedAt DESC") suspend fun favorites(): List<CachedVerse>
-    @Query("SELECT * FROM cached_verses WHERE scriptureId = :scriptureId AND languageId = :languageId ORDER BY savedAt DESC LIMIT 1") suspend fun matching(scriptureId: Int, languageId: Int): CachedVerse?
+    @Query("SELECT * FROM cached_verses WHERE scriptureId = :scriptureId AND languageId = :languageId AND favorite = 0 ORDER BY savedAt DESC LIMIT 1") suspend fun matching(scriptureId: Int, languageId: Int): CachedVerse?
+    @Query("SELECT * FROM cached_verses WHERE favorite = 0 ORDER BY savedAt DESC LIMIT 1") suspend fun latestAny(): CachedVerse?
     @Query("UPDATE cached_verses SET favorite = :favorite WHERE id = :id") suspend fun setFavorite(id: Int, favorite: Boolean)
     @Query("UPDATE cached_verses SET readDate = :date WHERE id = :id") suspend fun setReadDate(id: Int, date: String?)
     @Query("UPDATE cached_verses SET favorite = 0") suspend fun clearAllFavorites()
@@ -74,7 +75,7 @@ interface CatalogDao {
     @Query("DELETE FROM cached_catalog WHERE type = :type") suspend fun deleteByType(type: String)
 }
 
-@Database(entities = [CachedVerse::class, CachedCatalogItem::class], version = 3, exportSchema = false)
+@Database(entities = [CachedVerse::class, CachedCatalogItem::class], version = 4, exportSchema = false)
 abstract class ScriptureDatabase : RoomDatabase() {
     abstract fun verses(): VerseDao
     abstract fun catalog(): CatalogDao

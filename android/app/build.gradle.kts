@@ -10,14 +10,14 @@ plugins {
 
 android {
     namespace = "com.scripturedaily"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.scripturedaily"
         minSdk = 26
-        targetSdk = 35
-        versionCode = 17
-        versionName = "1.3.2"
+        targetSdk = 36
+        versionCode = 21
+        versionName = "1.4.1"
 
         val apiBase = providers.gradleProperty("SD_API_BASE_URL").get()
         buildConfigField("String", "API_BASE_URL", "\"$apiBase\"")

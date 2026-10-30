@@ -1,0 +1,11 @@
+<resources>
+    <string name="widget_description">Daily verse from WisdomOne</string>
+    <string name="shortcut_today_short">Today&#8217;s Verse</string>
+    <string name="shortcut_today_long">Read today&#8217;s verse</string>
+    <string name="shortcut_saved_short">Saved Verses</string>
+    <string name="shortcut_saved_long">Open your saved verses</string>
+    <string name="shortcut_explore_short">Explore</string>
+    <string name="shortcut_explore_long">Search across all scriptures</string>
+    <string name="shortcut_share_short">Share a Verse</string>
+    <string name="shortcut_share_long">Share today&#8217;s verse</string>
+</resources>
