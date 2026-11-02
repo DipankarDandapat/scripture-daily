@@ -16,8 +16,8 @@ android {
         applicationId = "com.scripturedaily"
         minSdk = 26
         targetSdk = 36
-        versionCode = 21
-        versionName = "1.4.1"
+        versionCode = 22
+        versionName = "1.4.2"
 
         val apiBase = providers.gradleProperty("SD_API_BASE_URL").get()
         buildConfigField("String", "API_BASE_URL", "\"$apiBase\"")

@@ -46,7 +46,6 @@ import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.LockOpen
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Search
-import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.BatteryChargingFull
@@ -341,45 +340,135 @@ private suspend fun refreshToken(context: android.content.Context): String? {
     return ensureDeviceToken(context, forceRefresh = true)
 }
 
+// ── WhatsApp Status: render a 9:16 portrait verse card and open WA Status ────
+private fun shareToWhatsAppStatus(context: android.content.Context, verse: Verse) {
+    val w = 1080; val h = 1920
+    val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.parseColor("#0F0A1A") }
+    canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), bgPaint)
+    val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        shader = android.graphics.RadialGradient(
+            w / 2f, h * 0.42f, 700f,
+            intArrayOf(android.graphics.Color.parseColor("#2D1B4E"), android.graphics.Color.parseColor("#1A0F2E"), android.graphics.Color.TRANSPARENT),
+            floatArrayOf(0f, 0.55f, 1f), android.graphics.Shader.TileMode.CLAMP
+        )
+    }
+    canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), glowPaint)
+    val goldLine = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.parseColor("#D4A574"); alpha = 180; style = Paint.Style.FILL }
+    canvas.drawRect(120f, 200f, w - 120f, 203f, goldLine)
+    val labelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.parseColor("#D4A574")
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        textSize = 40f; letterSpacing = 0.22f; textAlign = Paint.Align.CENTER
+    }
+    canvas.drawText(verse.scripture.uppercase(), w / 2f, 310f, labelPaint)
+    val quotePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.parseColor("#D4A574"); alpha = 55
+        typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD); textSize = 220f
+    }
+    canvas.drawText("“", 100f, 620f, quotePaint)
+    val bodyPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.parseColor("#F0EBE3")
+        typeface = Typeface.create(Typeface.SERIF, Typeface.NORMAL); textSize = 66f
+    }
+    val bodyLayout = StaticLayout.Builder
+        .obtain(verse.text, 0, verse.text.length, bodyPaint, w - 240)
+        .setAlignment(Layout.Alignment.ALIGN_CENTER).setLineSpacing(14f, 1f)
+        .setMaxLines(16).setEllipsize(TextUtils.TruncateAt.END).setIncludePad(false).build()
+    canvas.save(); canvas.translate(120f, h * 0.38f); bodyLayout.draw(canvas); canvas.restore()
+    val bottomLineY = h - 360f
+    canvas.drawRect(120f, bottomLineY, w - 120f, bottomLineY + 3f, goldLine)
+    val refPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.parseColor("#9A8A7A")
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+        textSize = 34f; textAlign = Paint.Align.RIGHT; letterSpacing = 0.08f
+    }
+    canvas.drawText(verse.reference(), w - 120f, bottomLineY - 28f, refPaint)
+    val wmPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.parseColor("#D4A574")
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        textSize = 62f; textAlign = Paint.Align.CENTER; letterSpacing = 0.10f
+    }
+    canvas.drawText("WisdomOne", w / 2f, h - 150f, wmPaint)
+    val file = File(context.cacheDir, "verse_status.png")
+    file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 95, it) }
+    bitmap.recycle()
+    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+    val waPackage = "com.whatsapp"
+    val wabPackage = "com.whatsapp.w4b"
+    val pm = context.packageManager
+    val installedPackage = when {
+        try { pm.getPackageInfo(waPackage, 0); true } catch (_: Exception) { false } -> waPackage
+        try { pm.getPackageInfo(wabPackage, 0); true } catch (_: Exception) { false } -> wabPackage
+        else -> null
+    }
+    if (installedPackage == null) {
+        android.widget.Toast.makeText(context, "WhatsApp is not installed", android.widget.Toast.LENGTH_SHORT).show()
+        return
+    }
+    val intent = Intent(Intent.ACTION_SEND).apply {
+        type = "image/png"
+        `package` = installedPackage
+        putExtra(Intent.EXTRA_STREAM, uri)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+    context.startActivity(intent)
+}
+
+
 // ── Share image: render a styled verse card bitmap and share it ──────────────
 private fun shareVerseImage(context: android.content.Context, verse: Verse) {
     val w = 1080; val h = 1080
     val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
-    // Background gradient (dark purple)
-    val bgPaint = Paint().apply { color = android.graphics.Color.parseColor("#1A1025") }
+    val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.parseColor("#0F0A1A") }
     canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), bgPaint)
-    // Accent bar
-    val barPaint = Paint().apply { color = android.graphics.Color.parseColor("#D4A574"); strokeWidth = 6f; style = Paint.Style.FILL }
-    canvas.drawRect(80f, 120f, 86f, 280f, barPaint)
-    // Scripture label
+    val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        shader = android.graphics.RadialGradient(
+            w / 2f, h * 0.44f, 560f,
+            intArrayOf(android.graphics.Color.parseColor("#2D1B4E"), android.graphics.Color.parseColor("#1A0F2E"), android.graphics.Color.TRANSPARENT),
+            floatArrayOf(0f, 0.5f, 1f), android.graphics.Shader.TileMode.CLAMP
+        )
+    }
+    canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), glowPaint)
+    val goldLine = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = android.graphics.Color.parseColor("#D4A574"); alpha = 180; style = Paint.Style.FILL }
+    canvas.drawRect(100f, 130f, w - 100f, 133f, goldLine)
     val labelPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
         color = android.graphics.Color.parseColor("#D4A574")
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-        textSize = 36f; letterSpacing = 0.12f
+        textSize = 34f; letterSpacing = 0.22f; textAlign = Paint.Align.CENTER
     }
-    canvas.drawText(verse.scripture.uppercase(), 110f, 175f, labelPaint)
-    // Verse text
+    canvas.drawText(verse.scripture.uppercase(), w / 2f, 220f, labelPaint)
+    val quotePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.parseColor("#D4A574"); alpha = 55
+        typeface = Typeface.create(Typeface.SERIF, Typeface.BOLD); textSize = 180f
+    }
+    canvas.drawText("“", 80f, 460f, quotePaint)
     val bodyPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.parseColor("#F5F0E8")
-        typeface = Typeface.DEFAULT; textSize = 52f
+        color = android.graphics.Color.parseColor("#F0EBE3")
+        typeface = Typeface.create(Typeface.SERIF, Typeface.NORMAL); textSize = 56f
     }
-    val bodyLayout = StaticLayout.Builder.obtain("“${verse.text}”", 0, verse.text.length + 2, bodyPaint, w - 160)
-        .setAlignment(Layout.Alignment.ALIGN_NORMAL).setLineSpacing(0f, 1.2f)
-        .setMaxLines(12).setEllipsize(TextUtils.TruncateAt.END).setIncludePad(false).build()
-    canvas.save(); canvas.translate(80f, 320f); bodyLayout.draw(canvas); canvas.restore()
-    // Reference
+    val bodyLayout = StaticLayout.Builder
+        .obtain(verse.text, 0, verse.text.length, bodyPaint, w - 200)
+        .setAlignment(Layout.Alignment.ALIGN_CENTER).setLineSpacing(10f, 1f)
+        .setMaxLines(10).setEllipsize(TextUtils.TruncateAt.END).setIncludePad(false).build()
+    val bodyTop = (h / 2f) - (bodyLayout.height / 2f) - 20f
+    canvas.save(); canvas.translate(100f, bodyTop.coerceAtLeast(270f)); bodyLayout.draw(canvas); canvas.restore()
+    val bottomLineY = h - 240f
+    canvas.drawRect(100f, bottomLineY, w - 100f, bottomLineY + 3f, goldLine)
     val refPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.parseColor("#8A8078"); typeface = Typeface.DEFAULT; textSize = 36f
+        color = android.graphics.Color.parseColor("#9A8A7A")
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
+        textSize = 28f; textAlign = Paint.Align.RIGHT; letterSpacing = 0.08f
     }
-    canvas.drawText(verse.reference(), 80f, h - 140f, refPaint)
-    // Watermark
+    canvas.drawText(verse.reference(), w - 100f, bottomLineY - 22f, refPaint)
     val wmPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = android.graphics.Color.parseColor("#D4A574"); typeface = Typeface.DEFAULT; textSize = 30f
-        textAlign = Paint.Align.RIGHT
+        color = android.graphics.Color.parseColor("#D4A574")
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        textSize = 54f; textAlign = Paint.Align.CENTER; letterSpacing = 0.10f
     }
-    canvas.drawText("WisdomOne", w - 80f, h - 80f, wmPaint)
-
+    canvas.drawText("WisdomOne", w / 2f, h - 90f, wmPaint)
     val file = File(context.cacheDir, "verse_share.png")
     file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 95, it) }
     bitmap.recycle()
@@ -387,7 +476,7 @@ private fun shareVerseImage(context: android.content.Context, verse: Verse) {
     val intent = Intent(Intent.ACTION_SEND).apply {
         type = "image/png"
         putExtra(Intent.EXTRA_STREAM, uri)
-        putExtra(Intent.EXTRA_TEXT, "${verse.text}\n\n${verse.scripture} · ${verse.reference()}")
+        putExtra(Intent.EXTRA_TEXT, "${verse.text}\n\n${verse.scripture} · ${verse.reference()}")
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     context.startActivity(Intent.createChooser(intent, "Share verse"))
@@ -1010,6 +1099,7 @@ private fun ScriptureApp(
                             if (result == SnackbarResult.ActionPerformed) RatingManager.openPlayStore(context)
                         }
                     }},
+                    onWhatsAppStatus = { verse?.let { v -> shareToWhatsAppStatus(context, v) } },
                     onShowLockScreen = { enableLockScreen() },
                     onHideLockScreen = { disableLockScreen() },
                     onHistory = {
@@ -1020,12 +1110,7 @@ private fun ScriptureApp(
                     },
                     onChapterBrowser = { showChapterBrowser = true },
                     fontSize = fontSize,
-                    streak = streak,
-                    onCopy = { verse?.let { v ->
-                        val cm = context.getSystemService(android.content.ClipboardManager::class.java)
-                        cm.setPrimaryClip(android.content.ClipData.newPlainText("verse", v.text))
-                        scope.launch { snackbarHostState.showSnackbar("Verse copied to clipboard") }
-                    }}
+                    streak = streak
                 )
                 "Favorites" -> FavoritesScreen(
                     savedVerses,
@@ -1617,7 +1702,7 @@ private fun HomeScreen(
     verse: Verse?, loading: Boolean, error: String?, favorite: Boolean, lockScreen: Boolean,
     fontSize: Int, streak: Int,
     onRandom: () -> Unit, onFavorite: () -> Unit, onShare: () -> Unit, onShareText: () -> Unit,
-    onCopy: () -> Unit, onShowLockScreen: () -> Unit, onHideLockScreen: () -> Unit,
+    onWhatsAppStatus: () -> Unit, onShowLockScreen: () -> Unit, onHideLockScreen: () -> Unit,
     onHistory: () -> Unit, onChapterBrowser: () -> Unit
 ) {
     val scrollState = rememberScrollState()
@@ -1732,18 +1817,27 @@ private fun HomeScreen(
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     val favBg by animateColorAsState(if (favorite) Amber else Color.Transparent, tween(300), label = "favBg")
                     val favContent by animateColorAsState(if (favorite) Color.White else Ink, tween(300), label = "favContent")
-                    Button(onClick = onFavorite, modifier = Modifier.weight(1f).height(52.dp), shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = favBg, contentColor = favContent), border = BorderStroke(1.5.dp, Amber.copy(alpha = 0.5f))) {
-                        Icon(if (favorite) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text(if (favorite) "Saved" else "Save", fontWeight = FontWeight.SemiBold)
+                    Button(onClick = onFavorite, modifier = Modifier.weight(1f).height(52.dp), shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = favBg, contentColor = favContent), border = BorderStroke(1.5.dp, Amber.copy(alpha = 0.5f)), contentPadding = PaddingValues(start = 10.dp, end = 4.dp, top = 0.dp, bottom = 0.dp)) {
+                        Icon(if (favorite) Icons.Outlined.Bookmark else Icons.Outlined.BookmarkBorder, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text(if (favorite) "Saved" else "Save", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1)
                     }
-                    OutlinedButton(onClick = onShare, modifier = Modifier.weight(1f).height(52.dp), shape = RoundedCornerShape(16.dp), border = BorderStroke(1.5.dp, Amber.copy(alpha = 0.5f)), colors = ButtonDefaults.outlinedButtonColors(contentColor = Ink)) {
-                        Icon(Icons.Outlined.Share, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Share", fontWeight = FontWeight.SemiBold)
+                    OutlinedButton(onClick = onShare, modifier = Modifier.weight(1f).height(52.dp), shape = RoundedCornerShape(16.dp), border = BorderStroke(1.5.dp, Amber.copy(alpha = 0.5f)), colors = ButtonDefaults.outlinedButtonColors(contentColor = Ink), contentPadding = PaddingValues(start = 10.dp, end = 4.dp, top = 0.dp, bottom = 0.dp)) {
+                        Icon(Icons.Outlined.Share, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text("Share", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1)
                     }
-                    OutlinedButton(onClick = onCopy, modifier = Modifier.size(52.dp), shape = RoundedCornerShape(16.dp), border = BorderStroke(1.5.dp, Amber.copy(alpha = 0.5f)), colors = ButtonDefaults.outlinedButtonColors(contentColor = Ink), contentPadding = PaddingValues(0.dp)) {
-                        Icon(Icons.Outlined.ContentCopy, contentDescription = "Copy", modifier = Modifier.size(18.dp))
+                    OutlinedButton(
+                        onClick = onWhatsAppStatus,
+                        modifier = Modifier.weight(1f).height(52.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.5.dp, Color(0xFF25D366).copy(alpha = 0.7f)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF25D366)),
+                        contentPadding = PaddingValues(start = 10.dp, end = 4.dp, top = 0.dp, bottom = 0.dp)
+                    ) {
+                        Icon(painter = painterResource(R.drawable.ic_whatsapp), contentDescription = "WhatsApp Status", modifier = Modifier.size(18.dp), tint = Color.Unspecified)
+                        Spacer(Modifier.width(5.dp))
+                        Text("Status", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1)
                     }
                 }
                 Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(if (lockScreen) Amber.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surface).border(1.dp, if (lockScreen) Amber.copy(alpha = 0.4f) else Amber.copy(alpha = 0.1f), RoundedCornerShape(20.dp)).padding(16.dp)) {
