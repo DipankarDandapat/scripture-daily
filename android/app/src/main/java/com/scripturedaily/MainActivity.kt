@@ -97,6 +97,22 @@ import com.scripturedaily.data.CatalogItem
 import com.scripturedaily.data.DeviceRegInput
 import com.scripturedaily.data.FavoriteInput
 import com.scripturedaily.data.FeedbackInput
+import com.scripturedaily.data.MoodCheckinInput
+import com.scripturedaily.features.Overlay
+import com.scripturedaily.features.challenges.ChallengesScreen
+import com.scripturedaily.features.discover.DiscoverItem
+import com.scripturedaily.features.discover.DiscoverScreen
+import com.scripturedaily.features.discover.StoryLibraryScreen
+import com.scripturedaily.features.explain.ExplainSheet
+import com.scripturedaily.features.media.MediaStudioScreen
+import com.scripturedaily.features.mood.DefaultMoods
+import com.scripturedaily.features.mood.MoodCard
+import com.scripturedaily.features.mood.MoodJournalScreen
+import com.scripturedaily.features.share.ShareStudioScreen
+import com.scripturedaily.features.story.StoryScreen
+import com.scripturedaily.features.story.StorySource
+import com.scripturedaily.features.truths.UniversalTruthsScreen
+import com.scripturedaily.widget.WidgetStudioScreen
 import com.scripturedaily.data.PreferenceInput
 import com.scripturedaily.data.PaletteRefreshWorker
 import com.scripturedaily.data.ReligionItem
@@ -476,7 +492,8 @@ private fun shareVerseImage(context: android.content.Context, verse: Verse) {
     val intent = Intent(Intent.ACTION_SEND).apply {
         type = "image/png"
         putExtra(Intent.EXTRA_STREAM, uri)
-        putExtra(Intent.EXTRA_TEXT, "${verse.text}\n\n${verse.scripture} · ${verse.reference()}")
+        putExtra(Intent.EXTRA_TEXT, "${verse.text}\n\n${verse.scripture} · ${verse.reference()}")
+
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     context.startActivity(Intent.createChooser(intent, "Share verse"))
@@ -559,6 +576,16 @@ private fun ScriptureApp(
     var showChapterBrowser by remember { mutableStateOf(false) }
     var fontSize by remember { mutableIntStateOf(store.getInt("font_size", 22)) }
     var streak by remember { mutableIntStateOf(store.getInt("streak", 0)) }
+    var overlay by remember { mutableStateOf<Overlay?>(null) }
+    var moods by remember { mutableStateOf(DefaultMoods) }
+    val todayKey = remember { java.time.LocalDate.now().toString() }
+    var mood by remember { mutableStateOf(if (store.getString("mood_day", null) == todayKey) store.getString("mood", null) else null) }
+    var moodMessage by remember { mutableStateOf(if (mood != null) store.getString("mood_message", null) else null) }
+    var moodLoading by remember { mutableStateOf(false) }
+    var moodError by remember { mutableStateOf<String?>(null) }
+    var moodShuffle by remember { mutableIntStateOf(0) }
+    var storyAvailable by remember { mutableStateOf(false) }
+    var explainFor by remember { mutableStateOf<Verse?>(null) }
 
     // ── Single sequential startup flow ─────────────────────────────────────────
     LaunchedEffect(Unit) {
@@ -789,6 +816,27 @@ private fun ScriptureApp(
         }
     }
 
+    suspend fun applyMood(code: String, shuffle: Int = 0) {
+        moodLoading = true; moodError = null
+        try {
+            val result = withContext(Dispatchers.IO) { ApiClient.api.moodVerse(code, religion.takeIf { it > 0 }, language.takeIf { it > 0 }, shuffle) }
+            val remote = result.verse
+            val sid = scriptures.firstOrNull { it.name == remote.scripture }?.id ?: scriptureId
+            val cached = withContext(Dispatchers.IO) {
+                val old = dao.find(remote.id)
+                remote.toCached(sid, language, old?.favorite == true).also { dao.save(it) }
+            }
+            ScriptureWidget.cacheVerseForWidget(context, cached)
+            store.edit().putInt("last_verse_id", remote.id).putString("mood", code).putString("mood_day", todayKey)
+                .putString("mood_message", result.message).apply()
+            verse = remote; mood = code; moodMessage = result.message
+            ScriptureWidget().refreshAll(context)
+            if (shuffle == 0) runCatching { withContext(Dispatchers.IO) { ApiClient.api.recordMood(MoodCheckinInput(code, remote.id)) } }
+        } catch (_: Exception) {
+            moodError = "Couldn't reach the server. Check your connection and try again."
+        } finally { moodLoading = false }
+    }
+
     suspend fun loadToday(random: Boolean = false, forceLanguage: Int? = null, forceScriptureId: Int? = null) {
         loading = true; error = null
         val langToUse = forceLanguage ?: language
@@ -960,6 +1008,7 @@ private fun ScriptureApp(
         Triple("Home", R.drawable.ic_nav_home, "Home"),
         Triple("Saved", R.drawable.ic_nav_saved, "Favorites"),
         Triple("Explore", R.drawable.ic_nav_explore, "Explore"),
+        Triple("Discover", R.drawable.ic_nav_discover, "Discover"),
         Triple("Settings", R.drawable.ic_nav_settings, "Settings")
     )
     val useNavigationRail = LocalConfiguration.current.screenWidthDp >= 840
@@ -1072,7 +1121,45 @@ private fun ScriptureApp(
                     } else when (page) {
                 "Home" -> HomeScreen(
                     verse, loading, error, favoriteIds.contains(verse?.id), lockScreen,
-                    onRandom = { scope.launch { loadToday(true) } },
+                    moodSlot = {
+                        MoodCard(
+                            moods = moods, selected = mood, loading = moodLoading, message = moodMessage, error = moodError,
+                            onSelect = { code -> moodShuffle = 0; scope.launch { applyMood(code) } },
+                            onAnother = { val m = mood; if (m != null) { moodShuffle++; scope.launch { applyMood(m, moodShuffle) } } },
+                            onClear = {
+                                mood = null; moodMessage = null; moodError = null
+                                store.edit().remove("mood").remove("mood_day").remove("mood_message").remove("last_verse_id").apply()
+                                scope.launch { loadToday() }
+                            },
+                            onJournal = { overlay = Overlay.Journal }
+                        )
+                    },
+                    actionsSlot = {
+                        verse?.let { v ->
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                OutlinedButton(
+                                    onClick = { explainFor = v }, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(16.dp),
+                                    border = BorderStroke(1.5.dp, Amber.copy(alpha = 0.5f)), colors = ButtonDefaults.outlinedButtonColors(contentColor = Ink)
+                                ) { Text("🧒  Explain this to me like I'm 5", fontWeight = FontWeight.SemiBold, fontSize = 14.sp) }
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    OutlinedButton(onClick = { overlay = Overlay.Studio(v) }, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(16.dp),
+                                        border = BorderStroke(1.5.dp, Amber.copy(alpha = 0.5f)), colors = ButtonDefaults.outlinedButtonColors(contentColor = Ink),
+                                        contentPadding = PaddingValues(horizontal = 6.dp)) { Text("🎨 Studio", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
+                                    OutlinedButton(onClick = { overlay = Overlay.Media(v) }, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(16.dp),
+                                        border = BorderStroke(1.5.dp, Amber.copy(alpha = 0.5f)), colors = ButtonDefaults.outlinedButtonColors(contentColor = Ink),
+                                        contentPadding = PaddingValues(horizontal = 6.dp)) { Text("🎬 Video", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
+                                    if (storyAvailable) OutlinedButton(onClick = { overlay = Overlay.StoryForVerse(v.id) }, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(16.dp),
+                                        border = BorderStroke(1.5.dp, Amber.copy(alpha = 0.5f)), colors = ButtonDefaults.outlinedButtonColors(contentColor = Ink),
+                                        contentPadding = PaddingValues(horizontal = 6.dp)) { Text("📖 Story", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
+                                }
+                            }
+                        }
+                    },
+                    onRandom = {
+                        mood = null; moodMessage = null
+                        store.edit().remove("mood").remove("mood_day").remove("mood_message").apply()
+                        scope.launch { loadToday(true) }
+                    },
                     onFavorite = { verse?.let { v -> scope.launch { toggleFavorite(v) } } },
                     onShare = { verse?.let { v ->
                         shareVerseImage(context, v)
@@ -1137,6 +1224,20 @@ private fun ScriptureApp(
                     onLanguageFilter = { searchLanguageFilter = it; results = emptyList() },
                     onScriptureFilter = { searchScriptureFilter = it; results = emptyList() }
                 )
+                "Discover" -> DiscoverScreen(onOpen = { item ->
+                    when (item) {
+                        DiscoverItem.TRUTHS -> overlay = Overlay.Truths
+                        DiscoverItem.CHALLENGES -> overlay = Overlay.Challenges
+                        DiscoverItem.STORIES -> overlay = Overlay.Stories
+                        DiscoverItem.WIDGETS -> overlay = Overlay.Widgets
+                        DiscoverItem.JOURNAL -> overlay = Overlay.Journal
+                        DiscoverItem.STUDIO, DiscoverItem.MEDIA -> scope.launch {
+                            val v = verse ?: withContext(Dispatchers.IO) { dao.find(store.getInt("last_verse_id", -1))?.toVerse() }
+                            if (v == null) snackbarHostState.showSnackbar("Open a verse on Home first, then come back.")
+                            else overlay = if (item == DiscoverItem.STUDIO) Overlay.Studio(v) else Overlay.Media(v)
+                        }
+                    }
+                })
                 else -> SettingsScreen(
                     religion, language, frequency, reminders, lockScreen, paletteIntervalHours, fontSize,
                     religions, languages, settingsResume, error,
@@ -1330,6 +1431,28 @@ private fun ScriptureApp(
         )
     }
 
+    // ── Feature overlays ───────────────────────────────────────────────────────
+    LaunchedEffect(configured) {
+        if (configured) try { moods = ApiClient.api.moods().ifEmpty { moods } } catch (_: Exception) {}
+    }
+    LaunchedEffect(verse?.id, language) {
+        storyAvailable = false
+        val v = verse ?: return@LaunchedEffect
+        try { storyAvailable = withContext(Dispatchers.IO) { ApiClient.api.storyForVerse(v.id, language.takeIf { it > 0 }).isSuccessful } } catch (_: Exception) {}
+    }
+    val closeOverlay = { overlay = null }
+    when (val o = overlay) {
+        null -> Unit
+        Overlay.Truths -> UniversalTruthsScreen(language, religions.firstOrNull { it.id == religion }?.code, closeOverlay)
+        Overlay.Challenges -> ChallengesScreen(language, religion, closeOverlay)
+        Overlay.Journal -> MoodJournalScreen(closeOverlay)
+        Overlay.Widgets -> WidgetStudioScreen(closeOverlay)
+        Overlay.Stories -> StoryLibraryScreen(language, closeOverlay)
+        is Overlay.Studio -> ShareStudioScreen(o.verse, closeOverlay)
+        is Overlay.Media -> MediaStudioScreen(o.verse, closeOverlay)
+        is Overlay.StoryForVerse -> StoryScreen(StorySource.ForVerse(o.verseId), language, closeOverlay)
+    }
+    explainFor?.let { ExplainSheet(it) { explainFor = null } }
 }
 @Composable
 private fun ResponsiveContentFrame(content: @Composable BoxScope.() -> Unit) {
@@ -1642,8 +1765,10 @@ private fun Onboarding(
                 CircularProgressIndicator(color = Amber, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
             }
         } else {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                localLanguages.forEach { item ->
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+              localLanguages.chunked(3).forEach { chunk ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                chunk.forEach { item ->
                     val selected = language == item.id
                     Box(
                         Modifier.weight(1f).clip(RoundedCornerShape(14.dp))
@@ -1669,6 +1794,9 @@ private fun Onboarding(
                         }
                     }
                 }
+                repeat(3 - chunk.size) { Spacer(Modifier.weight(1f)) }
+                }
+              }
             }
         }
 
@@ -1701,6 +1829,7 @@ private fun Onboarding(
 private fun HomeScreen(
     verse: Verse?, loading: Boolean, error: String?, favorite: Boolean, lockScreen: Boolean,
     fontSize: Int, streak: Int,
+    moodSlot: @Composable () -> Unit, actionsSlot: @Composable () -> Unit,
     onRandom: () -> Unit, onFavorite: () -> Unit, onShare: () -> Unit, onShareText: () -> Unit,
     onWhatsAppStatus: () -> Unit, onShowLockScreen: () -> Unit, onHideLockScreen: () -> Unit,
     onHistory: () -> Unit, onChapterBrowser: () -> Unit
@@ -1720,6 +1849,7 @@ private fun HomeScreen(
                 Spacer(Modifier.width(6.dp))
                 Text(today, fontSize = 12.sp, color = Ink, fontWeight = FontWeight.Medium)
             }
+            moodSlot()
             if (streak > 0) {
                 Row(Modifier.clip(RoundedCornerShape(50)).background(Amber.copy(alpha = 0.15f)).padding(horizontal = 12.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("🔥", fontSize = 13.sp)
@@ -1840,6 +1970,7 @@ private fun HomeScreen(
                         Text("Status", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1)
                     }
                 }
+                actionsSlot()
                 Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(if (lockScreen) Amber.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surface).border(1.dp, if (lockScreen) Amber.copy(alpha = 0.4f) else Amber.copy(alpha = 0.1f), RoundedCornerShape(20.dp)).padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(40.dp).clip(CircleShape).background(if (lockScreen) Amber.copy(alpha = 0.2f) else Amber.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
@@ -2200,8 +2331,10 @@ private fun SettingsScreen(
                     CircularProgressIndicator(color = Amber, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                 }
             } else {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    localLanguages.forEach { item ->
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                  localLanguages.chunked(3).forEach { chunk ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    chunk.forEach { item ->
                         val selected = language == item.id
                         Box(
                             Modifier.weight(1f).clip(RoundedCornerShape(14.dp))
@@ -2227,6 +2360,9 @@ private fun SettingsScreen(
                             }
                         }
                     }
+                    repeat(3 - chunk.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                  }
                 }
             }
 

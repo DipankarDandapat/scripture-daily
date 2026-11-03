@@ -31,7 +31,8 @@ def verse_out(v: Verse) -> dict:
     return {"id": v.id, "scripture": v.scripture.name, "religion": v.scripture.religion.name,
             "book": v.book, "chapter": v.chapter, "verse_number": v.verse_number,
             "language": v.language.code, "text": v.text, "translation": v.translation,
-            "source": v.source, "license": v.license, "is_demo": v.is_demo}
+            "source": v.source, "license": v.license, "is_demo": v.is_demo,
+            "topics": [t.code for t in v.topics], "explanation_available": bool(v.simple_explanation)}
 
 
 def verse_query(db: Session):
@@ -154,12 +155,16 @@ def today(credentials: HTTPAuthorizationCredentials | None = Depends(optional_be
 
 
 @router.get("/verses/random", response_model=VerseOut)
-def random_verse(religion_id: int | None = None, scripture_id: int | None = None, language_id: int | None = None, db: Session = Depends(get_db)):
+def random_verse(religion_id: int | None = None, scripture_id: int | None = None, language_id: int | None = None, exclude_id: int | None = None, db: Session = Depends(get_db)):
     from sqlalchemy import func
     query = verse_query(db)
     if religion_id is not None: query = query.where(Scripture.religion_id == religion_id)
     if scripture_id is not None: query = query.where(Verse.scripture_id == scripture_id)
     if language_id is not None: query = query.where(Verse.language_id == language_id)
+    if exclude_id is not None:
+        # prefer something different, but fall back to the excluded verse when it is the only one
+        v = db.scalar(query.where(Verse.id != exclude_id).order_by(func.random()).limit(1))
+        if v is not None: return verse_out(v)
     v = db.scalar(query.order_by(func.random()).limit(1))
     if v is None: raise HTTPException(status_code=404, detail="No published verses match these preferences")
     return verse_out(v)

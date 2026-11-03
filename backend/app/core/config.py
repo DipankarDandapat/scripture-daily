@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     access_token_minutes: int = 0  # 0 = no expiry (device tokens are permanent)
     admin_token: str = "local-admin-token-change-me"
     cors_origins: str = "*"
+    # Challenges: at most one new day can be completed per calendar day (set false for demos/tests)
+    challenge_one_per_day: bool = True
 
     @property
     def allowed_origins(self) -> list[str]:

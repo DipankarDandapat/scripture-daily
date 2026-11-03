@@ -48,6 +48,7 @@ interface VerseDao {
     @Query("SELECT * FROM cached_verses WHERE favorite = 1 ORDER BY savedAt DESC") suspend fun favorites(): List<CachedVerse>
     @Query("SELECT * FROM cached_verses WHERE scriptureId = :scriptureId AND languageId = :languageId AND favorite = 0 ORDER BY savedAt DESC LIMIT 1") suspend fun matching(scriptureId: Int, languageId: Int): CachedVerse?
     @Query("SELECT * FROM cached_verses WHERE favorite = 0 ORDER BY savedAt DESC LIMIT 1") suspend fun latestAny(): CachedVerse?
+    @Query("SELECT * FROM cached_verses WHERE scriptureId = :scriptureId AND languageId = :languageId ORDER BY id") suspend fun forCombo(scriptureId: Int, languageId: Int): List<CachedVerse>
     @Query("UPDATE cached_verses SET favorite = :favorite WHERE id = :id") suspend fun setFavorite(id: Int, favorite: Boolean)
     @Query("UPDATE cached_verses SET readDate = :date WHERE id = :id") suspend fun setReadDate(id: Int, date: String?)
     @Query("UPDATE cached_verses SET favorite = 0") suspend fun clearAllFavorites()

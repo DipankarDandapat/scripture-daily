@@ -8,4 +8,7 @@
     <string name="shortcut_explore_long">Search across all scriptures</string>
     <string name="shortcut_share_short">Share a Verse</string>
     <string name="shortcut_share_long">Share today&#8217;s verse</string>
+    <string name="widget_desc_compact">Slim verse strip with a tap-to-refresh button</string>
+    <string name="widget_desc_large">Large, easy-to-read verse with tap-to-refresh</string>
+    <string name="widget_desc_reference">Verse reference first, with tap-to-refresh</string>
 </resources>

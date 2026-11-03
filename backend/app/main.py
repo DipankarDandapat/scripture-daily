@@ -6,6 +6,7 @@ from app.core.database import Base, SessionLocal, engine
 from app.models import *  # noqa: F403 — ensure all ORM models register with Base.metadata
 from app.seed import seed_database
 from app.api.v1.routes import router
+from app.api.v1.features import router as features_router
 
 
 def _ensure_schema() -> None:
@@ -33,9 +34,21 @@ def _ensure_schema() -> None:
                 conn.commit()
 
 
+def _add_missing_columns() -> None:
+    """Non-destructive column additions for databases created before a column existed (any dialect)."""
+    from sqlalchemy import inspect, text
+    insp = inspect(engine)
+    if "verses" in insp.get_table_names():
+        cols = {c["name"] for c in insp.get_columns("verses")}
+        if "simple_explanation" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE verses ADD COLUMN simple_explanation TEXT"))
+
+
 # Run at import time so Passenger WSGI and uvicorn both initialise the schema
 _ensure_schema()
 Base.metadata.create_all(bind=engine)
+_add_missing_columns()
 with SessionLocal() as _db:
     seed_database(_db)
 
@@ -45,9 +58,10 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title=settings.app_name, version="1.0.0", description="Content-driven daily scripture API", lifespan=lifespan)
+app = FastAPI(title=settings.app_name, version="2.0.0", description="Content-driven daily scripture API", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=settings.allowed_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.include_router(router, prefix="/api/v1")
+app.include_router(features_router, prefix="/api/v1")
 
 
 @app.get("/")

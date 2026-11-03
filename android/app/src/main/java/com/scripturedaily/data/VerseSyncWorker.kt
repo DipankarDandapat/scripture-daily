@@ -14,6 +14,7 @@ import java.util.concurrent.TimeUnit
 
 class VerseSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
+        ApiClient.ensureInit(applicationContext)
         val prefs = applicationContext.getSharedPreferences("reader", Context.MODE_PRIVATE)
         val religion  = prefs.getInt("religion", 1)
         val language  = prefs.getInt("language", 0).takeIf { it > 0 } ?: 1
