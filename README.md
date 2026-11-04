@@ -12,9 +12,9 @@
 ![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7F52FF?logo=kotlin&logoColor=white)
 ![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-Material%203-4285F4?logo=jetpackcompose&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-SQLAlchemy-009688?logo=fastapi&logoColor=white)
-![SQLite](https://img.shields.io/badge/SQLite-663%20verses-003B57?logo=sqlite&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-1%2C100%2B%20verses-003B57?logo=sqlite&logoColor=white)
 ![Languages](https://img.shields.io/badge/languages-7-D4A574)
-![Tests](https://img.shields.io/badge/backend%20tests-14%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/backend%20tests-24%20passing-brightgreen)
 
 [Features](#-features) · [Screenshots](#-screenshots) · [Content](#-verse-catalog) · [Quick start](#-quick-start) · [API](#-api-reference) · [Architecture](#-architecture) · [Testing](#-testing)
 
@@ -41,6 +41,20 @@ Everything is driven by the database: add a scripture, a language, a story or a 
 | 🎬 | **Verse → video & wallpaper** | Vertical 9:16 MP4 (slow zoom, drifting light, text fade-in) with **calm music generated on your device** — ready for Status and Reels. Wallpapers are sized exactly to your screen. |
 | 📖 | **Stories for children** | Illustrated, swipeable scenes with a **read-aloud** player, the verse, and a *"What we learn"* line — in the reader's language. 8 stories × 7 languages. |
 
+### 🆕 What's new in this release (v2 enhancements)
+
+| Area | Change |
+|---|---|
+| **Studio** | *Share Studio* and *Video Studio* replace the separate **Video & Wallpaper** screens. Templates, fonts, size, colour, alignment, spacing and placement are all live; Video Studio adds length, text animation, background motion, transitions, music, volume and a live preview. Wallpapers are now *Set as wallpaper* inside Share Studio. |
+| **Tradition-aware templates** | Templates live in the `studio_templates` table (`GET /studio/templates`). Common templates show for everyone; tradition templates (Om, lotus, cross, dove, Islamic geometry, dharma wheel …) only for that tradition; General users never see religious imagery. Switching tradition refreshes the list. |
+| **Wisdom Tree** | One calm progress card on Home (plus a *Journey* screen) replaces the "This week" card. Growth is lifetime, a missed day only pauses it, and the streak is tracked separately. Synced through `POST /tree/read`. |
+| **Daily verse themes** | 10 date-rotating themes (sunrise gold … warm sunset), chosen from the local date, WCAG-AA checked. |
+| **Mood card** | "How are you feeling today?" fades away for the rest of the local day once answered, and survives restarts. |
+| **Stories** | 10 per tradition (50 total), scoped to the user's tradition — an Islam user never sees *Arjuna and the Bird's Eye*. |
+| **Challenges** | 14 tracks (10 new, 7–30 days), tradition- and language-aware, with remaining days, a welcome-back note for missed days and a universal track. |
+| **Verse library** | ≥ 100 verses for **every** tradition × language, validated by `scripts/validate_catalog.py` ([report](docs/VALIDATION_REPORT.md)). |
+| **Integrity** | Home, widgets, lock screen, notifications, mood, challenges and stories all draw only from the selected tradition + language and clear stale caches when it changes. |
+
 Plus the original foundation: onboarding by tradition and language, daily/random verse, favourites, search, chapter browser, streaks, reminders, lock-screen verse, offline cache and a dark-green reading card.
 
 ## 📱 Screenshots
@@ -66,17 +80,17 @@ Plus the original foundation: onboarding by tradition and language, daily/random
 
 ## 📚 Verse catalog
 
-The SQLite database ships **663 authentic verses**. Every scripture × language combination has **30 or more** records, each with topics, mood tags and a simple explanation.
+Every **tradition × language** combination has **100 or more** unique verses (Hinduism 100, Christianity 107, Islam 103, Buddhism 100, General 100 — in each of its languages), each with source, translation label, licence, topics, mood tags and a simple explanation. See the generated [validation report](docs/VALIDATION_REPORT.md).
 
 | Scripture | 🇬🇧 en | 🇮🇳 hi | বাং bn | 🇪🇸 es | ع ar | اردو ur | ไทย th |
 |---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| **Bhagavad Gita** | 30 | 30 | 30 | | | | |
+| **Bhagavad Gita** | 40 | 40 | 40 | | | | |
 | **Ramayana** | 30 | 30 | 30 | | | | |
 | **Mahabharata** | 30 | 30 | 30 | | | | |
-| **Bible** | 31 | 31 | | 31 | | | |
-| **Quran** | 30 | 30 | | | 30 | 30 | |
-| **Dhammapada** | 30 | 30 | | | | | 30 |
-| **Inspirational Verses** *(Vedas, Upanishads, Tao Te Ching, Analects, Tirukkural)* | 30 | 30 | 30 | | | | |
+| **Bible** | 107 | 107 | | 107 | | | |
+| **Quran** | 103 | 103 | | | 103 | 103 | |
+| **Dhammapada** | 100 | 100 | | | | | 100 |
+| **Inspirational Verses** *(Vedas, Upanishads, Tao Te Ching, Analects, Tirukkural)* | 100 | 100 | 100 | | | | |
 
 **How the content is sourced**
 
@@ -247,7 +261,10 @@ Interactive docs at `/docs`. All routes are under `/api/v1`.
 | POST | `/challenges/{id}/join` · `/challenges/{id}/days/{n}/complete` | Join / complete a day |
 | DELETE | `/challenges/{id}/progress` | Start over (earned badges are kept) |
 | GET | `/users/badges` | Earned badges |
-| GET | `/stories` · `/stories/{code}` · `/verses/{id}/story` | Children's stories |
+| GET | `/stories?religion_id=&language_id=` · `/stories/{code}` · `/verses/{id}/story` | Children's stories (one tradition at a time) |
+| GET | `/studio/templates?kind=share\|video&religion_id=` | Common + tradition-specific Studio templates |
+| GET / POST | `/tree` · `/tree/read` | Wisdom Tree state; record today's reading (idempotent) and merge offline history |
+| GET | `/verses/today?religion_id=&language_id=&client_date=` | Daily verse from the whole tradition, stable for the local day |
 </details>
 
 ## ⚙️ Configuration
@@ -263,11 +280,12 @@ Interactive docs at `/docs`. All routes are under `/api/v1`.
 ## 🧪 Testing
 
 ```bash
-cd backend && pytest -q                # 14 tests
+cd backend && pytest -q                # 24 tests
+cd backend && python -m scripts.validate_catalog --min 100 --markdown ../docs/VALIDATION_REPORT.md
 cd android && ./gradlew testDebugUnitTest
 ```
 
-The API suite checks the core flows, that **every scripture × language combination has at least 30 verses** (and every mood, in every combination, at least 3), explanations, Universal Truths (including language fallback), the full challenge → badge flow with the one-day-per-day rule, and every story in every language.
+The API suite checks the core flows, that **every tradition × language combination has at least 100 unique, valid verses**, that today / random / history / mood / challenge verses **never leave the selected tradition and language** (with in-tradition fallback for missing translations), tradition-aware Studio templates and their colour contrast, 10 stories per tradition, all 14 challenges × every tradition × every language × every day, and the Wisdom Tree rules. The Android unit tests cover the 10 verse themes (rotation, stability, WCAG AA), tree stages and streak rules, and template visibility.
 
 The app was also exercised end to end on a Pixel 7 emulator (API 37): onboarding, mood selection, Explain, Share Studio (share + save), video generation (H.264 720×1280 + AAC verified), wallpaper preview, Universal Truths, completing a challenge day, a story with read-aloud, widget placement and tap-to-refresh, and an Arabic right-to-left card.
 
@@ -277,7 +295,9 @@ The app was also exercised end to end on a Pixel 7 emulator (API 37): onboarding
 - Push notifications (FCM) are not configured; reminders use WorkManager.
 - Read-aloud depends on the text-to-speech voices installed on the device (Hindi, Bengali, Urdu, Thai may need a voice download).
 - Lock-screen widgets require a device whose lock screen hosts widgets; availability varies by Android version and manufacturer.
-- Planned: more stories and challenge tracks, an admin console for content, scholar-reviewed epic citations.
+- New v2 content (verses, stories, challenge text) was written for this release and should be reviewed by native speakers / scholars before a public launch; Hindi and Spanish renderings of the Bible are WisdomOne's plain-language versions, not the printed public-domain texts.
+- Stories and challenge text exist in English and Hindi for every tradition, plus Spanish (Christian), Arabic + Urdu (Islamic), Thai (Buddhist) and Bengali (General) where available; other combinations fall back to English and say so.
+- Planned: more stories and challenge translations, an admin console for content, scholar-reviewed epic citations.
 
 ## 🙏 Credits
 

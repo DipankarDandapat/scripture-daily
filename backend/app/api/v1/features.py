@@ -41,9 +41,7 @@ def optional_user(credentials: HTTPAuthorizationCredentials | None = Depends(opt
         user = db.get(User, payload["sub"])
     except (jwt.PyJWTError, KeyError):
         raise HTTPException(status_code=401, detail="Invalid or expired access token")
-    if user is None:
-        raise HTTPException(status_code=401, detail="User no longer exists")
-    return user
+    return user  # a token for a deleted user is treated as anonymous on public endpoints (the app re-registers on write calls)
 
 
 def _prefs(user: User | None, db: Session) -> tuple[int | None, int | None, list[int]]:

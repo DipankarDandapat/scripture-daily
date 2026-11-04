@@ -965,8 +965,8 @@ private fun ScriptureApp(
     }
 
     // Reading counts once the daily verse has been on screen for a few seconds.
-    LaunchedEffect(verse?.id, page, todayDate, configured) {
-        if (configured && page == "Home" && verse != null && overlay == null) {
+    LaunchedEffect(verse?.id, page, todayDate, configured, setupGuidePending) {
+        if (configured && !setupGuidePending && page == "Home" && verse != null && overlay == null) {
             kotlinx.coroutines.delay(5_000)
             markReading()
         }

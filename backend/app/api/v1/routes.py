@@ -94,9 +94,7 @@ def user_from_credentials(db: Session, credentials: HTTPAuthorizationCredentials
         user = db.get(User, payload["sub"])
     except (jwt.PyJWTError, KeyError):
         raise HTTPException(status_code=401, detail="Invalid or expired access token")
-    if user is None:
-        raise HTTPException(status_code=401, detail="User no longer exists")
-    return user
+    return user  # unknown user -> anonymous for public endpoints; write endpoints use current_user and still return 401
 
 
 def preference_pool(db: Session, user: User | None, religion_id: int | None, language_id: int | None) -> tuple[int | None, int | None, list[int]]:
