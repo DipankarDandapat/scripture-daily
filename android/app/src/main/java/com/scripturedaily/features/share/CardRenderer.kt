@@ -29,27 +29,45 @@ enum class CardFormat(val label: String, val hint: String, val w: Int, val h: In
     PORTRAIT("Portrait post", "4:5", 1080, 1350)
 }
 
-enum class CardTemplate(val label: String, val top: Int, val bottom: Int, val text: Int, val accent: Int, val muted: Int, val light: Boolean) {
-    NIGHT("Midnight", 0xFF0F0A1A.toInt(), 0xFF2D1B4E.toInt(), 0xFFF5F0E8.toInt(), 0xFFD4A574.toInt(), 0xFFB5A8C4.toInt(), false),
-    SUNRISE("Sunrise", 0xFFF6A55F.toInt(), 0xFFFCE3B4.toInt(), 0xFF3B2314.toInt(), 0xFF8A4B14.toInt(), 0xFF6B4A33.toInt(), true),
-    FOREST("Forest", 0xFF0E2A22.toInt(), 0xFF1F5A44.toInt(), 0xFFEEF5EE.toInt(), 0xFFBFE3A0.toInt(), 0xFFA9C9B5.toInt(), false),
-    OCEAN("Ocean", 0xFF0A2540.toInt(), 0xFF1E6F9F.toInt(), 0xFFFFFFFF.toInt(), 0xFF9FE1FF.toInt(), 0xFFB8D8EA.toInt(), false),
-    ROSE("Rose", 0xFF3A1426.toInt(), 0xFFA24A6A.toInt(), 0xFFFFF1F4.toInt(), 0xFFFFC4D2.toInt(), 0xFFE6B9C5.toInt(), false),
-    IVORY("Ivory", 0xFFFBF6EC.toInt(), 0xFFEADFC8.toInt(), 0xFF2A1F14.toInt(), 0xFF9A6B2F.toInt(), 0xFF6F5B45.toInt(), true)
-}
+/** Background art drawn behind the verse. [TEMPLATE] uses the selected template's own motif (om, cross, geometry …). */
+enum class CardPattern(val label: String) { TEMPLATE("Template art"), NONE("Plain"), MANDALA("Mandala"), STARS("Stars"), WAVES("Waves"), RAYS("Rays"), BOKEH("Bokeh") }
 
-enum class CardPattern(val label: String) { NONE("Plain"), MANDALA("Mandala"), STARS("Stars"), WAVES("Waves"), RAYS("Rays"), BOKEH("Bokeh") }
+enum class CardFont(val label: String) { SERIF("Serif"), SANS("Sans"), ITALIC("Italic"), MONO("Typewriter") }
 
-enum class CardFont(val label: String) { SERIF("Serif"), SANS("Sans"), ITALIC("Italic") }
+enum class TextAlignment(val label: String) { START("Left"), CENTER("Centre"), END("Right") }
+
+enum class TextPlacement(val label: String) { TOP("Top"), MIDDLE("Middle"), BOTTOM("Bottom") }
+
+/** Text colours the user can pick instead of the template's own (null = template default). */
+val TEXT_COLORS: List<Pair<String, Int>> = listOf(
+    "Ivory" to 0xFFF5F0E8.toInt(), "White" to 0xFFFFFFFF.toInt(), "Gold" to 0xFFFFD98A.toInt(),
+    "Ink" to 0xFF1A1025.toInt(), "Brown" to 0xFF3B2314.toInt(), "Forest" to 0xFF123524.toInt()
+)
 
 data class CardStyle(
-    val template: CardTemplate = CardTemplate.NIGHT,
-    val pattern: CardPattern = CardPattern.MANDALA,
+    val template: StudioTemplate = StudioTemplates.DEFAULT,
+    val pattern: CardPattern = CardPattern.TEMPLATE,
     val format: CardFormat = CardFormat.STORY,
     val fontScale: Float = 1f,
     val font: CardFont = CardFont.SERIF,
-    val showMark: Boolean = true
-)
+    val showMark: Boolean = true,
+    val align: TextAlignment = TextAlignment.CENTER,
+    val spacing: Float = 1f,                 // line spacing multiplier 0.8 .. 1.8
+    val placement: TextPlacement = TextPlacement.MIDDLE,
+    val textColor: Int? = null,              // overrides the template's text colour
+    val swatch: BgSwatch? = null             // overrides the template's background gradient
+) {
+    /** The template with the user's colour overrides applied (text/accent follow the background for contrast). */
+    fun resolved(): StudioTemplate {
+        var t = template
+        swatch?.let { sw ->
+            t = if (sw.light) t.copy(top = sw.top, bottom = sw.bottom, text = 0xFF2A1F14.toInt(), accent = 0xFF8A4B14.toInt(), muted = 0xFF6B5A48.toInt(), light = true)
+            else t.copy(top = sw.top, bottom = sw.bottom, text = 0xFFF5F0E8.toInt(), accent = 0xFFE3C58B.toInt(), muted = 0xFFB9B0C4.toInt(), light = false)
+        }
+        textColor?.let { t = t.copy(text = it) }
+        return t
+    }
+}
 
 /** What a card says. The reference and source are always drawn. */
 data class CardContent(val text: String, val scripture: String, val reference: String, val source: String) {
@@ -102,7 +120,7 @@ object CardRenderer {
 
     // ── background ──────────────────────────────────────────────────────────
     fun drawBackground(canvas: Canvas, style: CardStyle, w: Int, h: Int) {
-        val t = style.template
+        val t = style.resolved()
         val p = Paint(Paint.ANTI_ALIAS_FLAG)
         p.shader = LinearGradient(0f, 0f, w * 0.35f, h.toFloat(), t.top, t.bottom, Shader.TileMode.CLAMP)
         canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), p)
@@ -117,6 +135,7 @@ object CardRenderer {
         val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.style = Paint.Style.FILL; color = t.accent; alpha = 36 }
         when (style.pattern) {
             CardPattern.NONE -> Unit
+            CardPattern.TEMPLATE -> Motifs.draw(canvas, style.template.motif, t.accent, w, h)
             CardPattern.MANDALA -> {
                 val cx = w / 2f; val cy = h * 0.5f
                 for (ring in 1..6) canvas.drawCircle(cx, cy, w * 0.14f * ring, stroke)
@@ -170,9 +189,10 @@ object CardRenderer {
     }
 
     // ── text, reference, source, mark ───────────────────────────────────────
-    fun drawForeground(context: Context, canvas: Canvas, c: CardContent, style: CardStyle, w: Int, h: Int, alpha: Float) {
+    /** [reveal] < 1 fades the verse words in one by one (used by the video's typewriter animation). */
+    fun drawForeground(context: Context, canvas: Canvas, c: CardContent, style: CardStyle, w: Int, h: Int, alpha: Float, reveal: Float = 1f) {
         val z = zones(w, h)
-        val t = style.template
+        val t = style.resolved()
         val a255 = (alpha * 255).toInt().coerceIn(0, 255)
         val marginX = w * 0.11f
         val textWidth = (w - 2 * marginX).toInt()
@@ -196,8 +216,9 @@ object CardRenderer {
         canvas.drawText("“", marginX * 0.7f, h * z.textTop + w * 0.05f, quote)
 
         // verse text, auto-fitted to the available band
-        val fontStyle = when (style.font) { CardFont.SERIF -> Typeface.NORMAL; CardFont.SANS -> Typeface.NORMAL; CardFont.ITALIC -> Typeface.ITALIC }
-        val family = if (style.font == CardFont.SANS) Typeface.SANS_SERIF else Typeface.SERIF
+        val fontStyle = if (style.font == CardFont.ITALIC) Typeface.ITALIC else Typeface.NORMAL
+        val family = when (style.font) { CardFont.SANS -> Typeface.SANS_SERIF; CardFont.MONO -> Typeface.MONOSPACE; else -> Typeface.SERIF }
+        val layoutAlign = when (style.align) { TextAlignment.START -> Layout.Alignment.ALIGN_NORMAL; TextAlignment.CENTER -> Layout.Alignment.ALIGN_CENTER; TextAlignment.END -> Layout.Alignment.ALIGN_OPPOSITE }
         val body = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
             color = colored(t.text); typeface = Typeface.create(family, fontStyle)
         }
@@ -209,12 +230,25 @@ object CardRenderer {
         while (true) {
             body.textSize = size
             layout = StaticLayout.Builder.obtain(c.text, 0, c.text.length, body, textWidth)
-                .setAlignment(Layout.Alignment.ALIGN_CENTER).setLineSpacing(size * 0.22f, 1f)
+                .setAlignment(layoutAlign).setLineSpacing(size * 0.22f * style.spacing, 1f)
                 .setTextDirection(TextDirectionHeuristics.FIRSTSTRONG_LTR).setIncludePad(false).build()
             if (layout.height <= bandHeight || size <= minSize) break
             size *= 0.94f
         }
-        val top = bandTop + (bandHeight - layout.height).coerceAtLeast(0f) / 2f
+        if (reveal < 1f) {
+            val spanned = android.text.SpannableStringBuilder(c.text)
+            val words = Regex("\\S+").findAll(c.text).toList()
+            val base = colored(t.text)
+            words.forEachIndexed { i, m ->
+                val a = ((reveal * (words.size + 1) - i).coerceIn(0f, 1f) * Color.alpha(base)).toInt()
+                spanned.setSpan(android.text.style.ForegroundColorSpan(Color.argb(a, Color.red(base), Color.green(base), Color.blue(base))), m.range.first, m.range.last + 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+            layout = StaticLayout.Builder.obtain(spanned, 0, spanned.length, body, textWidth)
+                .setAlignment(layoutAlign).setLineSpacing(size * 0.22f * style.spacing, 1f)
+                .setTextDirection(TextDirectionHeuristics.FIRSTSTRONG_LTR).setIncludePad(false).build()
+        }
+        val slack = (bandHeight - layout.height).coerceAtLeast(0f)
+        val top = bandTop + when (style.placement) { TextPlacement.TOP -> 0f; TextPlacement.MIDDLE -> slack / 2f; TextPlacement.BOTTOM -> slack }
         canvas.save(); canvas.translate(marginX, top); layout.draw(canvas); canvas.restore()
 
         // divider + reference + source (always shown)
@@ -243,17 +277,20 @@ object CardRenderer {
             val total = logoSize + gap + markPaint.measureText(text)
             val startX = (w - total) / 2f
             val cy = h * z.mark
-            val logo = BitmapFactory.decodeResource(context.resources, R.drawable.ic_wisdomone_ui_logo)
+            val logo = logoBitmap(context)
             if (logo != null) {
                 val clip = Path().apply { addCircle(startX + logoSize / 2, cy - logoSize * 0.35f, logoSize / 2, Path.Direction.CW) }
                 canvas.save(); canvas.clipPath(clip)
                 val lp = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { this.alpha = a255 }
                 canvas.drawBitmap(logo, null, android.graphics.RectF(startX, cy - logoSize * 0.85f, startX + logoSize, cy + logoSize * 0.15f), lp)
-                canvas.restore(); logo.recycle()
+                canvas.restore()
             }
             canvas.drawText(text, startX + logoSize + gap, cy, markPaint)
         }
     }
+
+    @Volatile private var logoCache: Bitmap? = null
+    private fun logoBitmap(context: Context): Bitmap? = logoCache ?: BitmapFactory.decodeResource(context.resources, R.drawable.ic_wisdomone_ui_logo)?.also { logoCache = it }
 
     private fun drawFitted(canvas: Canvas, text: String, paint: TextPaint, cx: Float, y: Float, maxWidth: Float) {
         var size = paint.textSize

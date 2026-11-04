@@ -44,10 +44,9 @@ import kotlinx.coroutines.withContext
 
 enum class DiscoverItem(val emoji: String, val title: String, val subtitle: String, val tint: Color) {
     TRUTHS("🌍", "Universal Truths", "See how different traditions speak about love, patience and more — side by side.", Color(0xFFE8833A)),
-    CHALLENGES("🏅", "Challenges", "30 days of gratitude, 7 days of anxiety relief and more. Earn badges.", Color(0xFFD4A574)),
+    CHALLENGES("🏅", "Challenges", "7, 14, 21 or 30 days of gratitude, patience, courage and more. Earn badges.", Color(0xFFD4A574)),
     STORIES("📖", "Stories for Children", "Illustrated stories behind the verses. Read or listen together.", Color(0xFF5E9E6E)),
-    STUDIO("🎨", "Share Studio", "Beautiful cards for WhatsApp Status, Instagram Stories and posts.", Color(0xFF8A5CC8)),
-    MEDIA("🎬", "Video & Wallpaper", "Make a calm vertical video or a wallpaper from today's verse.", Color(0xFF4F8DB5)),
+    STUDIO("🎨", "Studio", "Create verse images, wallpapers and calm videos — with templates for your tradition.", Color(0xFF8A5CC8)),
     WIDGETS("🧩", "Widget Studio", "Compact, large-text and calm-colour widgets with tap-to-refresh.", Color(0xFFB06A7E)),
     JOURNAL("🙂", "Mood Journal", "Look back at how you've been feeling and what helped.", Color(0xFF7A62A8))
 }
@@ -74,15 +73,15 @@ fun DiscoverScreen(onOpen: (DiscoverItem) -> Unit) {
 }
 
 @Composable
-fun StoryLibraryScreen(languageId: Int, onBack: () -> Unit) {
+fun StoryLibraryScreen(languageId: Int, religionId: Int, onBack: () -> Unit) {
     var stories by remember { mutableStateOf<List<StorySummary>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
     var open by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(languageId, attempt) {
+    LaunchedEffect(languageId, religionId, attempt) {
         error = null
-        try { stories = withContext(Dispatchers.IO) { ApiClient.api.stories(languageId) } }
+        try { stories = withContext(Dispatchers.IO) { ApiClient.api.stories(languageId, religionId.takeIf { it > 0 }) } }
         catch (_: Exception) { error = "Couldn't load stories. Check your connection and try again." }
     }
     val code = open

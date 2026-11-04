@@ -317,3 +317,4 @@ class TreeOut(BaseModel):
 
 class TreeReadInput(BaseModel):
     dates: list[str] = Field(default_factory=list, max_length=400)  # local dates (YYYY-MM-DD) completed on this device
+    mark_today: bool = True  # False = only merge `dates` (a pure sync that does not count today)

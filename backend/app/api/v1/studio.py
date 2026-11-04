@@ -61,7 +61,7 @@ def record_reading(body: TreeReadInput | None = None, client_date: str | None = 
     """Record today's completed reading (idempotent per day) and merge any dates this device recorded offline."""
     today = client_day(client_date)
     have = _days(db, user)
-    wanted = {today}
+    wanted = {today} if (body is None or body.mark_today) else set()
     horizon = today - timedelta(days=800)
     for raw in (body.dates if body else []):
         try:

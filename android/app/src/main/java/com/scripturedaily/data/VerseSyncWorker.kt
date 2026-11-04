@@ -18,10 +18,10 @@ class VerseSyncWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val prefs = applicationContext.getSharedPreferences("reader", Context.MODE_PRIVATE)
         val religion  = prefs.getInt("religion", 1)
         val language  = prefs.getInt("language", 0).takeIf { it > 0 } ?: 1
-        val scripture = prefs.getInt("scripture", 0).takeIf { it > 0 } ?: religion
+        val scripture = prefs.getInt("scripture", 0)  // cache label only; verses come from the whole tradition
         return try {
-            val verse = if (prefs.getString("frequency", "Daily") == "Daily") ApiClient.api.today()
-                else ApiClient.api.random(religion, language, scripture)
+            val verse = if (prefs.getString("frequency", "Daily") == "Daily") ApiClient.api.today(religion, language, java.time.LocalDate.now().toString())
+                else ApiClient.api.random(religion, language, null)
             val previous = ScriptureDatabase.get(applicationContext).verses().find(verse.id)
             val cached = verse.toCached(scripture, language, previous?.favorite == true)
             ScriptureDatabase.get(applicationContext).verses().save(cached)

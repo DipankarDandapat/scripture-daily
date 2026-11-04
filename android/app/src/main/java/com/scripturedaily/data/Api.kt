@@ -126,13 +126,21 @@ data class ChallengeProgress(
     @SerializedName("next_day") val nextDay: Int? = 1,
     val completed: Boolean = false,
     @SerializedName("badge_earned") val badgeEarned: Boolean = false,
-    @SerializedName("available_tomorrow") val availableTomorrow: Boolean? = false
+    @SerializedName("available_tomorrow") val availableTomorrow: Boolean? = false,
+    @SerializedName("completed_count") val completedCount: Int = 0,
+    @SerializedName("remaining_days") val remainingDays: Int = 0,
+    val percent: Int = 0,
+    @SerializedName("last_completed_on") val lastCompletedOn: String? = null,
+    @SerializedName("missed_days") val missedDays: Int = 0
 )
 data class Challenge(
     val id: Int, val code: String, val title: String, val subtitle: String, val description: String,
     @SerializedName("total_days") val totalDays: Int, val icon: String, val color: String,
     @SerializedName("badge_name") val badgeName: String, @SerializedName("badge_icon") val badgeIcon: String,
-    val progress: ChallengeProgress
+    val progress: ChallengeProgress,
+    @SerializedName("is_universal") val isUniversal: Boolean = false,
+    val language: String = "en",
+    @SerializedName("language_fallback") val languageFallback: Boolean = false
 )
 data class ChallengeDay(
     @SerializedName("day_number") val dayNumber: Int, val title: String, val reflection: String, val action: String,
@@ -142,7 +150,10 @@ data class ChallengeDetail(
     val id: Int, val code: String, val title: String, val subtitle: String, val description: String,
     @SerializedName("total_days") val totalDays: Int, val icon: String, val color: String,
     @SerializedName("badge_name") val badgeName: String, @SerializedName("badge_icon") val badgeIcon: String,
-    val progress: ChallengeProgress, val days: List<ChallengeDay>
+    val progress: ChallengeProgress, val days: List<ChallengeDay>,
+    @SerializedName("is_universal") val isUniversal: Boolean = false,
+    val language: String = "en",
+    @SerializedName("language_fallback") val languageFallback: Boolean = false
 )
 data class CompleteDayBody(val note: String? = null)
 data class CompleteDayResult(
@@ -160,15 +171,38 @@ data class StorySummary(
     val id: Int, val code: String, val emoji: String, val palette: String, val values: List<String>, val title: String,
     val lesson: String, val language: String, @SerializedName("language_fallback") val languageFallback: Boolean,
     val scripture: String, val reference: String, @SerializedName("verse_id") val verseId: Int?,
-    @SerializedName("scene_count") val sceneCount: Int
+    @SerializedName("scene_count") val sceneCount: Int, val summary: String = "",
+    @SerializedName("religion_code") val religionCode: String = ""
 )
 data class StoryScene(@SerializedName("scene_number") val sceneNumber: Int, val art: String, val text: String)
 data class StoryDetail(
     val id: Int, val code: String, val emoji: String, val palette: String, val values: List<String>, val title: String,
     val lesson: String, val language: String, @SerializedName("language_fallback") val languageFallback: Boolean,
     val scripture: String, val reference: String, @SerializedName("verse_id") val verseId: Int?,
-    @SerializedName("scene_count") val sceneCount: Int, val scenes: List<StoryScene>, val verse: Verse?
+    @SerializedName("scene_count") val sceneCount: Int, val scenes: List<StoryScene>, val verse: Verse?,
+    val summary: String = "", @SerializedName("religion_code") val religionCode: String = ""
 )
+
+data class StudioTemplateDto(
+    val code: String, val name: String, val kind: String, val tradition: String?, val motif: String,
+    @SerializedName("color_top") val colorTop: String, @SerializedName("color_bottom") val colorBottom: String,
+    @SerializedName("color_text") val colorText: String, @SerializedName("color_accent") val colorAccent: String,
+    @SerializedName("color_muted") val colorMuted: String, @SerializedName("is_light") val isLight: Boolean,
+    val emoji: String = "", @SerializedName("sort_order") val sortOrder: Int = 0
+)
+
+data class TreeMilestoneDto(val stage: String, val label: String, val level: Int,
+                            @SerializedName("first_day") val firstDay: Int, @SerializedName("last_day") val lastDay: Int, val unlocked: Boolean)
+data class TreeNextDto(val stage: String, val label: String, val level: Int,
+                       @SerializedName("at_days") val atDays: Int, @SerializedName("days_to_go") val daysToGo: Int)
+data class TreeDto(
+    @SerializedName("total_days") val totalDays: Int, val level: Int, val stage: String,
+    @SerializedName("stage_label") val stageLabel: String, val status: String,
+    @SerializedName("current_streak") val currentStreak: Int, @SerializedName("longest_streak") val longestStreak: Int,
+    @SerializedName("read_today") val readToday: Boolean, @SerializedName("last_read") val lastRead: String?,
+    @SerializedName("next_milestone") val nextMilestone: TreeNextDto?, val milestones: List<TreeMilestoneDto>, val history: List<String>
+)
+data class TreeReadBody(val dates: List<String> = emptyList(), @SerializedName("mark_today") val markToday: Boolean = true)
 
 interface ScriptureApi {
     @GET("health")
@@ -188,15 +222,28 @@ interface ScriptureApi {
 
     // Verses — token auto-attached by interceptor
     @GET("verses/today")
-    suspend fun today(): Verse
+    suspend fun today(
+        @Query("religion_id") religion: Int? = null,
+        @Query("language_id") language: Int? = null,
+        @Query("client_date") clientDate: String? = null
+    ): Verse
 
+    /** Draws from the whole tradition (omit [scripture] to span all of its scriptures). */
     @GET("verses/random")
     suspend fun random(
         @Query("religion_id") religion: Int,
         @Query("language_id") language: Int,
-        @Query("scripture_id") scripture: Int,
+        @Query("scripture_id") scripture: Int? = null,
         @Query("exclude_id") excludeId: Int? = null
     ): Verse
+
+    @GET("studio/templates")
+    suspend fun studioTemplates(@Query("kind") kind: String = "all", @Query("religion_id") religionId: Int? = null): List<StudioTemplateDto>
+
+    @GET("tree") suspend fun tree(@Query("client_date") clientDate: String? = null): TreeDto
+
+    @POST("tree/read")
+    suspend fun recordReading(@Query("client_date") clientDate: String? = null, @Body body: TreeReadBody = TreeReadBody()): TreeDto
 
     // ── Mood, explanations, universal truths, challenges, stories ──
     @GET("moods") suspend fun moods(): List<MoodItem>
@@ -226,7 +273,8 @@ interface ScriptureApi {
         @Query("seed") seed: Int = 0
     ): UniversalTruth
 
-    @GET("challenges") suspend fun challenges(@Query("client_date") clientDate: String? = null): List<Challenge>
+    @GET("challenges")
+    suspend fun challenges(@Query("client_date") clientDate: String? = null, @Query("language_id") languageId: Int? = null): List<Challenge>
 
     @GET("challenges/{id}")
     suspend fun challenge(
@@ -249,7 +297,8 @@ interface ScriptureApi {
     @DELETE("challenges/{id}/progress") suspend fun restartChallenge(@Path("id") id: Int): Response<Unit>
     @GET("users/badges") suspend fun badges(): List<Badge>
 
-    @GET("stories") suspend fun stories(@Query("language_id") languageId: Int?): List<StorySummary>
+    @GET("stories")
+    suspend fun stories(@Query("language_id") languageId: Int?, @Query("religion_id") religionId: Int? = null): List<StorySummary>
 
     @GET("stories/{code}")
     suspend fun story(@Path("code") code: String, @Query("language_id") languageId: Int?): StoryDetail
@@ -262,7 +311,11 @@ interface ScriptureApi {
     ): List<Verse>
 
     @GET("verses/today/history")
-    suspend fun todayHistory(@Query("count") count: Int = 7): List<Verse>
+    suspend fun todayHistory(
+        @Query("count") count: Int = 7,
+        @Query("religion_id") religion: Int? = null,
+        @Query("language_id") language: Int? = null
+    ): List<Verse>
 
     @GET("scriptures/{scripture_id}/chapters")
     suspend fun scriptureChapters(

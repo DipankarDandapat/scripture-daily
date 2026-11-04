@@ -26,7 +26,7 @@ HINDUISM = [
     ("radha-lotus", "Radha · Lotus", "both", "hinduism", "lotus", "#4A1530", "#C0557F", "#FFF1F5", "#FFD1DC", "#F0BCCB", False, "🪷"),
     ("shiva-moon", "Shiva · Trident & moon", "both", "hinduism", "trident", "#0B1021", "#2B3A67", "#EEF1FA", "#B8C4FF", "#AAB4D6", False, "🔱"),
     ("ganesha-diya", "Ganesha · Diya light", "both", "hinduism", "diya", "#3A1A00", "#B5651D", "#FFF6E5", "#FFD27A", "#F0CFA0", False, "🪔"),
-    ("gita-sun", "Bhagavad Gita · Dawn", "both", "hinduism", "mandala", "#5B2A0A", "#F2A65A", "#2B1405", "#7A3410", "#5A3A22", True, "☀️"),
+    ("gita-sun", "Bhagavad Gita · Dawn", "both", "hinduism", "mandala", "#FBD9A5", "#F2A65A", "#2B1405", "#7A3410", "#5A3A22", True, "☀️"),
 ]
 
 CHRISTIANITY = [
@@ -40,7 +40,7 @@ CHRISTIANITY = [
 ISLAM = [
     ("geometry-emerald", "Geometric emerald", "both", "islam", "geometry", "#06302A", "#0F6B57", "#F0FBF6", "#E3C468", "#A9D0C4", False, "🕌"),
     ("crescent-night", "Crescent night", "both", "islam", "crescent", "#0B1B3A", "#1D3C6E", "#F2F5FC", "#F5D77A", "#AEBBD8", False, "🌙"),
-    ("mosque-dusk", "Mosque at dusk", "both", "islam", "mosque", "#3A2A52", "#D9885B", "#FFF8EF", "#FFE0A3", "#F2D2BC", False, "🕌"),
+    ("mosque-dusk", "Mosque at dusk", "both", "islam", "mosque", "#3A2A52", "#A9553A", "#FFF8EF", "#FFE0A3", "#FBE3D2", False, "🕌"),
     ("arabesque-gold", "Arabesque gold", "both", "islam", "arabesque", "#1F1608", "#5C4318", "#FFF6DF", "#F0C75E", "#D8C192", False, "✨"),
     ("ivory-geometry", "Ivory geometry", "both", "islam", "geometry", "#F7F1E3", "#E6D8B5", "#2C2415", "#0F6B57", "#5E5236", True, "🔷"),
 ]
@@ -53,9 +53,9 @@ BUDDHISM = [
 ]
 
 GENERAL = [
-    ("nature-mountains", "Mountains", "both", "general wisdom", "mountains", "#1B3A4B", "#6C8EAD", "#F6FAFD", "#FFE2A8", "#C3D3E2", False, "⛰️"),
+    ("nature-mountains", "Mountains", "both", "general wisdom", "mountains", "#1B3A4B", "#4A6F90", "#F6FAFD", "#FFE2A8", "#DCE7F1", False, "⛰️"),
     ("gratitude-sunrise", "Gratitude sunrise", "both", "general wisdom", "sunrise", "#F7B267", "#FFE3B8", "#3A2112", "#9A4A12", "#6B4A33", True, "🌄"),
-    ("peace-leaves", "Quiet leaves", "both", "general wisdom", "leaves", "#193D2E", "#4C8C63", "#F3FAF4", "#D6EFA4", "#B3D2BC", False, "🍃"),
+    ("peace-leaves", "Quiet leaves", "both", "general wisdom", "leaves", "#193D2E", "#3B7A53", "#F3FAF4", "#D6EFA4", "#D3E8D9", False, "🍃"),
     ("calm-waves", "Calm waves", "both", "general wisdom", "waves", "#0D3050", "#3A8CBB", "#FFFFFF", "#BFEBFF", "#C5DDEC", False, "🌊"),
     ("universal-stars", "Universal stars", "both", "general wisdom", "stars", "#0B0D24", "#2B2A66", "#F4F2FF", "#FFD98A", "#B9B6DC", False, "✨"),
 ]

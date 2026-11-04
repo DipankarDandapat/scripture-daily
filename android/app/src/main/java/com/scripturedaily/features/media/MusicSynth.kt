@@ -29,7 +29,7 @@ object MusicSynth {
     )
     private val PENTATONIC = doubleArrayOf(523.25, 587.33, 659.25, 783.99, 880.00, 1046.50)
 
-    fun generate(style: MusicStyle, seconds: Int): ShortArray {
+    fun generate(style: MusicStyle, seconds: Int, volume: Float = 1f): ShortArray {
         val n = SAMPLE_RATE * seconds
         val buf = FloatArray(n)
         when (style) {
@@ -41,7 +41,7 @@ object MusicSynth {
         // master fades + gentle normalisation
         var peak = 0f
         for (v in buf) peak = max(peak, abs(v))
-        val gain = if (peak > 0f) 0.62f / peak else 0f
+        val gain = if (peak > 0f) 0.62f * volume.coerceIn(0f, 1f) / peak else 0f
         val fadeIn = SAMPLE_RATE * 1.2
         val fadeOut = SAMPLE_RATE * 2.0
         return ShortArray(n) { i ->
@@ -105,5 +105,31 @@ object MusicSynth {
             val breathe = 0.75 + 0.25 * sin(2 * PI * 0.11 * t)
             buf[i] = (s * breathe * 0.22).toFloat()
         }
+    }
+}
+
+/** Plays a short sample of a music style so the user can choose before generating the video. */
+object MusicPreview {
+    private var track: android.media.AudioTrack? = null
+
+    suspend fun play(style: MusicStyle, volume: Float, onDone: () -> Unit) {
+        stop()
+        val pcm = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { MusicSynth.generate(style, 6, volume) }
+        val at = android.media.AudioTrack.Builder()
+            .setAudioAttributes(android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC).build())
+            .setAudioFormat(android.media.AudioFormat.Builder().setEncoding(android.media.AudioFormat.ENCODING_PCM_16BIT)
+                .setSampleRate(MusicSynth.SAMPLE_RATE).setChannelMask(android.media.AudioFormat.CHANNEL_OUT_MONO).build())
+            .setBufferSizeInBytes(pcm.size * 2).setTransferMode(android.media.AudioTrack.MODE_STATIC).build()
+        at.write(pcm, 0, pcm.size)
+        track = at
+        at.play()
+        kotlinx.coroutines.delay(6_200)
+        if (track === at) { stop(); onDone() }
+    }
+
+    fun stop() {
+        track?.let { runCatching { it.stop() }; runCatching { it.release() } }
+        track = null
     }
 }

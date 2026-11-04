@@ -204,6 +204,12 @@ private fun RefreshButton(colors: Colors, compact: Boolean) {
 
 class ScriptureWidget : WisdomWidget(WidgetLayout.STANDARD) {
     companion object {
+        /** Removes the verse snapshot (e.g. after the tradition changes and nothing in the new tradition is cached yet). */
+        fun clearCachedVerse(context: Context) {
+            context.getSharedPreferences("reader", Context.MODE_PRIVATE).edit()
+                .remove("current_verse_id").remove("widget_scripture").remove("widget_text").remove("widget_reference").remove("widget_saved_at").commit()
+        }
+
         fun cacheVerseForWidget(context: Context, verse: CachedVerse) {
             context.getSharedPreferences("reader", Context.MODE_PRIVATE).edit()
                 .putInt("current_verse_id", verse.id)
@@ -258,17 +264,17 @@ class CycleVerseCallback : ActionCallback {
         val prefs = context.getSharedPreferences("reader", Context.MODE_PRIVATE)
         val religion = prefs.getInt("religion", 1)
         val language = prefs.getInt("language", 0).takeIf { it > 0 } ?: 1
-        val scripture = prefs.getInt("scripture", 0).takeIf { it > 0 } ?: religion
+        val scripture = prefs.getInt("scripture", 0)  // only labels the offline cache; the server draws from the whole tradition
         val current = prefs.getInt("current_verse_id", -1)
         val dao = ScriptureDatabase.get(context).verses()
 
         val fresh: CachedVerse? = try {
-            val remote = ApiClient.api.random(religion, language, scripture, current.takeIf { it > 0 })
+            val remote = ApiClient.api.random(religion, language, null, current.takeIf { it > 0 })
             val cached = remote.toCached(scripture, language, dao.find(remote.id)?.favorite == true)
             dao.save(cached)
             cached
         } catch (_: Exception) {
-            val pool = dao.forCombo(scripture, language)
+            val pool = if (scripture > 0) dao.forCombo(scripture, language) else emptyList()
             if (pool.isEmpty()) null else pool.firstOrNull { it.id > current } ?: pool.first()
         }
         if (fresh != null) {

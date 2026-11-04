@@ -212,3 +212,50 @@ def test_every_story_exists_in_every_language(client):
     for lang in client.get("/api/v1/languages").json():
         stories = client.get("/api/v1/stories", params={"language_id": lang["id"]}).json()
         assert len(stories) == 8 and not any(s["language_fallback"] for s in stories), lang["code"]
+
+
+# ── Studio templates ──────────────────────────────────────────────────────────
+def _rgb(h):
+    h = h.lstrip("#"); return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def _lum(c):
+    def ch(v):
+        s = v / 255; return s / 12.92 if s <= 0.03928 else ((s + 0.055) / 1.055) ** 2.4
+    r, g, b = map(ch, c); return .2126 * r + .7152 * g + .0722 * b
+
+
+def _contrast(a, b):
+    la, lb = _lum(a), _lum(b); return (max(la, lb) + .05) / (min(la, lb) + .05)
+
+
+def _mix(a, b, t): return tuple(a[i] + (b[i] - a[i]) * t for i in range(3))
+
+
+def test_studio_templates_are_tradition_aware(client):
+    by_religion = {r["code"]: r["id"] for r in client.get("/api/v1/religions").json()}
+    common = {t["code"] for t in client.get("/api/v1/studio/templates").json()}
+    assert common and all(t["tradition"] is None for t in client.get("/api/v1/studio/templates").json())  # unknown tradition: common only
+    seen: dict[str, set] = {}
+    for code, rid in by_religion.items():
+        rows = client.get("/api/v1/studio/templates", params={"religion_id": rid}).json()
+        assert common <= {t["code"] for t in rows}, code
+        own = {t["code"] for t in rows if t["tradition"] is not None}
+        assert own and all(t["tradition"] == code for t in rows if t["tradition"] is not None), code
+        seen[code] = own
+    names = list(seen.values())
+    assert all(a.isdisjoint(b) for i, a in enumerate(names) for b in names[i + 1:])  # never shared between traditions
+    assert not any(t["motif"] in ("om", "cross", "crescent", "dharma") for t in client.get("/api/v1/studio/templates", params={"religion_id": by_religion["general wisdom"]}).json())
+    video = client.get("/api/v1/studio/templates", params={"religion_id": 1, "kind": "video"}).json()
+    assert video and client.get("/api/v1/studio/templates", params={"kind": "bogus"}).status_code == 422
+    assert client.get("/api/v1/studio/templates", params={"religion_id": 999}).status_code == 404
+
+
+def test_template_colours_are_readable(client):
+    rows = client.get("/api/v1/studio/templates", params={"religion_id": 1}).json()
+    rows += [t for r in (2, 3, 4, 5) for t in client.get("/api/v1/studio/templates", params={"religion_id": r}).json() if t["tradition"]]
+    for t in rows:
+        top, bottom = _rgb(t["color_top"]), _rgb(t["color_bottom"])
+        assert min(_contrast(_rgb(t["color_text"]), _mix(top, bottom, x)) for x in (.2, .35, .5, .65, .75)) >= 4.5, t["code"]
+        assert _contrast(_rgb(t["color_accent"]), _mix(top, bottom, .8)) >= 3.0, t["code"]
+        assert _contrast(_rgb(t["color_muted"]), _mix(top, bottom, .84)) >= 3.0, t["code"]

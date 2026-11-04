@@ -11,29 +11,38 @@ import android.widget.Toast
 import androidx.core.content.FileProvider
 import java.io.File
 
-/** Persists the user's last studio choices. */
+/** Persists the user's last studio choices. The template is stored by code and resolved against the tradition's visible list. */
 object StudioPrefs {
     private const val FILE = "reader"
 
-    fun load(context: Context): CardStyle {
+    fun load(context: Context, templates: List<StudioTemplate> = StudioTemplates.BUILT_IN): CardStyle {
         val p = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
         fun <T : Enum<T>> pick(key: String, values: Array<T>, default: T): T =
             values.firstOrNull { it.name == p.getString(key, null) } ?: default
         return CardStyle(
-            template = pick("studio_template", CardTemplate.values(), CardTemplate.NIGHT),
-            pattern = pick("studio_pattern", CardPattern.values(), CardPattern.MANDALA),
+            template = StudioTemplates.find(templates, p.getString("studio_template_code", null)),
+            pattern = pick("studio_pattern_v2", CardPattern.values(), CardPattern.TEMPLATE),
             format = pick("studio_format", CardFormat.values(), CardFormat.STORY),
             fontScale = p.getFloat("studio_font_scale", 1f).coerceIn(0.7f, 1.5f),
             font = pick("studio_font", CardFont.values(), CardFont.SERIF),
-            showMark = p.getBoolean("studio_mark", true)
+            showMark = p.getBoolean("studio_mark", true),
+            align = pick("studio_align", TextAlignment.values(), TextAlignment.CENTER),
+            spacing = p.getFloat("studio_spacing", 1f).coerceIn(0.8f, 1.8f),
+            placement = pick("studio_placement", TextPlacement.values(), TextPlacement.MIDDLE),
+            textColor = if (p.contains("studio_text_color")) p.getInt("studio_text_color", 0) else null,
+            swatch = StudioTemplates.SWATCHES.firstOrNull { it.label == p.getString("studio_swatch", null) }
         )
     }
 
     fun save(context: Context, s: CardStyle) {
-        context.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit()
-            .putString("studio_template", s.template.name).putString("studio_pattern", s.pattern.name)
+        val e = context.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit()
+            .putString("studio_template_code", s.template.code).putString("studio_pattern_v2", s.pattern.name)
             .putString("studio_format", s.format.name).putFloat("studio_font_scale", s.fontScale)
-            .putString("studio_font", s.font.name).putBoolean("studio_mark", s.showMark).apply()
+            .putString("studio_font", s.font.name).putBoolean("studio_mark", s.showMark)
+            .putString("studio_align", s.align.name).putFloat("studio_spacing", s.spacing).putString("studio_placement", s.placement.name)
+            .putString("studio_swatch", s.swatch?.label)
+        if (s.textColor != null) e.putInt("studio_text_color", s.textColor) else e.remove("studio_text_color")
+        e.apply()
     }
 }
 

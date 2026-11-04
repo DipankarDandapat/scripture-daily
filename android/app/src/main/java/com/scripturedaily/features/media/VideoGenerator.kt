@@ -23,13 +23,22 @@ import kotlin.coroutines.coroutineContext
 import kotlin.math.PI
 import kotlin.math.sin
 
+enum class TextAnimation(val label: String) { FADE("Fade in"), RISE("Rise"), WORDS("Word by word"), ZOOM("Zoom in") }
+enum class BgMotion(val label: String) { ZOOM_IN("Slow zoom"), ZOOM_OUT("Zoom out"), PAN("Gentle pan"), STILL("Still") }
+enum class VideoTransition(val label: String) { FADE_BLACK("Fade to black"), FADE_WHITE("Fade to white"), NONE("None") }
+
 data class VideoOptions(
     val seconds: Int = 12,
     val music: MusicStyle = MusicStyle.CALM_PAD,
     val style: CardStyle,
     val width: Int = 720,
     val height: Int = 1280,
-    val fps: Int = 24
+    val fps: Int = 24,
+    val animation: TextAnimation = TextAnimation.FADE,
+    val motion: BgMotion = BgMotion.ZOOM_IN,
+    val transition: VideoTransition = VideoTransition.FADE_BLACK,
+    val particles: Boolean = true,
+    val volume: Float = 0.8f
 )
 
 /**
@@ -44,9 +53,8 @@ object VideoGenerator {
     ): File = withContext(Dispatchers.Default) {
         val w = options.width; val h = options.height; val fps = options.fps
         val totalFrames = options.seconds * fps
-        val background = CardRenderer.renderBackground(options.style, w, h)
-        val foreground = CardRenderer.renderForeground(context, content, options.style, w, h)
-        val pcm: ShortArray? = if (options.music == MusicStyle.NONE) null else MusicSynth.generate(options.music, options.seconds)
+        val composer = FrameComposer(context, content, options, w, h)
+        val pcm: ShortArray? = if (options.music == MusicStyle.NONE) null else MusicSynth.generate(options.music, options.seconds, options.volume)
 
         if (output.exists()) output.delete()
         val muxer = MediaMuxer(output.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
@@ -80,7 +88,6 @@ object VideoGenerator {
         val canvas = Canvas(frame)
         val pixels = IntArray(w * h)
         val info = MediaCodec.BufferInfo()
-        val dots = Particles(w, h)
 
         fun maybeStart() {
             if (!muxerStarted && videoTrack >= 0 && (audioCodec == null || audioTrack >= 0)) { muxer.start(); muxerStarted = true }
@@ -125,7 +132,7 @@ object VideoGenerator {
                         if (frameIndex >= totalFrames) {
                             videoCodec.queueInputBuffer(inIndex, 0, 0, ptsUs, MediaCodec.BUFFER_FLAG_END_OF_STREAM); videoInputDone = true
                         } else {
-                            composeFrame(canvas, background, foreground, dots, frameIndex.toFloat() / fps, options.seconds.toFloat())
+                            composer.draw(canvas, frameIndex.toFloat() / fps)
                             frame.getPixels(pixels, 0, w, 0, 0, w, h)
                             val image = videoCodec.getInputImage(inIndex)
                             if (image != null) fillYuv(image, pixels, w, h)
@@ -166,47 +173,9 @@ object VideoGenerator {
             audioCodec?.let { runCatching { it.stop() }; runCatching { it.release() } }
             if (muxerStarted) runCatching { muxer.stop() }
             runCatching { muxer.release() }
-            background.recycle(); foreground.recycle(); frame.recycle()
+            composer.release(); frame.recycle()
         }
         output
-    }
-
-    private class Particles(val w: Int, val h: Int) {
-        private val rnd = java.util.Random(5)
-        val x = FloatArray(28) { rnd.nextFloat() * w }
-        val y = FloatArray(28) { rnd.nextFloat() * h }
-        val r = FloatArray(28) { w * (0.004f + rnd.nextFloat() * 0.008f) }
-        val speed = FloatArray(28) { 12f + rnd.nextFloat() * 28f }
-        val phase = FloatArray(28) { rnd.nextFloat() * 6.28f }
-    }
-
-    private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
-    private val bitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
-    private val matrix = Matrix()
-
-    private fun composeFrame(c: Canvas, bg: Bitmap, fg: Bitmap, p: Particles, t: Float, total: Float) {
-        val w = bg.width.toFloat(); val h = bg.height.toFloat()
-        // 1) slow zoom on the background
-        val zoom = 1f + 0.08f * (t / total)
-        matrix.reset(); matrix.postScale(zoom, zoom, w / 2f, h / 2f)
-        c.drawColor(Color.BLACK)
-        c.drawBitmap(bg, matrix, bitmapPaint)
-        // 2) drifting light particles
-        for (i in p.x.indices) {
-            val yy = ((p.y[i] - p.speed[i] * t) % h + h) % h
-            val xx = p.x[i] + (sin(t * 0.6 + p.phase[i]) * w * 0.02).toFloat()
-            dotPaint.alpha = (60 + 50 * sin(t * 1.3 + p.phase[i])).toInt().coerceIn(10, 140)
-            c.drawCircle(xx, yy, p.r[i], dotPaint)
-        }
-        // 3) text fades and floats in
-        val fadeIn = ((t - 0.6f) / 1.8f).coerceIn(0f, 1f)
-        val ease = fadeIn * fadeIn * (3 - 2 * fadeIn)
-        bitmapPaint.alpha = (ease * 255).toInt()
-        c.drawBitmap(fg, 0f, (1 - ease) * h * 0.02f, bitmapPaint)
-        bitmapPaint.alpha = 255
-        // 4) soft fade to black at the very end
-        val tail = ((t - (total - 0.8f)) / 0.8f).coerceIn(0f, 1f)
-        if (tail > 0f) c.drawColor(Color.argb((tail * 255).toInt(), 0, 0, 0))
     }
 
     /** ARGB pixels -> the codec's flexible YUV420 input image (handles any stride / semi-planar layout). */
@@ -239,4 +208,75 @@ object VideoGenerator {
             }
         }
     }
+}
+
+
+/**
+ * Draws one frame of the verse video at time t. Shared by the encoder and the live preview so what you
+ * preview is what you get: background motion, floating light, animated verse text and the end transition.
+ */
+class FrameComposer(private val context: Context, private val content: CardContent, private val o: VideoOptions, val w: Int, val h: Int) {
+    private val background: Bitmap = CardRenderer.renderBackground(o.style, w, h)
+    private val foreground: Bitmap? = if (o.animation == TextAnimation.WORDS) null else CardRenderer.renderForeground(context, content, o.style, w, h)
+    private val rnd = java.util.Random(5)
+    private val px = FloatArray(28) { rnd.nextFloat() * w }
+    private val py = FloatArray(28) { rnd.nextFloat() * h }
+    private val pr = FloatArray(28) { w * (0.004f + rnd.nextFloat() * 0.008f) }
+    private val ps = FloatArray(28) { 12f + rnd.nextFloat() * 28f }
+    private val pp = FloatArray(28) { rnd.nextFloat() * 6.28f }
+    private val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = if (o.style.resolved().light) Color.rgb(255, 214, 140) else Color.WHITE }
+    private val bmpPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val matrix = Matrix()
+    private val total = o.seconds.toFloat()
+
+    fun draw(c: Canvas, t: Float) {
+        val wf = w.toFloat(); val hf = h.toFloat(); val progress = (t / total).coerceIn(0f, 1f)
+        // 1) background motion
+        matrix.reset()
+        when (o.motion) {
+            BgMotion.ZOOM_IN -> matrix.postScale(1f + 0.08f * progress, 1f + 0.08f * progress, wf / 2, hf / 2)
+            BgMotion.ZOOM_OUT -> matrix.postScale(1.08f - 0.08f * progress, 1.08f - 0.08f * progress, wf / 2, hf / 2)
+            BgMotion.PAN -> { matrix.postScale(1.06f, 1.06f, wf / 2, hf / 2); matrix.postTranslate((progress - 0.5f) * wf * 0.04f, 0f) }
+            BgMotion.STILL -> Unit
+        }
+        c.drawColor(Color.BLACK)
+        c.drawBitmap(background, matrix, bmpPaint)
+        // 2) drifting light
+        if (o.particles) for (i in px.indices) {
+            val yy = ((py[i] - ps[i] * t) % hf + hf) % hf
+            val xx = px[i] + (sin(t * 0.6 + pp[i]) * wf * 0.02).toFloat()
+            dot.alpha = (60 + 50 * sin(t * 1.3 + pp[i])).toInt().coerceIn(10, 140)
+            c.drawCircle(xx, yy, pr[i], dot)
+        }
+        // 3) verse text animation
+        val fadeIn = ((t - 0.6f) / 1.8f).coerceIn(0f, 1f)
+        val ease = fadeIn * fadeIn * (3 - 2 * fadeIn)
+        when (o.animation) {
+            TextAnimation.WORDS -> {
+                val reveal = ((t - 0.6f) / (total * 0.55f).coerceIn(2.5f, 9f)).coerceIn(0f, 1f)
+                CardRenderer.drawForeground(context, c, content, o.style, w, h, 1f, if (reveal >= 1f) 1f else reveal)
+            }
+            else -> {
+                val fg = foreground ?: return
+                c.save()
+                when (o.animation) {
+                    TextAnimation.RISE -> c.translate(0f, (1 - ease) * hf * 0.05f)
+                    TextAnimation.ZOOM -> { val s = 0.9f + 0.1f * ease; c.scale(s, s, wf / 2, hf / 2) }
+                    else -> c.translate(0f, (1 - ease) * hf * 0.02f)
+                }
+                bmpPaint.alpha = (ease * 255).toInt(); c.drawBitmap(fg, 0f, 0f, bmpPaint); bmpPaint.alpha = 255
+                c.restore()
+            }
+        }
+        // 4) transitions: a short fade-in from the transition colour, and the end fade
+        val base = if (o.transition == VideoTransition.FADE_WHITE) 255 else 0
+        if (o.transition != VideoTransition.NONE) {
+            val intro = (1f - t / 0.6f).coerceIn(0f, 1f)
+            if (intro > 0f) c.drawColor(Color.argb((intro * 255).toInt(), base, base, base))
+            val tail = ((t - (total - 0.8f)) / 0.8f).coerceIn(0f, 1f)
+            if (tail > 0f) c.drawColor(Color.argb((tail * 255).toInt(), base, base, base))
+        }
+    }
+
+    fun release() { background.recycle(); foreground?.recycle() }
 }
