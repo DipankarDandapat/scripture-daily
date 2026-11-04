@@ -103,7 +103,8 @@ fun StoryLibraryScreen(languageId: Int, religionId: Int, onBack: () -> Unit) {
                             Column(Modifier.weight(1f)) {
                                 Text(st.title, fontWeight = FontWeight.Bold, fontSize = 16.sp, color = W.Ink)
                                 Text(if (st.reference.startsWith(st.scripture)) st.reference else "${st.scripture} · ${st.reference}", fontSize = 11.sp, color = W.Gold, fontWeight = FontWeight.SemiBold)
-                                Text(st.lesson, fontSize = 12.sp, color = W.InkSoft, lineHeight = 17.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                if (st.summary.isNotBlank()) Text(st.summary, fontSize = 12.sp, color = W.InkSoft, lineHeight = 17.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                Text("💡 ${st.lesson}", fontSize = 11.sp, color = W.InkMid, lineHeight = 15.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp))
                             }
                         }
                     }

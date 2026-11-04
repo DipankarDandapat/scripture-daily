@@ -196,8 +196,8 @@ def test_challenge_lengths(client):
 # ── Stories ──────────────────────────────────────────────────────────────────
 def test_stories(client):
     stories = client.get("/api/v1/stories", params={"language_id": 2}).json()
-    assert len(stories) == 8 and all(s["language"] == "hi" and not s["language_fallback"] for s in stories)
-    detail = client.get(f"/api/v1/stories/{stories[0]['code']}", params={"language_id": 6}).json()
+    assert len(stories) == 50 and all(s["language"] == "hi" and not s["language_fallback"] for s in stories)
+    detail = client.get("/api/v1/stories/arjuna-and-the-birds-eye", params={"language_id": 6}).json()
     assert detail["language"] == "ur" and len(detail["scenes"]) == 3 and all(s["text"] and s["art"] for s in detail["scenes"])
     assert detail["lesson"] and detail["verse"] is not None
     matches = 0
@@ -211,10 +211,41 @@ def test_stories(client):
     assert client.get("/api/v1/stories", params={"language_id": 99}).status_code == 404
 
 
-def test_every_story_exists_in_every_language(client):
-    for lang in client.get("/api/v1/languages").json():
-        stories = client.get("/api/v1/stories", params={"language_id": lang["id"]}).json()
-        assert len(stories) == 8 and not any(s["language_fallback"] for s in stories), lang["code"]
+MIN_STORIES = 10
+
+
+def test_stories_never_mix_traditions_and_each_has_at_least_ten(client):
+    """Fixes 'Arjuna and the Bird's Eye appears for an Islam user': listings are scoped to one tradition."""
+    religions = client.get("/api/v1/religions").json()
+    all_codes = {s["code"]: s["religion_code"] for s in client.get("/api/v1/stories").json()}
+    for religion in religions:
+        langs = client.get("/api/v1/languages", params={"religion_id": religion["id"]}).json()
+        expected = {c for c, r in all_codes.items() if r == religion["code"]}
+        assert len(expected) >= MIN_STORIES, (religion["code"], len(expected))
+        for lang in langs:
+            listed = client.get("/api/v1/stories", params={"religion_id": religion["id"], "language_id": lang["id"]}).json()
+            assert {s["code"] for s in listed} == expected, (religion["code"], lang["code"])
+            assert all(s["religion_code"] == religion["code"] for s in listed)
+            for s in listed:
+                assert s["title"] and s["lesson"] and s["summary"] and s["scene_count"] >= 3
+    islam = client.get("/api/v1/stories", params={"religion_id": 3, "language_id": 1}).json()
+    assert "arjuna-and-the-birds-eye" not in {s["code"] for s in islam}
+    # a signed-in user is scoped by their saved tradition even without sending religion_id
+    headers = register(client, "story-scope@example.com")
+    client.put("/api/v1/users/preferences", headers=headers, json={"religion_id": 3, "language_id": 1, "scripture_ids": "3", "frequency": "daily", "notifications_enabled": False})
+    own = client.get("/api/v1/stories", params={"language_id": 1}, headers=headers).json()
+    assert {s["code"] for s in own} == {c for c, r in all_codes.items() if r == "islam"}
+
+
+def test_every_story_has_complete_text_in_english_and_hindi_and_graceful_fallback(client):
+    for lang_id in (1, 2):
+        for s in client.get("/api/v1/stories", params={"language_id": lang_id}).json():
+            assert not s["language_fallback"], (s["code"], lang_id)
+            d = client.get(f"/api/v1/stories/{s['code']}", params={"language_id": lang_id}).json()
+            assert all(sc["text"].strip() and sc["art"] for sc in d["scenes"]), s["code"]
+    # a language a story was not translated into falls back to English (never to another story or tradition)
+    bn = client.get("/api/v1/stories", params={"language_id": 3, "religion_id": 1}).json()
+    assert len(bn) == 10 and {s["language"] for s in bn} <= {"bn", "en"}
 
 
 # ── Studio templates ──────────────────────────────────────────────────────────

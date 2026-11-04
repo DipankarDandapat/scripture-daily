@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.abs
 import kotlin.math.sin
 
 /**
@@ -118,6 +119,22 @@ private fun DrawScope.drawScene(t: Set<String>, palette: String) {
     if ("kids" in t) { person(w * 0.22f, ground, w * 0.07f, Color(0xFFD16B8F), Color(0xFFE8B98E)); person(w * 0.34f, ground + h * 0.01f, w * 0.07f, Color(0xFF4F8DB5), Color(0xFFD9A57C)); person(w * 0.46f, ground, w * 0.07f, Color(0xFFE0B040), Color(0xFFE8B98E)) }
     if ("monkeys" in t) for (i in 0 until 5) monkey(w * (0.2f + i * 0.14f), if ("bridge" in t) horizon + h * 0.075f else ground + (i % 2) * h * 0.03f, w * 0.045f)
     if ("bird" in t) bird(w * 0.72f, h * 0.3f, w * 0.05f)
+
+    // v2 scenery and animals
+    if ("rain" in t) for (i in 0 until 40) { val x = ((i * 47) % 100) / 100f * w; val y = ((i * 31) % 70) / 100f * h; drawLine(Color(0xAA9FC5E8), Offset(x, y), Offset(x - w * 0.012f, y + h * 0.04f), w * 0.004f) }
+    if ("cave" in t) { val c = Path().apply { moveTo(w * 0.05f, horizon + h * 0.2f); quadraticTo(w * 0.05f, horizon - h * 0.2f, w * 0.3f, horizon - h * 0.2f); quadraticTo(w * 0.55f, horizon - h * 0.2f, w * 0.55f, horizon + h * 0.2f); close() }; drawPath(c, Color(0xFF3C3550)); drawOval(Color(0xFF14101F), Offset(w * 0.14f, horizon - h * 0.04f), Size(w * 0.32f, h * 0.24f)) }
+    if ("dome" in t) dome(w * 0.5f, horizon + h * 0.12f, w * 0.55f)
+    if ("boat" in t) boat(w * 0.5f, horizon + h * 0.1f, w * 0.4f)
+    if ("rainbow" in t) for ((i, c) in listOf(Color(0xFFE5534B), Color(0xFFF2A33A), Color(0xFFF7DE5B), Color(0xFF5BB974), Color(0xFF4F9FE0), Color(0xFF8A62C9)).withIndex()) {
+        drawArc(c.copy(alpha = 0.8f), 180f, 180f, false, Offset(w * (0.12f + i * 0.02f), h * (0.12f + i * 0.02f)), Size(w * (0.76f - i * 0.04f), w * (0.76f - i * 0.04f)), style = Stroke(w * 0.022f)) }
+    if ("fire" in t) flame(w * 0.7f, ground0(horizon, h), w * 0.16f, true)
+    if ("lamp" in t) flame(w * 0.2f, horizon + h * 0.14f, w * 0.07f, false)
+    if ("fish" in t) fish(w * 0.5f, horizon + h * 0.14f, w * 0.34f)
+    if ("lion" in t) animal(w * 0.7f, horizon + h * 0.25f, w * 0.26f, Color(0xFFD9A441), mane = Color(0xFF8B5A22))
+    if ("deer" in t) animal(w * 0.7f, horizon + h * 0.25f, w * 0.24f, Color(0xFFB07A45), antlers = true)
+    if ("hare" in t) animal(w * 0.74f, horizon + h * 0.25f, w * 0.2f, Color(0xFFEFE8DC), ears = true)
+    if ("tortoise" in t) animal(w * 0.34f, horizon + h * 0.26f, w * 0.2f, Color(0xFF5E9E5A), shell = true)
+    if ("ant" in t) for (i in 0 until 5) animal(w * (0.15f + i * 0.17f), horizon + h * (0.27f + (i % 2) * 0.03f), w * 0.06f, Color(0xFF3A2A22))
 
     // flourishes
     if ("hearts" in t) for (i in 0 until 5) heart(w * (0.2f + i * 0.15f), h * (0.28f - (i % 3) * 0.05f), w * (0.028f + (i % 2) * 0.01f), Color(0xFFFF8FAB).copy(alpha = 0.85f))
@@ -228,6 +245,51 @@ private fun DrawScope.bird(x: Float, y: Float, s: Float) {
     drawPath(beak, Color(0xFFFFC857))
     val wing = Path().apply { moveTo(x - s * 0.1f, y); quadraticTo(x - s * 0.5f, y - s * 0.6f, x - s * 0.9f, y - s * 0.2f); quadraticTo(x - s * 0.5f, y + s * 0.1f, x - s * 0.1f, y) }
     drawPath(wing, Color(0xFFA9652A))
+}
+
+private fun ground0(horizon: Float, h: Float) = horizon + h * 0.25f
+
+private fun DrawScope.dome(x: Float, baseY: Float, s: Float) {
+    val body = Color(0xFFE9DFC7)
+    drawRect(body, Offset(x - s * 0.3f, baseY - s * 0.25f), Size(s * 0.6f, s * 0.25f))
+    drawArc(Color(0xFF4FA3A5), 180f, 180f, true, Offset(x - s * 0.3f, baseY - s * 0.55f), Size(s * 0.6f, s * 0.6f))
+    drawLine(Color(0xFFE5B84B), Offset(x, baseY - s * 0.55f), Offset(x, baseY - s * 0.7f), s * 0.015f); drawCircle(Color(0xFFE5B84B), s * 0.025f, Offset(x, baseY - s * 0.72f))
+    for (dx in listOf(-0.42f, 0.42f)) { drawRect(body, Offset(x + dx * s - s * 0.04f, baseY - s * 0.62f), Size(s * 0.08f, s * 0.62f)); drawCircle(Color(0xFF4FA3A5), s * 0.05f, Offset(x + dx * s, baseY - s * 0.64f)) }
+    drawRoundRect(Color(0xFF8A6A3C), Offset(x - s * 0.06f, baseY - s * 0.14f), Size(s * 0.12f, s * 0.14f), androidx.compose.ui.geometry.CornerRadius(s * 0.06f))
+}
+
+private fun DrawScope.boat(x: Float, baseY: Float, s: Float) {
+    val hull = Path().apply { moveTo(x - s * 0.5f, baseY - s * 0.12f); lineTo(x + s * 0.5f, baseY - s * 0.12f); quadraticTo(x + s * 0.4f, baseY + s * 0.1f, x + s * 0.2f, baseY + s * 0.1f); lineTo(x - s * 0.2f, baseY + s * 0.1f); quadraticTo(x - s * 0.4f, baseY + s * 0.1f, x - s * 0.5f, baseY - s * 0.12f); close() }
+    drawPath(hull, Color(0xFF8A5A33))
+    drawRect(Color(0xFFB98652), Offset(x - s * 0.3f, baseY - s * 0.32f), Size(s * 0.6f, s * 0.2f))
+    val roof = Path().apply { moveTo(x - s * 0.36f, baseY - s * 0.32f); lineTo(x, baseY - s * 0.5f); lineTo(x + s * 0.36f, baseY - s * 0.32f); close() }
+    drawPath(roof, Color(0xFF6B4528))
+    for (i in 0 until 3) drawCircle(Color(0xFFFFF3C4), s * 0.03f, Offset(x - s * 0.15f + i * s * 0.15f, baseY - s * 0.22f))
+}
+
+private fun DrawScope.flame(x: Float, baseY: Float, s: Float, large: Boolean) {
+    if (large) for (i in -1..1) { val p = Path().apply { moveTo(x + i * s * 0.5f, baseY); quadraticTo(x + i * s * 0.5f - s * 0.4f, baseY - s * 0.7f, x + i * s * 0.5f, baseY - s * 1.4f + abs(i) * s * 0.4f); quadraticTo(x + i * s * 0.5f + s * 0.4f, baseY - s * 0.7f, x + i * s * 0.5f, baseY) }; drawPath(p, Color(0xFFF2A33A)); drawPath(p, Color(0xFFFFE08A).copy(alpha = 0.6f), style = Stroke(s * 0.1f)) }
+    else { drawOval(Color(0xFFB98652), Offset(x - s, baseY), Size(s * 2f, s * 0.8f)); val p = Path().apply { moveTo(x, baseY - s * 1.2f); quadraticTo(x + s * 0.5f, baseY - s * 0.5f, x, baseY); quadraticTo(x - s * 0.5f, baseY - s * 0.5f, x, baseY - s * 1.2f) }; drawPath(p, Color(0xFFFFC857)); drawCircle(Color(0x44FFE08A), s * 1.6f, Offset(x, baseY - s * 0.5f)) }
+}
+
+private fun DrawScope.fish(x: Float, baseY: Float, s: Float) {
+    val c = Color(0xFF4F6F95)
+    drawOval(c, Offset(x - s * 0.5f, baseY - s * 0.28f), Size(s * 0.8f, s * 0.5f))
+    val tail = Path().apply { moveTo(x + s * 0.25f, baseY - s * 0.03f); lineTo(x + s * 0.55f, baseY - s * 0.3f); lineTo(x + s * 0.55f, baseY + s * 0.24f); close() }
+    drawPath(tail, c); drawCircle(Color.White, s * 0.04f, Offset(x - s * 0.33f, baseY - s * 0.1f)); drawCircle(Color(0xFF2A1B14), s * 0.02f, Offset(x - s * 0.33f, baseY - s * 0.1f))
+}
+
+/** One friendly four-legged animal shape, dressed up by flags (mane, antlers, ears, shell). */
+private fun DrawScope.animal(x: Float, baseY: Float, s: Float, color: Color, mane: Color? = null, antlers: Boolean = false, ears: Boolean = false, shell: Boolean = false) {
+    for (dx in listOf(-0.3f, -0.1f, 0.15f, 0.3f)) drawRect(color.copy(alpha = 0.85f), Offset(x + dx * s - s * 0.04f, baseY - s * 0.25f), Size(s * 0.08f, s * 0.25f))
+    drawOval(color, Offset(x - s * 0.4f, baseY - s * 0.55f), Size(s * 0.8f, s * 0.38f))
+    if (shell) drawArc(Color(0xFF3F7A45), 180f, 180f, true, Offset(x - s * 0.36f, baseY - s * 0.62f), Size(s * 0.72f, s * 0.5f))
+    val head = Offset(x + s * 0.45f, baseY - s * 0.5f)
+    if (mane != null) drawCircle(mane, s * 0.3f, head)
+    drawCircle(color, s * 0.2f, head)
+    if (ears) for (dx in listOf(-0.05f, 0.08f)) drawOval(color, Offset(head.x + dx * s - s * 0.04f, head.y - s * 0.55f), Size(s * 0.08f, s * 0.38f))
+    if (antlers) for (dx in listOf(-0.06f, 0.08f)) { drawLine(Color(0xFF6B4528), Offset(head.x + dx * s, head.y - s * 0.15f), Offset(head.x + dx * s * 2f, head.y - s * 0.5f), s * 0.03f); drawLine(Color(0xFF6B4528), Offset(head.x + dx * s * 1.5f, head.y - s * 0.33f), Offset(head.x + dx * s * 3f, head.y - s * 0.4f), s * 0.025f) }
+    drawCircle(Color(0xFF2A1B14), s * 0.025f, Offset(head.x + s * 0.07f, head.y - s * 0.03f))
 }
 
 private fun DrawScope.heart(x: Float, y: Float, s: Float, color: Color) {

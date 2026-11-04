@@ -279,3 +279,11 @@ STORIES = [
                     "พวกเขาเถียงกัน จนเด็กฉลาดคนหนึ่งบอกว่า 'ทุกคนพูดถูกในส่วนของตัวเอง' เมื่อรวมกัน พวกเขาก็เข้าใจช้างทั้งตัว"]),
         }),
 ]
+
+
+# ── v2: ten stories per tradition (see the stories_*.py modules) ─────────────────────────────────────────
+from app.content.stories_general import GENERAL as _GENERAL  # noqa: E402
+from app.content.stories_hindu_christian import CHRISTIAN as _CHRISTIAN, HINDU as _HINDU  # noqa: E402
+from app.content.stories_islam_buddhist import BUDDHIST as _BUDDHIST, ISLAM as _ISLAM  # noqa: E402
+
+STORIES = STORIES + _HINDU + _CHRISTIAN + _ISLAM + _BUDDHIST + _GENERAL
