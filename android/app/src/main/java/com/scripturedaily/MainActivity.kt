@@ -601,6 +601,7 @@ private fun ScriptureApp(
     var moodLoading by remember { mutableStateOf(false) }
     var moodError by remember { mutableStateOf<String?>(null) }
     var moodShuffle by remember { mutableIntStateOf(0) }
+    var prefsSyncKey by remember { mutableIntStateOf(0) }
     var storyAvailable by remember { mutableStateOf(false) }
     var explainFor by remember { mutableStateOf<Verse?>(null) }
 
@@ -675,6 +676,7 @@ private fun ScriptureApp(
                     val p = resp.body()!!
                     val freqLocal = when (p.frequency) { "6h" -> "Every 6 hours"; "1h" -> "Every hour"; else -> "Daily" }
                     val firstScriptureId = p.scriptureIds.split(",").firstOrNull()?.trim()?.toIntOrNull() ?: scriptureId
+                    if (p.religionId != religion || p.languageId != language) prefsSyncKey++   // changed elsewhere: drop stale verses below
                     religion = p.religionId; language = p.languageId; scriptureId = firstScriptureId; frequency = freqLocal
                     store.edit().putInt("religion", p.religionId).putInt("language", p.languageId)
                         .putInt("scripture", firstScriptureId).putString("frequency", freqLocal).apply()
@@ -903,6 +905,9 @@ private fun ScriptureApp(
         }
         loadToday(random = false)
     }
+
+    // Tradition/language changed on the server (e.g. saved from another session): reload so nothing stale is shown.
+    LaunchedEffect(prefsSyncKey) { if (prefsSyncKey > 0) refreshForPreferences(changed = true) }
 
     /** The daily reading is complete (verse viewed for a few seconds, or saved / shared / explained). One count per day. */
     fun markReading() {
