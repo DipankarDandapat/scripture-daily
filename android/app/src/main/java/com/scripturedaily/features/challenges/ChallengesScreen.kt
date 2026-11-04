@@ -86,11 +86,11 @@ fun ChallengesScreen(languageId: Int, religionId: Int, onBack: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(attempt, openId) {
+    LaunchedEffect(attempt, openId, languageId) {
         if (openId != null) return@LaunchedEffect
         error = null
         try {
-            list = withContext(Dispatchers.IO) { ApiClient.api.challenges(LocalDate.now().toString()) }
+            list = withContext(Dispatchers.IO) { ApiClient.api.challenges(LocalDate.now().toString(), languageId.takeIf { it > 0 }) }
             badges = runCatching { withContext(Dispatchers.IO) { ApiClient.api.badges() } }.getOrDefault(emptyList())
         } catch (_: Exception) { error = "Couldn't load challenges. Check your connection and try again." }
     }
@@ -142,7 +142,11 @@ private fun ChallengeCard(c: Challenge, onClick: () -> Unit) {
         Spacer(Modifier.height(6.dp))
         Row {
             Text(
-                when { c.progress.completed -> "Completed 🎉"; done == 0 -> "${c.totalDays} days · Not started"; else -> "Day $done of ${c.totalDays} done" },
+                when {
+                    c.progress.completed -> "${c.totalDays} days · Completed 🎉"
+                    done == 0 -> "${c.totalDays} days · Not started"
+                    else -> "${c.totalDays} days · $done done · ${c.totalDays - done} to go"
+                },
                 fontSize = 12.sp, color = W.InkMid, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f)
             )
             Text(if (c.progress.completed) "Review" else if (done == 0) "Start" else "Continue", fontSize = 12.sp, color = color, fontWeight = FontWeight.Bold)
@@ -192,8 +196,14 @@ private fun ChallengeDetailScreen(id: Int, languageId: Int, religionId: Int, onB
                         Text(d.description, fontSize = 12.sp, color = W.InkSoft, lineHeight = 17.sp)
                         Spacer(Modifier.height(10.dp))
                         LinearProgressIndicator(progress = { done.toFloat() / d.totalDays }, modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(4.dp)), color = color, trackColor = color.copy(alpha = 0.2f))
-                        Text(if (d.progress.completed) "All ${d.totalDays} days complete!" else "$done of ${d.totalDays} days complete", fontSize = 12.sp, color = W.InkMid, modifier = Modifier.padding(top = 6.dp))
+                        Text(if (d.progress.completed) "All ${d.totalDays} days complete!" else "${d.totalDays}-day challenge · $done completed · ${d.totalDays - done} remaining", fontSize = 12.sp, color = W.InkMid, modifier = Modifier.padding(top = 6.dp))
                     }
+                    if (d.progress.missedDays > 0 && !d.progress.completed && done > 0) Text(
+                        "Welcome back 🌿 Your progress is safe — pick up right where you left off at day ${d.progress.nextDay ?: done + 1}.",
+                        fontSize = 13.sp, color = W.InkMid, lineHeight = 19.sp,
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(color.copy(alpha = 0.12f)).padding(12.dp))
+                    if (d.languageFallback) Text("This challenge isn't translated into your language yet, so it is shown in English. Verses are still in your language.", fontSize = 11.sp, color = W.InkSoft)
+                    if (d.isUniversal) Text("🌍 Universal challenge: verses come from many traditions.", fontSize = 11.sp, color = W.InkSoft)
                     notice?.let { n -> Text(n, fontSize = 13.sp, color = W.InkMid, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(color.copy(alpha = 0.14f)).padding(12.dp)) }
                     d.days.forEach { day ->
                         DayRow(day, color, expanded == day.dayNumber, working, d.progress.availableTomorrow == true,

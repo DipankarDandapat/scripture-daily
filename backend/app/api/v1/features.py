@@ -287,16 +287,35 @@ def list_challenges(client_date: str | None = Query(default=None), language_id: 
     return [_challenge_out(db, c, user, today, language_id) for c in rows]
 
 
+# When a tradition has no verse tagged with a day's exact topic, the closest related topics are tried (same tradition)
+# before any verse of that tradition, so every challenge day always carries a relevant verse.
+RELATED_TOPICS = {
+    "truth": ["wisdom", "faith"], "humility": ["wisdom", "faith", "compassion"], "charity": ["compassion", "love"],
+    "faith": ["hope", "peace", "wisdom"], "self-control": ["patience", "wisdom", "peace"], "wisdom": ["truth", "faith", "peace"],
+    "gratitude": ["faith", "love", "hope"], "forgiveness": ["compassion", "love", "peace"], "courage": ["faith", "hope", "wisdom"],
+    "hope": ["faith", "peace"], "peace": ["faith", "patience", "wisdom"], "patience": ["peace", "faith", "self-control"],
+    "love": ["compassion", "faith"], "compassion": ["love", "charity", "forgiveness"],
+}
+
+
 def _day_verse(db: Session, challenge: Challenge, day: ChallengeDay, language_id: int | None, religion_id: int | None) -> Verse | None:
     """A verse on the day's topic from the user's own tradition + language.
 
-    Missing translations fall back to the same tradition in English / its other languages — never to another
-    tradition. Only challenges explicitly marked universal draw on every tradition.
+    Missing translations fall back to the same tradition in English / its other languages, and a missing topic to the
+    closest related topic of the same tradition — never to another tradition. Only challenges explicitly marked
+    universal draw on every tradition.
     """
     english_id = _english_id(db)
+    topic_ids = [day.topic_id]
+    for code in RELATED_TOPICS.get(day.topic.code, []):
+        tid = db.scalar(select(Topic.id).where(Topic.code == code))
+        if tid:
+            topic_ids.append(tid)
 
-    def fetch(rel: int | None, lang: int | None) -> list[Verse]:
-        q = verse_query(db).join(VerseTopic, VerseTopic.verse_id == Verse.id).where(VerseTopic.topic_id == day.topic_id)
+    def fetch(rel: int | None, lang: int | None, topic: int | None) -> list[Verse]:
+        q = verse_query(db)
+        if topic is not None:
+            q = q.join(VerseTopic, VerseTopic.verse_id == Verse.id).where(VerseTopic.topic_id == topic)
         if rel is not None:
             q = q.where(Scripture.religion_id == rel)
         if lang is not None:
@@ -304,14 +323,17 @@ def _day_verse(db: Session, challenge: Challenge, day: ChallengeDay, language_id
         return list(db.scalars(q.order_by(Verse.id)).all())
 
     if challenge.is_universal:
-        attempts = [(None, language_id), (None, english_id)]
+        scopes = [(None, language_id), (None, english_id)]
     else:
         langs = [language_id, english_id] + (_religion_language_ids(db, religion_id) if religion_id else [])
-        attempts = [(religion_id, lang) for lang in dict.fromkeys(l for l in langs if l)]
-    for rel, lang in attempts:
-        verses = fetch(rel, lang)
-        if verses:
-            return verses[(challenge.id * 7 + day.day_number * 3) % len(verses)]
+        scopes = [(religion_id, lang) for lang in dict.fromkeys(l for l in langs if l)]
+    for rel, lang in scopes:
+        for topic in [*topic_ids, None]:  # None = any verse of this tradition + language, as a last resort
+            if topic is None and rel is None:
+                continue
+            verses = fetch(rel, lang, topic)
+            if verses:
+                return verses[(challenge.id * 7 + day.day_number * 3) % len(verses)]
     return None
 
 

@@ -147,7 +147,7 @@ def test_challenge_flow_and_badge(client, monkeypatch):
     monkeypatch.setattr(settings, "challenge_one_per_day", False)
     headers = register(client, "challenger@example.com")
     listing = client.get("/api/v1/challenges").json()
-    assert {c["code"] for c in listing} == {"gratitude-30", "anxiety-relief-7", "compassion-21", "calm-anger-10"}
+    assert {"gratitude-30", "anxiety-relief-7", "compassion-21", "calm-anger-10"} <= {c["code"] for c in listing} and len(listing) == 14
     seven = next(c for c in listing if c["code"] == "anxiety-relief-7")
     assert seven["total_days"] == 7 and seven["progress"]["joined"] is False
     detail = client.get(f"/api/v1/challenges/{seven['id']}", params={"language_id": 1, "religion_id": 2}, headers=headers).json()
@@ -185,7 +185,10 @@ def test_challenge_one_day_per_calendar_day(client):
 
 def test_challenge_lengths(client):
     by_code = {c["code"]: c["total_days"] for c in client.get("/api/v1/challenges").json()}
-    assert by_code == {"gratitude-30": 30, "anxiety-relief-7": 7, "compassion-21": 21, "calm-anger-10": 10}
+    assert {k: by_code[k] for k in ("gratitude-30", "anxiety-relief-7", "compassion-21", "calm-anger-10")} == {"gratitude-30": 30, "anxiety-relief-7": 7, "compassion-21": 21, "calm-anger-10": 10}
+    assert {k: v for k, v in by_code.items() if k not in ("gratitude-30", "anxiety-relief-7", "compassion-21", "calm-anger-10")} == {
+        "inner-peace-7": 7, "gratitude-21": 21, "patience-7": 7, "courage-14": 14, "forgiveness-7": 7, "self-discipline-21": 21,
+        "kindness-7": 7, "hope-14": 14, "mindfulness-7": 7, "everyday-wisdom-21": 21}
     detail = client.get("/api/v1/challenges/gratitude-30").json()
     assert [d["day_number"] for d in detail["days"]] == list(range(1, 31))
 
@@ -259,3 +262,34 @@ def test_template_colours_are_readable(client):
         assert min(_contrast(_rgb(t["color_text"]), _mix(top, bottom, x)) for x in (.2, .35, .5, .65, .75)) >= 4.5, t["code"]
         assert _contrast(_rgb(t["color_accent"]), _mix(top, bottom, .8)) >= 3.0, t["code"]
         assert _contrast(_rgb(t["color_muted"]), _mix(top, bottom, .84)) >= 3.0, t["code"]
+
+
+def test_every_challenge_day_has_a_verse_in_the_users_own_tradition_and_language(client):
+    """Tradition + language integrity for challenges: a relevant verse on every day, never from another tradition."""
+    religions = {r["id"]: r["code"] for r in client.get("/api/v1/religions").json()}
+    challenges = client.get("/api/v1/challenges").json()
+    for rid, rcode in religions.items():
+        for lang in client.get("/api/v1/languages", params={"religion_id": rid}).json():
+            for ch in challenges:
+                detail = client.get(f"/api/v1/challenges/{ch['id']}", params={"religion_id": rid, "language_id": lang["id"]}).json()
+                for day in detail["days"]:
+                    if day["day_number"] != 1:
+                        continue  # later days are locked until reached; day verses are validated below through the DB check
+                    assert day["verse"] is not None, (rcode, lang["code"], ch["code"])
+                    if not ch["is_universal"]:
+                        assert day["verse"]["religion"].lower().startswith(rcode.split()[0]), (rcode, ch["code"], day["verse"]["religion"])
+
+
+def test_all_challenge_days_resolve_a_verse_for_every_combo(client):
+    from app.api.v1.features import _day_verse
+    from app.models.entities import Challenge, Religion
+    with SessionLocal() as db:
+        for religion in db.scalars(select(Religion)).all():
+            from app.api.v1.routes import _religion_language_ids
+            for lang_id in _religion_language_ids(db, religion.id):
+                for challenge in db.scalars(select(Challenge)).all():
+                    for day in challenge.days:
+                        v = _day_verse(db, challenge, day, lang_id, religion.id)
+                        assert v is not None, (religion.code, lang_id, challenge.code, day.day_number)
+                        if not challenge.is_universal:
+                            assert v.scripture.religion_id == religion.id and v.language_id == lang_id
