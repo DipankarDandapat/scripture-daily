@@ -7,13 +7,13 @@ start: the heavy verse/story/challenge sync only runs when ``CONTENT_VERSION`` c
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
-from app.content import bible, challenges as challenge_content, dhammapada, gita, mahabharata, quran, ramayana, stories, wisdom
+from app.content import bible, challenges as challenge_content, dhammapada, gita, mahabharata, quran, ramayana, stories, templates as template_content, wisdom
 from app.models.entities import (
-    AppMeta, Challenge, ChallengeDay, Favorite, Language, MoodCheckin, Religion, ReligionLanguage, Scripture, Story,
+    AppMeta, Challenge, ChallengeDay, ChallengeDayTranslation, ChallengeTranslation, Favorite, StudioTemplate, Language, MoodCheckin, Religion, ReligionLanguage, Scripture, Story,
     StoryScene, StorySceneTranslation, StoryTranslation, Topic, Verse, VerseMood, VerseTopic,
 )
 
-CONTENT_VERSION = "2026.11.03-1"
+CONTENT_VERSION = "2026.11.04-1"
 
 RELIGIONS = [
     ("Hinduism", "hinduism"),
@@ -185,6 +185,7 @@ def _sync_challenges(db: Session, topics: dict[str, Topic]) -> None:
         for field in ("title", "subtitle", "description", "total_days", "icon", "color", "badge_name", "badge_icon"):
             setattr(row, field, spec[field])
         row.sort_order, row.is_active = order, True
+        row.is_universal = bool(spec.get("universal", False))
         days = {d.day_number: d for d in db.scalars(select(ChallengeDay).where(ChallengeDay.challenge_id == row.id))}
         for number, (title, reflection, action, topic_code) in enumerate(spec["days"], start=1):
             day = days.get(number)
@@ -195,6 +196,38 @@ def _sync_challenges(db: Session, topics: dict[str, Topic]) -> None:
         for number, day in days.items():
             if number > spec["total_days"]:
                 db.delete(day)
+        db.flush()
+        _sync_challenge_translations(db, row, spec)
+    db.flush()
+
+
+def _sync_challenge_translations(db: Session, row: Challenge, spec: dict) -> None:
+    """Localised challenge text. Missing languages simply fall back to the English row at read time."""
+    languages = {l.code: l for l in db.scalars(select(Language))}
+    day_ids = {d.day_number: d.id for d in db.scalars(select(ChallengeDay).where(ChallengeDay.challenge_id == row.id))}
+    db.execute(delete(ChallengeDayTranslation).where(ChallengeDayTranslation.day_id.in_(list(day_ids.values()))))
+    db.execute(delete(ChallengeTranslation).where(ChallengeTranslation.challenge_id == row.id))
+    db.expire_all()
+    for lcode, tr in spec.get("tr", {}).items():
+        lang = languages[lcode]
+        assert len(tr["days"]) == spec["total_days"], (spec["code"], lcode)
+        db.add(ChallengeTranslation(challenge_id=row.id, language_id=lang.id, title=tr["title"], subtitle=tr.get("subtitle", ""),
+                                    description=tr.get("description", ""), badge_name=tr.get("badge_name", "")))
+        for number, (title, reflection, action) in enumerate(tr["days"], start=1):
+            db.add(ChallengeDayTranslation(day_id=day_ids[number], language_id=lang.id, title=title, reflection=reflection, action=action))
+
+
+def _sync_templates(db: Session) -> None:
+    """Upsert the studio template catalogue. Rows added by hand in the database are left alone."""
+    existing = {t.code: t for t in db.scalars(select(StudioTemplate))}
+    for order, (code, name, kind, tradition, motif, top, bottom, text, accent, muted, light, emoji) in enumerate(template_content.TEMPLATES):
+        row = existing.get(code)
+        if row is None:
+            row = StudioTemplate(code=code)
+            db.add(row)
+        row.name, row.kind, row.tradition, row.motif = name, kind, tradition, motif
+        row.color_top, row.color_bottom, row.color_text, row.color_accent, row.color_muted = top, bottom, text, accent, muted
+        row.is_light, row.emoji, row.sort_order, row.is_active = light, emoji, order, True
     db.flush()
 
 
@@ -225,7 +258,8 @@ def _sync_stories(db: Session, languages: dict[str, Language], scriptures: dict[
         for lcode, (title, lesson, texts) in spec["tr"].items():
             assert len(texts) == len(scenes), (spec["code"], lcode)
             lang = languages[lcode]
-            db.add(StoryTranslation(story_id=row.id, language_id=lang.id, title=title, summary=texts[0], lesson=lesson))
+            summary = spec.get("summary", {}).get(lcode) or texts[0]
+            db.add(StoryTranslation(story_id=row.id, language_id=lang.id, title=title, summary=summary, lesson=lesson))
             for scene, text in zip(scenes, texts):
                 db.add(StorySceneTranslation(scene_id=scene.id, language_id=lang.id, text=text))
     db.flush()
@@ -241,6 +275,7 @@ def seed_database(db: Session) -> None:
     _sync_verses(db, languages, scriptures, topics)
     _sync_challenges(db, topics)
     _sync_stories(db, languages, scriptures)
+    _sync_templates(db)
     if meta is None:
         db.add(AppMeta(key="content_version", value=CONTENT_VERSION))
     else:

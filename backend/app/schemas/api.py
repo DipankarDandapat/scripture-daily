@@ -175,6 +175,11 @@ class ChallengeProgressOut(BaseModel):
     completed: bool = False
     badge_earned: bool = False
     available_tomorrow: bool = False  # today's day is done and the next one unlocks on the next calendar day
+    completed_count: int = 0
+    remaining_days: int = 0
+    percent: int = 0
+    last_completed_on: str | None = None
+    missed_days: int = 0  # whole calendar days since the last completed day (0 = on track). Never punitive: nothing resets.
 
 
 class ChallengeOut(BaseModel):
@@ -189,6 +194,9 @@ class ChallengeOut(BaseModel):
     badge_name: str
     badge_icon: str
     progress: ChallengeProgressOut
+    is_universal: bool = False
+    language: str = "en"
+    language_fallback: bool = False
 
 
 class ChallengeDayOut(BaseModel):
@@ -242,6 +250,8 @@ class StoryOut(BaseModel):
     values: list[str]
     title: str
     lesson: str
+    summary: str = ""
+    religion_code: str = ""
     language: str
     language_fallback: bool
     scripture: str
@@ -253,3 +263,57 @@ class StoryOut(BaseModel):
 class StoryDetailOut(StoryOut):
     scenes: list[StorySceneOut]
     verse: VerseOut | None = None
+
+
+# ── Studio templates + Wisdom Tree ───────────────────────────────────────────
+class TemplateOut(BaseModel):
+    code: str
+    name: str
+    kind: str
+    tradition: str | None  # None = common
+    motif: str
+    color_top: str
+    color_bottom: str
+    color_text: str
+    color_accent: str
+    color_muted: str
+    is_light: bool
+    emoji: str
+    sort_order: int
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TreeMilestone(BaseModel):
+    stage: str
+    label: str
+    level: int
+    first_day: int
+    last_day: int
+    unlocked: bool
+
+
+class TreeNext(BaseModel):
+    stage: str
+    label: str
+    level: int
+    at_days: int
+    days_to_go: int
+
+
+class TreeOut(BaseModel):
+    total_days: int
+    level: int
+    stage: str
+    stage_label: str
+    status: str
+    current_streak: int
+    longest_streak: int
+    read_today: bool
+    last_read: str | None
+    next_milestone: TreeNext | None
+    milestones: list[TreeMilestone]
+    history: list[str]
+
+
+class TreeReadInput(BaseModel):
+    dates: list[str] = Field(default_factory=list, max_length=400)  # local dates (YYYY-MM-DD) completed on this device

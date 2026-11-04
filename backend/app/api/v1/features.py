@@ -8,11 +8,11 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.v1.routes import current_user, verse_out, verse_query
+from app.api.v1.routes import _religion_language_ids, current_user, preference_pool, verse_out, verse_query
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.entities import (
-    Challenge, ChallengeDay, ChallengeProgress, Language, MOODS, MoodCheckin, Religion, Scripture, Story,
+    Challenge, ChallengeDay, ChallengeDayTranslation, ChallengeProgress, ChallengeTranslation, Language, MOODS, MoodCheckin, Religion, Scripture, Story,
     StorySceneTranslation, StoryTranslation, Topic, User, UserChallenge, UserPreference, Verse, VerseMood, VerseTopic,
 )
 from app.schemas.api import (
@@ -94,20 +94,35 @@ def verse_for_mood(
     mood = mood.lower()
     if mood not in MOODS:
         raise HTTPException(status_code=422, detail=f"mood must be one of: {', '.join(MOODS)}")
-    p_religion, p_language, p_scriptures = _prefs(user, db)
-    religion_id = religion_id if religion_id is not None else p_religion
-    language_id = language_id if language_id is not None else p_language
-    query = (verse_query(db).join(VerseMood, VerseMood.verse_id == Verse.id).where(VerseMood.mood == mood))
+    _language_or_404(db, language_id)
     if scripture_id is not None:
-        query = query.where(Verse.scripture_id == scripture_id)
-    else:
+        scripture = db.get(Scripture, scripture_id)
+        if scripture is None:
+            raise HTTPException(status_code=404, detail="Scripture not found")
+        if religion_id is not None and scripture.religion_id != religion_id:
+            raise HTTPException(status_code=422, detail="That scripture does not belong to the selected tradition")
+        religion_id = scripture.religion_id
+    religion_id, language_id, p_scriptures = preference_pool(db, user, religion_id, language_id)
+
+    def fetch(language: int | None) -> list[Verse]:
+        query = verse_query(db).join(VerseMood, VerseMood.verse_id == Verse.id).where(VerseMood.mood == mood)
         if religion_id is not None:
             query = query.where(Scripture.religion_id == religion_id)
-        if p_scriptures and religion_id == p_religion:
+        if scripture_id is not None:
+            query = query.where(Verse.scripture_id == scripture_id)
+        elif p_scriptures:
             query = query.where(Verse.scripture_id.in_(p_scriptures))
-    if language_id is not None:
-        query = query.where(Verse.language_id == language_id)
-    verses = list(db.scalars(query.order_by(Verse.id)).all())
+        if language is not None:
+            query = query.where(Verse.language_id == language)
+        return list(db.scalars(query.order_by(Verse.id)).all())
+
+    verses = fetch(language_id)
+    if not verses and language_id is not None and religion_id is not None:  # missing translation: stay inside the tradition
+        english = _english_id(db)
+        for fallback in [x for x in [english, *_religion_language_ids(db, religion_id)] if x and x != language_id]:
+            verses = fetch(fallback)
+            if verses:
+                break
     if not verses:
         raise HTTPException(status_code=404, detail="No verses match this mood for your preferences")
     # shuffle=0 -> the same verse all day; shuffle>0 -> a different verse each tap
@@ -212,23 +227,44 @@ def _effective_today(client_date: str | None) -> date:
 
 
 def _progress(db: Session, challenge: Challenge, user: User | None, today: date | None = None) -> ChallengeProgressOut:
+    total = challenge.total_days
     if user is None:
-        return ChallengeProgressOut(joined=False, completed_days=[], next_day=1)
+        return ChallengeProgressOut(joined=False, completed_days=[], next_day=1, remaining_days=total)
+    today = today or _effective_today(None)
     enrol = db.get(UserChallenge, (user.id, challenge.id))
     days = sorted(db.scalars(select(ChallengeProgress.day_number).where(
         ChallengeProgress.user_id == user.id, ChallengeProgress.challenge_id == challenge.id)).all())
-    done = len(days) >= challenge.total_days
+    done = len(days) >= total
     next_day = None if done else (max(days) + 1 if days else 1)
     last_on = db.scalar(select(func.max(ChallengeProgress.completed_on)).where(
         ChallengeProgress.user_id == user.id, ChallengeProgress.challenge_id == challenge.id))
-    wait = bool(settings.challenge_one_per_day and not done and last_on is not None and last_on >= (today or _effective_today(None)))
+    wait = bool(settings.challenge_one_per_day and not done and last_on is not None and last_on >= today)
+    # Missed days are only reported, never punished: progress is never reset and the next day simply stays open.
+    missed = max(0, (today - last_on).days - 1) if (last_on is not None and not done) else 0
     return ChallengeProgressOut(joined=enrol is not None, completed_days=days, next_day=next_day, completed=done,
-                                badge_earned=bool(enrol and enrol.completed_at), available_tomorrow=wait)
+                                badge_earned=bool(enrol and enrol.completed_at), available_tomorrow=wait,
+                                completed_count=len(days), remaining_days=max(0, total - len(days)),
+                                percent=round(100 * len(days) / total) if total else 0,
+                                last_completed_on=last_on.isoformat() if last_on else None, missed_days=missed)
 
 
-def _challenge_out(db: Session, c: Challenge, user: User | None, today: date | None = None) -> dict:
-    return dict(id=c.id, code=c.code, title=c.title, subtitle=c.subtitle, description=c.description, total_days=c.total_days,
-                icon=c.icon, color=c.color, badge_name=c.badge_name, badge_icon=c.badge_icon, progress=_progress(db, c, user, today))
+def _challenge_text(db: Session, c: Challenge, language_id: int | None) -> tuple[ChallengeTranslation | None, str, bool]:
+    """Localised challenge copy: (translation row or None for English, language code, fell back to English)."""
+    english = db.scalar(select(Language).where(Language.code == "en"))
+    if language_id is None or (english and language_id == english.id):
+        return None, "en", False
+    tr = db.scalar(select(ChallengeTranslation).where(ChallengeTranslation.challenge_id == c.id, ChallengeTranslation.language_id == language_id))
+    if tr is not None:
+        return tr, db.get(Language, language_id).code, False
+    return None, "en", True
+
+
+def _challenge_out(db: Session, c: Challenge, user: User | None, today: date | None = None, language_id: int | None = None) -> dict:
+    tr, code, fallback = _challenge_text(db, c, language_id)
+    return dict(id=c.id, code=c.code, title=(tr.title if tr else c.title), subtitle=(tr.subtitle if tr and tr.subtitle else c.subtitle),
+                description=(tr.description if tr and tr.description else c.description), total_days=c.total_days,
+                icon=c.icon, color=c.color, badge_name=(tr.badge_name if tr and tr.badge_name else c.badge_name), badge_icon=c.badge_icon,
+                progress=_progress(db, c, user, today), is_universal=c.is_universal, language=code, language_fallback=fallback)
 
 
 def _get_challenge(db: Session, ident: str) -> Challenge:
@@ -241,23 +277,39 @@ def _get_challenge(db: Session, ident: str) -> Challenge:
 
 
 @router.get("/challenges", response_model=list[ChallengeOut])
-def list_challenges(client_date: str | None = Query(default=None), user: User | None = Depends(optional_user), db: Session = Depends(get_db)):
+def list_challenges(client_date: str | None = Query(default=None), language_id: int | None = None,
+                    user: User | None = Depends(optional_user), db: Session = Depends(get_db)):
     today = _effective_today(client_date)
+    _language_or_404(db, language_id)
+    if language_id is None:
+        _, language_id, _ = _prefs(user, db)
     rows = db.scalars(select(Challenge).where(Challenge.is_active.is_(True)).order_by(Challenge.sort_order)).all()
-    return [_challenge_out(db, c, user, today) for c in rows]
+    return [_challenge_out(db, c, user, today, language_id) for c in rows]
 
 
 def _day_verse(db: Session, challenge: Challenge, day: ChallengeDay, language_id: int | None, religion_id: int | None) -> Verse | None:
-    """A verse on the day's topic from the user's tradition + language; widens gradually if nothing matches."""
+    """A verse on the day's topic from the user's own tradition + language.
+
+    Missing translations fall back to the same tradition in English / its other languages — never to another
+    tradition. Only challenges explicitly marked universal draw on every tradition.
+    """
     english_id = _english_id(db)
-    attempts = [(religion_id, language_id), (None, language_id), (None, english_id)]
-    for rel, lang in attempts:
+
+    def fetch(rel: int | None, lang: int | None) -> list[Verse]:
         q = verse_query(db).join(VerseTopic, VerseTopic.verse_id == Verse.id).where(VerseTopic.topic_id == day.topic_id)
         if rel is not None:
             q = q.where(Scripture.religion_id == rel)
         if lang is not None:
             q = q.where(Verse.language_id == lang)
-        verses = list(db.scalars(q.order_by(Verse.id)).all())
+        return list(db.scalars(q.order_by(Verse.id)).all())
+
+    if challenge.is_universal:
+        attempts = [(None, language_id), (None, english_id)]
+    else:
+        langs = [language_id, english_id] + (_religion_language_ids(db, religion_id) if religion_id else [])
+        attempts = [(religion_id, lang) for lang in dict.fromkeys(l for l in langs if l)]
+    for rel, lang in attempts:
+        verses = fetch(rel, lang)
         if verses:
             return verses[(challenge.id * 7 + day.day_number * 3) % len(verses)]
     return None
@@ -268,18 +320,20 @@ def challenge_detail(ident: str, language_id: int | None = None, religion_id: in
                      user: User | None = Depends(optional_user), db: Session = Depends(get_db)):
     c = _get_challenge(db, ident)
     today = _effective_today(client_date)
-    p_religion, p_language, _ = _prefs(user, db)
-    language_id = language_id if language_id is not None else p_language
-    religion_id = religion_id if religion_id is not None else p_religion
+    _language_or_404(db, language_id)
+    religion_id, language_id, _ = preference_pool(db, user, religion_id, language_id)
     progress = _progress(db, c, user, today)
+    day_tr = {t.day_id: t for t in db.scalars(select(ChallengeDayTranslation).where(
+        ChallengeDayTranslation.language_id == language_id, ChallengeDayTranslation.day_id.in_([d.id for d in c.days])))} if language_id else {}
     done = set(progress.completed_days)
     days = []
     for d in c.days:
         status = "completed" if d.day_number in done else ("available" if d.day_number == (progress.next_day or 0) else "locked")
         verse = _day_verse(db, c, d, language_id, religion_id) if status != "locked" or d.day_number <= 1 else None
-        days.append(ChallengeDayOut(day_number=d.day_number, title=d.title, reflection=d.reflection, action=d.action,
-                                    topic=d.topic.code, status=status, verse=verse_out(verse) if verse else None))
-    return ChallengeDetailOut(**_challenge_out(db, c, user, today), days=days)
+        t = day_tr.get(d.id)
+        days.append(ChallengeDayOut(day_number=d.day_number, title=t.title if t else d.title, reflection=t.reflection if t else d.reflection,
+                                    action=t.action if t else d.action, topic=d.topic.code, status=status, verse=verse_out(verse) if verse else None))
+    return ChallengeDetailOut(**_challenge_out(db, c, user, today, language_id), days=days)
 
 
 @router.post("/challenges/{ident}/join", response_model=ChallengeProgressOut, status_code=201)
@@ -375,7 +429,8 @@ def _story_out(db: Session, story: Story, language_id: int | None) -> dict | Non
         return None
     lang = db.get(Language, tr.language_id)
     verse = _story_verse(db, story, language_id)
-    return dict(id=story.id, code=story.code, emoji=story.emoji, palette=story.palette,
+    return dict(id=story.id, code=story.code, emoji=story.emoji, palette=story.palette, summary=tr.summary,
+                religion_code=story.scripture.religion.code,
                 values=[x for x in story.moral_values.split(",") if x], title=tr.title, lesson=tr.lesson, language=lang.code,
                 language_fallback=fallback, scripture=story.scripture.name,
                 reference=f"{story.book or ''} {story.chapter}:{story.verse_number}".strip(), verse_id=verse.id if verse else None,
@@ -383,11 +438,20 @@ def _story_out(db: Session, story: Story, language_id: int | None) -> dict | Non
 
 
 @router.get("/stories", response_model=list[StoryOut])
-def list_stories(language_id: int | None = None, scripture_id: int | None = None, db: Session = Depends(get_db)):
+def list_stories(language_id: int | None = None, scripture_id: int | None = None, religion_id: int | None = None,
+                 user: User | None = Depends(optional_user), db: Session = Depends(get_db)):
+    """Stories for one tradition only. The tradition is ``religion_id`` or the signed-in user's saved tradition;
+    with neither, the whole catalogue is listed (admin/back-compat)."""
     _language_or_404(db, language_id)
-    q = select(Story).order_by(Story.sort_order)
+    if religion_id is None and scripture_id is None and user is not None:
+        religion_id, _, _ = _prefs(user, db)
+    if religion_id is not None and db.get(Religion, religion_id) is None:
+        raise HTTPException(status_code=404, detail="Tradition not found")
+    q = select(Story).join(Scripture, Scripture.id == Story.scripture_id).order_by(Story.sort_order)
     if scripture_id is not None:
         q = q.where(Story.scripture_id == scripture_id)
+    if religion_id is not None:
+        q = q.where(Scripture.religion_id == religion_id)
     out = [_story_out(db, s, language_id) for s in db.scalars(q).all()]
     return [o for o in out if o]
 

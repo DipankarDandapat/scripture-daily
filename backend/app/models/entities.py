@@ -181,6 +181,9 @@ class Challenge(Base):
     badge_icon: Mapped[str] = mapped_column(String(16), default="")
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Universal challenges may mix verses from every tradition; all others stay inside the user's tradition.
+    is_universal: Mapped[bool] = mapped_column(Boolean, default=False)
+    translations: Mapped[list["ChallengeTranslation"]] = relationship(cascade="all, delete-orphan")
     days: Mapped[list["ChallengeDay"]] = relationship(back_populates="challenge", order_by="ChallengeDay.day_number", cascade="all, delete-orphan")
 
 
@@ -196,6 +199,30 @@ class ChallengeDay(Base):
     topic_id: Mapped[int] = mapped_column(ForeignKey("topics.id"))
     challenge: Mapped[Challenge] = relationship(back_populates="days")
     topic: Mapped[Topic] = relationship()
+
+
+class ChallengeTranslation(Base):
+    """Localised title/subtitle/description/badge for a challenge (English lives on the challenge row)."""
+    __tablename__ = "challenge_translations"
+    __table_args__ = (UniqueConstraint("challenge_id", "language_id", name="uq_challenge_lang"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    challenge_id: Mapped[int] = mapped_column(ForeignKey("challenges.id", ondelete="CASCADE"), index=True)
+    language_id: Mapped[int] = mapped_column(ForeignKey("languages.id"), index=True)
+    title: Mapped[str] = mapped_column(String(160))
+    subtitle: Mapped[str] = mapped_column(String(240), default="")
+    description: Mapped[str] = mapped_column(Text, default="")
+    badge_name: Mapped[str] = mapped_column(String(120), default="")
+
+
+class ChallengeDayTranslation(Base):
+    __tablename__ = "challenge_day_translations"
+    __table_args__ = (UniqueConstraint("day_id", "language_id", name="uq_challenge_day_lang"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    day_id: Mapped[int] = mapped_column(ForeignKey("challenge_days.id", ondelete="CASCADE"), index=True)
+    language_id: Mapped[int] = mapped_column(ForeignKey("languages.id"), index=True)
+    title: Mapped[str] = mapped_column(String(160))
+    reflection: Mapped[str] = mapped_column(Text)
+    action: Mapped[str] = mapped_column(Text)
 
 
 class UserChallenge(Base):
@@ -266,3 +293,38 @@ class StorySceneTranslation(Base):
     scene_id: Mapped[int] = mapped_column(ForeignKey("story_scenes.id", ondelete="CASCADE"), index=True)
     language_id: Mapped[int] = mapped_column(ForeignKey("languages.id"), index=True)
     text: Mapped[str] = mapped_column(Text)
+
+
+# ── Studio templates + Wisdom Tree ───────────────────────────────────────────
+
+class StudioTemplate(Base):
+    """A Share/Video Studio template. ``tradition`` NULL = common (shown to everyone); otherwise a religion code.
+
+    Rows are data: add or retire a template without shipping a new app build. ``motif`` names a vector
+    illustration the app draws (om, lotus, cross, geometry, mountains, …); colours are #RRGGBB.
+    """
+    __tablename__ = "studio_templates"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(String(60), unique=True)
+    name: Mapped[str] = mapped_column(String(80))
+    kind: Mapped[str] = mapped_column(String(10), default="both")  # share | video | both
+    tradition: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    motif: Mapped[str] = mapped_column(String(30), default="none")
+    color_top: Mapped[str] = mapped_column(String(9))
+    color_bottom: Mapped[str] = mapped_column(String(9))
+    color_text: Mapped[str] = mapped_column(String(9))
+    color_accent: Mapped[str] = mapped_column(String(9))
+    color_muted: Mapped[str] = mapped_column(String(9))
+    is_light: Mapped[bool] = mapped_column(Boolean, default=False)
+    emoji: Mapped[str] = mapped_column(String(16), default="")
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
+
+class ReadingDay(Base):
+    """One row per user per local calendar day on which the daily reading was completed (Wisdom Tree)."""
+    __tablename__ = "reading_days"
+    __table_args__ = (UniqueConstraint("user_id", "day", name="uq_reading_day"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(10), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    day: Mapped[date] = mapped_column(Date)

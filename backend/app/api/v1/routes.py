@@ -39,15 +39,83 @@ def verse_query(db: Session):
     return select(Verse).join(Verse.scripture).join(Scripture.religion).join(Verse.language).where(Verse.is_active.is_(True))
 
 
-def pick_verse(db: Session, *, religion_id: int | None = None, scripture_id: int | None = None, language_id: int | None = None) -> Verse:
-    query = verse_query(db)
-    if religion_id is not None: query = query.where(Scripture.religion_id == religion_id)
-    if scripture_id is not None: query = query.where(Verse.scripture_id == scripture_id)
-    if language_id is not None: query = query.where(Verse.language_id == language_id)
-    verses = list(db.scalars(query.order_by(Verse.id)).all())
+def _religion_language_ids(db: Session, religion_id: int) -> list[int]:
+    from app.models.entities import ReligionLanguage
+    return list(db.scalars(select(ReligionLanguage.language_id).where(ReligionLanguage.religion_id == religion_id).order_by(ReligionLanguage.sort_order)).all())
+
+
+def pool_for(db: Session, *, religion_id: int | None, language_id: int | None, scripture_ids: list[int] | None = None) -> list[Verse]:
+    """Every active verse of the tradition in the language, ordered by id.
+
+    Never crosses traditions. When the tradition has nothing in the requested language (missing
+    translation) it falls back to the tradition's own other languages, English first, never to another tradition.
+    """
+    def fetch(language: int | None) -> list[Verse]:
+        query = verse_query(db)
+        if religion_id is not None: query = query.where(Scripture.religion_id == religion_id)
+        if scripture_ids: query = query.where(Verse.scripture_id.in_(scripture_ids))
+        if language is not None: query = query.where(Verse.language_id == language)
+        return list(db.scalars(query.order_by(Verse.id)).all())
+    verses = fetch(language_id)
+    if verses or language_id is None or religion_id is None:
+        return verses
+    english = db.scalar(select(Language.id).where(Language.code == "en"))
+    for fallback in [x for x in [english, *_religion_language_ids(db, religion_id)] if x and x != language_id]:
+        verses = fetch(fallback)
+        if verses: return verses
+    return []
+
+
+def pick_verse(db: Session, *, religion_id: int | None = None, scripture_id: int | None = None, language_id: int | None = None,
+               scripture_ids: list[int] | None = None, on: date | None = None) -> Verse:
+    verses = pool_for(db, religion_id=religion_id, language_id=language_id, scripture_ids=[scripture_id] if scripture_id else scripture_ids)
     if not verses:
         raise HTTPException(status_code=404, detail="No published verses match these preferences")
-    return verses[(date.today().toordinal() - 1) % len(verses)]
+    return verses[((on or date.today()).toordinal() - 1) % len(verses)]
+
+
+def client_day(client_date: str | None) -> date:
+    """The caller's local date (clamped to +-1 day of UTC so a bad client cannot jump the calendar)."""
+    from datetime import datetime, timezone
+    utc_today = datetime.now(timezone.utc).date()
+    if not client_date:
+        return utc_today
+    try:
+        d = date.fromisoformat(client_date)
+    except ValueError:
+        raise HTTPException(status_code=422, detail="client_date must be YYYY-MM-DD")
+    return d if abs((d - utc_today).days) <= 1 else utc_today
+
+
+def user_from_credentials(db: Session, credentials: HTTPAuthorizationCredentials | None) -> User | None:
+    if credentials is None: return None
+    try:
+        payload = jwt.decode(credentials.credentials, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+        user = db.get(User, payload["sub"])
+    except (jwt.PyJWTError, KeyError):
+        raise HTTPException(status_code=401, detail="Invalid or expired access token")
+    if user is None:
+        raise HTTPException(status_code=401, detail="User no longer exists")
+    return user
+
+
+def preference_pool(db: Session, user: User | None, religion_id: int | None, language_id: int | None) -> tuple[int | None, int | None, list[int]]:
+    """Explicit query values win; otherwise the signed-in user's saved tradition, language and scriptures."""
+    scripture_ids: list[int] = []
+    if user is not None:
+        prefs = db.get(UserPreference, user.id)
+        if prefs:
+            if religion_id is None: religion_id = prefs.religion_id
+            if language_id is None: language_id = prefs.language_id
+            if religion_id == prefs.religion_id:
+                scripture_ids = [int(x) for x in prefs.scripture_ids.split(",") if x.strip().isdigit()]
+    if religion_id is None:
+        first = db.scalar(select(Religion).order_by(Religion.id))
+        religion_id = first.id if first else None
+    if language_id is None and religion_id is not None:
+        langs = _religion_language_ids(db, religion_id)
+        language_id = langs[0] if langs else db.scalar(select(Language.id).order_by(Language.id))
+    return religion_id, language_id, scripture_ids
 
 
 @router.get("/health")
@@ -121,53 +189,28 @@ def scriptures(religion_id: int | None = None, db: Session = Depends(get_db)):
 
 
 @router.get("/verses/today", response_model=VerseOut)
-def today(credentials: HTTPAuthorizationCredentials | None = Depends(optional_bearer), db: Session = Depends(get_db)):
-    religion_id: int | None = None
-    scripture_id: int | None = None
-    language_id: int | None = None
-    if credentials:
-        try:
-            payload = jwt.decode(credentials.credentials, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
-            user = db.get(User, payload["sub"])
-        except (jwt.PyJWTError, KeyError):
-            raise HTTPException(status_code=401, detail="Invalid or expired access token")
-        if user is None:
-            raise HTTPException(status_code=401, detail="User no longer exists")
-        prefs = db.get(UserPreference, user.id)
-        if prefs:
-            religion_id = prefs.religion_id
-            language_id = prefs.language_id
-            # Pick first scripture_id from comma-separated list
-            ids = [int(x) for x in prefs.scripture_ids.split(",") if x.strip().isdigit()]
-            scripture_id = ids[0] if ids else None
-    if scripture_id is None:
-        selected_scripture = db.scalar(select(Scripture).where(Scripture.religion_id == religion_id).order_by(Scripture.id)) if religion_id else db.scalar(select(Scripture).order_by(Scripture.id))
-        if selected_scripture is None:
-            raise HTTPException(status_code=404, detail="No scripture matches this religion")
-        scripture_id = selected_scripture.id
-        religion_id = selected_scripture.religion_id
-    if language_id is None:
-        language = db.scalar(select(Language).order_by(Language.id))
-        if language is None:
-            raise HTTPException(status_code=404, detail="No language is available")
-        language_id = language.id
-    return verse_out(pick_verse(db, religion_id=religion_id, scripture_id=scripture_id, language_id=language_id))
+def today(client_date: str | None = None, religion_id: int | None = None, language_id: int | None = None, credentials: HTTPAuthorizationCredentials | None = Depends(optional_bearer), db: Session = Depends(get_db)):
+    """The verse of the day, drawn from the user's whole tradition in their language (never from another tradition)."""
+    user = user_from_credentials(db, credentials)
+    religion_id, language_id, scripture_ids = preference_pool(db, user, religion_id, language_id)
+    if language_id is not None and religion_id is not None and language_id not in _religion_language_ids(db, religion_id):
+        language_id = None  # not offered for this tradition: fall back inside it
+    return verse_out(pick_verse(db, religion_id=religion_id, language_id=language_id, scripture_ids=scripture_ids, on=client_day(client_date)))
 
 
 @router.get("/verses/random", response_model=VerseOut)
 def random_verse(religion_id: int | None = None, scripture_id: int | None = None, language_id: int | None = None, exclude_id: int | None = None, db: Session = Depends(get_db)):
-    from sqlalchemy import func
-    query = verse_query(db)
-    if religion_id is not None: query = query.where(Scripture.religion_id == religion_id)
-    if scripture_id is not None: query = query.where(Verse.scripture_id == scripture_id)
-    if language_id is not None: query = query.where(Verse.language_id == language_id)
-    if exclude_id is not None:
-        # prefer something different, but fall back to the excluded verse when it is the only one
-        v = db.scalar(query.where(Verse.id != exclude_id).order_by(func.random()).limit(1))
-        if v is not None: return verse_out(v)
-    v = db.scalar(query.order_by(func.random()).limit(1))
-    if v is None: raise HTTPException(status_code=404, detail="No published verses match these preferences")
-    return verse_out(v)
+    import random
+    if scripture_id is not None:
+        scripture = db.get(Scripture, scripture_id)
+        if scripture is None: raise HTTPException(status_code=404, detail="Scripture not found")
+        if religion_id is not None and scripture.religion_id != religion_id:
+            raise HTTPException(status_code=422, detail="That scripture does not belong to the selected tradition")
+        religion_id = scripture.religion_id
+    verses = pool_for(db, religion_id=religion_id, language_id=language_id, scripture_ids=[scripture_id] if scripture_id else None)
+    if not verses: raise HTTPException(status_code=404, detail="No published verses match these preferences")
+    candidates = [v for v in verses if v.id != exclude_id] or verses  # prefer something different, but never fail
+    return verse_out(random.choice(candidates))
 
 
 @router.get("/verses/search", response_model=list[VerseOut])
@@ -217,6 +260,8 @@ def save_preferences(data: PreferenceInput, user: User = Depends(current_user), 
         if not scripture or scripture.religion_id != data.religion_id:
             raise HTTPException(status_code=422, detail=f"Scripture {sid} must belong to the selected religion")
     if not db.get(Language, data.language_id): raise HTTPException(status_code=422, detail="Unknown language")
+    if data.language_id not in _religion_language_ids(db, data.religion_id):
+        raise HTTPException(status_code=422, detail="That language is not available for the selected tradition")
     prefs = get_or_create_preferences(user, db)
     for key, value in data.model_dump().items(): setattr(prefs, key, value)
     db.commit(); db.refresh(prefs)
@@ -260,35 +305,17 @@ def submit_feedback(data: FeedbackInput, user: User = Depends(current_user), db:
 
 
 @router.get("/verses/today/history", response_model=list[VerseOut])
-def today_history(count: int = Query(default=7, ge=1, le=30),
+def today_history(count: int = Query(default=7, ge=1, le=30), client_date: str | None = None,
+                  religion_id: int | None = None, language_id: int | None = None,
                   credentials: HTTPAuthorizationCredentials | None = Depends(optional_bearer),
                   db: Session = Depends(get_db)):
     """Return the last `count` daily verses (today + previous days) for the user's preferences."""
-    religion_id: int | None = None
-    scripture_id: int | None = None
-    language_id: int | None = None
-    if credentials:
-        try:
-            payload = jwt.decode(credentials.credentials, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
-            user = db.get(User, payload["sub"])
-        except (jwt.PyJWTError, KeyError):
-            raise HTTPException(status_code=401, detail="Invalid or expired access token")
-        if user is None:
-            raise HTTPException(status_code=401, detail="User no longer exists")
-        prefs = db.get(UserPreference, user.id)
-        if prefs:
-            religion_id = prefs.religion_id
-            language_id = prefs.language_id
-            ids = [int(x) for x in prefs.scripture_ids.split(",") if x.strip().isdigit()]
-            scripture_id = ids[0] if ids else None
-    query = verse_query(db)
-    if religion_id is not None: query = query.where(Scripture.religion_id == religion_id)
-    if scripture_id is not None: query = query.where(Verse.scripture_id == scripture_id)
-    if language_id is not None: query = query.where(Verse.language_id == language_id)
-    verses = list(db.scalars(query.order_by(Verse.id)).all())
+    user = user_from_credentials(db, credentials)
+    religion_id, language_id, scripture_ids = preference_pool(db, user, religion_id, language_id)
+    verses = pool_for(db, religion_id=religion_id, language_id=language_id, scripture_ids=scripture_ids)
     if not verses:
         return []
-    today_ord = date.today().toordinal() - 1
+    today_ord = client_day(client_date).toordinal() - 1
     indices = {(today_ord - i) % len(verses) for i in range(count)}
     ordered = sorted(indices, key=lambda i: -(today_ord - i) % len(verses))
     return [verse_out(verses[i]) for i in ordered]

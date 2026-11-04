@@ -33,7 +33,7 @@ def test_core_flow(client):
     scriptures = client.get("/api/v1/scriptures", params={"religion_id": 1}).json()
     assert scriptures and scriptures[0]["name"] == "Bhagavad Gita"
     verse = client.get("/api/v1/verses/today", params={"scripture_id": 1, "language_id": 1}).json()
-    assert verse["scripture"] == "Bhagavad Gita" and verse["is_demo"] is False
+    assert verse["religion"] == "Hinduism" and verse["is_demo"] is False
     assert "topics" in verse and isinstance(verse["explanation_available"], bool)
     assert client.get("/api/v1/verses/search", params={"q": "patient"}).status_code == 200
     headers = register(client, "reader@example.com")

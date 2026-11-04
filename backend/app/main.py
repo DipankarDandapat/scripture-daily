@@ -7,6 +7,7 @@ from app.models import *  # noqa: F403 — ensure all ORM models register with B
 from app.seed import seed_database
 from app.api.v1.routes import router
 from app.api.v1.features import router as features_router
+from app.api.v1.studio import router as studio_router
 
 
 def _ensure_schema() -> None:
@@ -43,6 +44,11 @@ def _add_missing_columns() -> None:
         if "simple_explanation" not in cols:
             with engine.begin() as conn:
                 conn.execute(text("ALTER TABLE verses ADD COLUMN simple_explanation TEXT"))
+    if "challenges" in insp.get_table_names():
+        cols = {c["name"] for c in insp.get_columns("challenges")}
+        if "is_universal" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE challenges ADD COLUMN is_universal BOOLEAN NOT NULL DEFAULT 0"))
 
 
 # Run at import time so Passenger WSGI and uvicorn both initialise the schema
@@ -62,6 +68,7 @@ app = FastAPI(title=settings.app_name, version="2.0.0", description="Content-dri
 app.add_middleware(CORSMiddleware, allow_origins=settings.allowed_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.include_router(router, prefix="/api/v1")
 app.include_router(features_router, prefix="/api/v1")
+app.include_router(studio_router, prefix="/api/v1")
 
 
 @app.get("/")
