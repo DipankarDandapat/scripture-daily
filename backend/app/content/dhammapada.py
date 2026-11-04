@@ -249,3 +249,7 @@ VERSES = [
                "การคิดอย่างสงบกับความเข้าใจทำงานเป็นคู่ เมื่อรวมกันย่อมนำไปสู่ความสงบลึก"),
     }),
 ]
+
+
+from app.content.dhammapada_more import VERSES as _MORE  # noqa: E402  (v2: Buddhism reaches 100 verses per language)
+VERSES = VERSES + _MORE

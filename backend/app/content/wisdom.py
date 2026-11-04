@@ -257,3 +257,7 @@ VERSES = [
                "সবকিছু সঙ্গে সঙ্গে বিশ্বাস করো না। সত্য জানতে ভালো করে ভাবো।"),
     }),
 ]
+
+
+from app.content.wisdom_more import VERSES as _MORE  # noqa: E402  (v2: General reaches 100 verses per language)
+VERSES = VERSES + _MORE

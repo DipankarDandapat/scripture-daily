@@ -250,3 +250,7 @@ VERSES = [
                "যেখানে জ্ঞান আর সাহস একসঙ্গে চলে, সেখানে ভালো কিছু আসে।"),
     }),
 ]
+
+
+from app.content.gita_more import VERSES as _MORE  # noqa: E402  (v2: Hinduism reaches 100 verses per language)
+VERSES = VERSES + _MORE

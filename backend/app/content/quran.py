@@ -189,3 +189,7 @@ VERSES = [
         "ur": ("سوائے ان کے جو ایمان لائے، نیک عمل کیے اور ایک دوسرے کو حق اور صبر کی نصیحت کرتے رہے۔", "کامیاب وہ ہیں جو نیکی کرتے ہیں اور ایک دوسرے کو سچ بولنے اور صبر کرنے کی یاد دلاتے ہیں۔"),
     }),
 ]
+
+
+from app.content.quran_more import VERSES as _MORE  # noqa: E402  (v2: Islam reaches 100 verses per language)
+VERSES = VERSES + _MORE

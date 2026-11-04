@@ -324,3 +324,83 @@ def test_all_challenge_days_resolve_a_verse_for_every_combo(client):
                         assert v is not None, (religion.code, lang_id, challenge.code, day.day_number)
                         if not challenge.is_universal:
                             assert v.scripture.religion_id == religion.id and v.language_id == lang_id
+
+
+# ── Catalogue size + integrity ───────────────────────────────────────────────────
+def test_every_tradition_language_has_at_least_100_unique_valid_verses(client):
+    from scripts.validate_catalog import validate
+    problems, report = validate(100)
+    assert problems == []
+    assert len(report["matrix"]) == 16  # 16 tradition x language combinations
+    assert all(m["count"] >= 100 for m in report["matrix"].values())
+    assert report["stories"] == {"hinduism": 10, "christianity": 10, "islam": 10, "buddhism": 10, "general wisdom": 10}
+
+
+def test_verses_never_leak_across_traditions_or_languages(client):
+    """Every verse surface (today, random, history, mood, search by tradition) stays inside the selected tradition + language."""
+    religions = client.get("/api/v1/religions").json()
+    for r in religions:
+        for lang in client.get("/api/v1/languages", params={"religion_id": r["id"]}).json():
+            today = client.get("/api/v1/verses/today", params={"religion_id": r["id"], "language_id": lang["id"], "client_date": "2026-11-04"}).json()
+            assert today["religion"].lower().startswith(r["code"].split()[0]) and today["language"] == lang["code"], (r["code"], lang["code"])
+            seen = set()
+            for _ in range(12):
+                v = client.get("/api/v1/verses/random", params={"religion_id": r["id"], "language_id": lang["id"]}).json()
+                assert v["religion"].lower().startswith(r["code"].split()[0]) and v["language"] == lang["code"]
+                seen.add(v["id"])
+            assert len(seen) > 3  # genuinely random, not a fixed pick
+            history = client.get("/api/v1/verses/today/history", params={"religion_id": r["id"], "language_id": lang["id"], "count": 7}).json()
+            assert len(history) == 7 and all(h["language"] == lang["code"] and h["religion"].lower().startswith(r["code"].split()[0]) for h in history)
+            for mood in ("anxious", "happy", "sad", "angry"):
+                m = client.get("/api/v1/mood/verse", params={"mood": mood, "religion_id": r["id"], "language_id": lang["id"]}).json()["verse"]
+                assert m["language"] == lang["code"] and m["religion"].lower().startswith(r["code"].split()[0])
+    # daily verse changes with the (client) calendar day, and is stable within a day
+    a = client.get("/api/v1/verses/today", params={"religion_id": 3, "language_id": 1, "client_date": "2026-11-04"}).json()["id"]
+    assert a == client.get("/api/v1/verses/today", params={"religion_id": 3, "language_id": 1, "client_date": "2026-11-04"}).json()["id"]
+    assert a != client.get("/api/v1/verses/today", params={"religion_id": 3, "language_id": 1, "client_date": "2026-11-05"}).json()["id"]
+    # invalid combinations are rejected rather than leaking
+    assert client.get("/api/v1/verses/random", params={"religion_id": 3, "scripture_id": 1, "language_id": 1}).status_code == 422
+    assert client.get("/api/v1/verses/today", params={"client_date": "nope"}).status_code == 422
+
+
+def test_missing_translation_falls_back_inside_the_tradition(client):
+    """Spanish is not offered for Islam: the request falls back to English/Arabic Islamic verses, never to another tradition."""
+    spanish = next(l for l in client.get("/api/v1/languages").json() if l["code"] == "es")
+    v = client.get("/api/v1/verses/today", params={"religion_id": 3, "language_id": spanish["id"]}).json()
+    assert v["religion"] == "Islam" and v["language"] in ("en", "ar", "ur", "hi")
+    r = client.get("/api/v1/verses/random", params={"religion_id": 3, "language_id": spanish["id"]}).json()
+    assert r["religion"] == "Islam"
+
+
+# ── Wisdom Tree ───────────────────────────────────────────────────────────────────
+def test_wisdom_tree_growth_never_resets_and_is_idempotent(client):
+    headers = register(client, "tree@example.com")
+    assert client.get("/api/v1/tree", headers=headers, params={"client_date": "2026-11-04"}).json()["total_days"] == 0
+    assert client.get("/api/v1/tree").status_code == 401
+    t = client.post("/api/v1/tree/read", headers=headers, params={"client_date": "2026-11-04"}, json={}).json()
+    assert t["total_days"] == 1 and t["stage"] == "sprout" and t["status"] == "Growing" and t["read_today"] is True
+    again = client.post("/api/v1/tree/read", headers=headers, params={"client_date": "2026-11-04"}, json={}).json()
+    assert again["total_days"] == 1  # repeated reads on one day count once
+    # offline history from the device is merged, future dates are ignored, bad dates rejected
+    merged = client.post("/api/v1/tree/read", headers=headers, params={"client_date": "2026-11-04"},
+                         json={"dates": ["2026-11-01", "2026-11-02", "2026-11-03", "2026-12-25"]}).json()
+    assert merged["total_days"] == 4 and merged["stage"] == "leaves" and merged["current_streak"] == 4
+    assert client.post("/api/v1/tree/read", headers=headers, json={"dates": ["bad"]}).status_code == 422
+    # a long break pauses growth but loses nothing
+    from datetime import date
+    from app.services.tree import tree_state
+    later = tree_state({date(2026, 11, d) for d in (1, 2, 3, 4)}, date(2026, 12, 20))
+    assert later["total_days"] == 4 and later["stage"] == "leaves" and later["status"] == "Resting" and later["current_streak"] == 0 and later["longest_streak"] == 4
+    # pure sync does not count today
+    sync = client.post("/api/v1/tree/read", headers=headers, json={"dates": [], "mark_today": False}).json()
+    assert sync["total_days"] == 4
+    # users are isolated from each other
+    other = register(client, "tree2@example.com")
+    assert client.get("/api/v1/tree", headers=other).json()["total_days"] == 0
+
+
+def test_tree_stage_thresholds_match_the_brief():
+    from app.services.tree import stage_for
+    expected = {1: "sprout", 3: "sprout", 4: "leaves", 7: "leaves", 8: "branches", 14: "branches", 15: "flowers", 21: "flowers", 22: "fruits", 30: "fruits", 80: "fruits"}
+    for days, stage in expected.items():
+        assert stage_for(days)[1] == stage, days

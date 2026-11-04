@@ -13,7 +13,7 @@ from app.models.entities import (
     StoryScene, StorySceneTranslation, StoryTranslation, Topic, Verse, VerseMood, VerseTopic,
 )
 
-CONTENT_VERSION = "2026.11.04-1"
+CONTENT_VERSION = "2026.11.04-2"
 
 RELIGIONS = [
     ("Hinduism", "hinduism"),

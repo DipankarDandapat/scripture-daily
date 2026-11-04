@@ -257,3 +257,7 @@ VERSES = [
                "Escucha primero, habla despacio y tómate tu tiempo antes de enojarte."),
     }),
 ]
+
+
+from app.content.bible_more import VERSES as _MORE  # noqa: E402  (v2: Christianity reaches 100 verses per language)
+VERSES = VERSES + _MORE
