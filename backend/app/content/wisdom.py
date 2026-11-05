@@ -1,0 +1,263 @@
+"""Inspirational Verses (General Wisdom) — 30 verses × en / hi / bn.
+
+Public-domain classics from several traditions: the Vedas and Upanishads, the Tao Te Ching,
+Confucius' Analects and the Tirukkural. Renderings are WisdomOne's own plain-language
+translations. Row format: (work, chapter, verse, topics, moods, {lang: (text, simple_explanation)}).
+Tao Te Ching rows use the chapter number with verse 1; Tirukkural rows use the adhikaram (chapter)
+number with the couplet (kural) number; Upanishad rows carry the section in the work name.
+"""
+
+SCRIPTURE_CODE = "wisdom"
+
+RV1, RV10 = "Rigveda Mandala 1", "Rigveda Mandala 10"
+BRIH, MUND, ISHA, TAIT, KATHA, MAHA = (
+    "Brihadaranyaka Upanishad 1.3", "Mundaka Upanishad 3", "Isha Upanishad",
+    "Taittiriya Upanishad 1", "Katha Upanishad 1", "Maha Upanishad")
+TAO, ANA, KURAL = "Tao Te Ching", "Analects", "Tirukkural"
+
+VERSES = [
+    (RV1, 164, 46, "truth,humility", "happy", {
+        "en": ("Truth is one; the wise call it by many names.",
+               "There is one goodness, and people use different names and paths to reach it."),
+        "hi": ("सत्य एक है; विद्वान उसे अनेक नामों से पुकारते हैं।",
+               "भलाई एक है, और लोग उस तक पहुँचने के लिए अलग-अलग नाम और रास्ते अपनाते हैं।"),
+        "bn": ("সত্য এক; জ্ঞানীরা তাকে বহু নামে ডাকেন।",
+               "ভালোত্ব একটাই, মানুষ সেখানে পৌঁছাতে ভিন্ন নাম ও পথ ব্যবহার করে।"),
+    }),
+    (RV10, 191, 2, "love,peace", "angry,happy", {
+        "en": ("Come together, speak together, and let your minds be in harmony.",
+               "When we listen and talk together, our hearts come closer."),
+        "hi": ("साथ चलो, साथ बोलो, तुम्हारे मन एक सुर में हों।",
+               "जब हम साथ सुनते और बोलते हैं, तो हमारे दिल क़रीब आ जाते हैं।"),
+        "bn": ("একসঙ্গে চলো, একসঙ্গে বলো, তোমাদের মন একসুরে মিলুক।",
+               "যখন আমরা একসঙ্গে শুনি ও বলি, আমাদের হৃদয় কাছে আসে।"),
+    }),
+    (BRIH, 3, 28, "truth,hope", "anxious,sad", {
+        "en": ("Lead me from the unreal to the real, from darkness to light, from death to immortality.",
+               "A little prayer: take me from confusion to clarity, and from fear to light."),
+        "hi": ("मुझे असत्य से सत्य की ओर, अंधकार से प्रकाश की ओर और मृत्यु से अमरता की ओर ले चलो।",
+               "एक छोटी प्रार्थना: मुझे उलझन से स्पष्टता की ओर और डर से रोशनी की ओर ले चलो।"),
+        "bn": ("আমাকে অসত্য থেকে সত্যে, অন্ধকার থেকে আলোয় এবং মৃত্যু থেকে অমৃতত্বে নিয়ে চলো।",
+               "একটি ছোট প্রার্থনা: আমাকে বিভ্রান্তি থেকে স্পষ্টতায় এবং ভয় থেকে আলোয় নিয়ে যাও।"),
+    }),
+    (MUND, 1, 6, "truth,courage", "anxious", {
+        "en": ("Truth alone triumphs, not falsehood. By truth the path to the divine is laid out.",
+               "In the end the truth wins. Honesty makes the road clear."),
+        "hi": ("सत्य की ही जीत होती है, असत्य की नहीं। सत्य से ही दिव्य मार्ग बनता है।",
+               "अंत में सच ही जीतता है। ईमानदारी रास्ता साफ़ कर देती है।"),
+        "bn": ("সত্যেরই জয় হয়, মিথ্যার নয়। সত্যের দ্বারাই দিব্য পথ রচিত হয়।",
+               "শেষে সত্যই জেতে। সততা পথ পরিষ্কার করে দেয়।"),
+    }),
+    (ISHA, 1, 1, "gratitude,humility", "happy", {
+        "en": ("All this world is pervaded by the divine. Enjoy through letting go, and do not covet what belongs to another.",
+               "Everything is a gift. Enjoy what you have and do not envy others."),
+        "hi": ("यह सारा जगत् ईश्वर से व्याप्त है। त्याग के भाव से भोग करो और किसी दूसरे के धन का लालच मत करो।",
+               "सब कुछ एक उपहार है। जो तुम्हारे पास है उसका आनंद लो और दूसरों से जलो मत।"),
+        "bn": ("এই সমগ্র জগৎ ঈশ্বরে ব্যাপ্ত। ত্যাগের ভাবে ভোগ করো, অন্যের ধনে লোভ করো না।",
+               "সবকিছুই উপহার। যা আছে তা উপভোগ করো, অন্যকে হিংসা করো না।"),
+    }),
+    (ISHA, 1, 6, "compassion,love", "angry", {
+        "en": ("One who sees all beings in the Self, and the Self in all beings, feels no hatred.",
+               "When you feel that everyone is part of your own family, hating becomes impossible."),
+        "hi": ("जो सब प्राणियों को अपने में और अपने को सब प्राणियों में देखता है, वह किसी से घृणा नहीं करता।",
+               "जब तुम सबको अपने परिवार का हिस्सा मानते हो, तो नफ़रत करना नामुमकिन हो जाता है।"),
+        "bn": ("যে সকল প্রাণীকে নিজের মধ্যে এবং নিজেকে সকল প্রাণীর মধ্যে দেখে, সে কাউকে ঘৃণা করে না।",
+               "যখন সবাইকে নিজের পরিবারের অংশ মনে করো, তখন ঘৃণা করা অসম্ভব হয়ে যায়।"),
+    }),
+    (TAIT, 11, 2, "love,truth", "happy", {
+        "en": ("Speak the truth. Follow what is right. Respect your mother, your father, your teacher and your guest.",
+               "Be honest, be good, and show respect to the people who care for and teach you."),
+        "hi": ("सत्य बोलो। धर्म का आचरण करो। माता, पिता, आचार्य और अतिथि को देवता के समान मानो।",
+               "ईमानदार रहो, अच्छे रहो और उनका आदर करो जो तुम्हारी देखभाल करते और तुम्हें सिखाते हैं।"),
+        "bn": ("সত্য বলো। ধর্ম আচরণ করো। মাতা, পিতা, আচার্য ও অতিথিকে দেবতার মতো মান্য করো।",
+               "সৎ থাকো, ভালো থাকো এবং যাঁরা তোমার যত্ন নেন ও শেখান তাঁদের সম্মান করো।"),
+    }),
+    (KATHA, 3, 14, "courage,wisdom", "sad,anxious", {
+        "en": ("Arise, awake, and seek out the wise and learn; the path is sharp as a razor's edge, say the sages, and hard to cross.",
+               "Wake up, get up and learn from good teachers. The path is not easy, but you can walk it."),
+        "hi": ("उठो, जागो और श्रेष्ठ जनों के पास जाकर ज्ञान प्राप्त करो; ऋषि कहते हैं कि यह मार्ग छुरे की धार जैसा तीक्ष्ण और दुर्गम है।",
+               "जागो, उठो और अच्छे गुरुओं से सीखो। रास्ता आसान नहीं, पर तुम चल सकते हो।"),
+        "bn": ("ওঠো, জাগো এবং শ্রেষ্ঠজনের কাছে গিয়ে জ্ঞান লাভ করো; ঋষিরা বলেন এ পথ ক্ষুরের ধারের মতো তীক্ষ্ণ ও দুর্গম।",
+               "জাগো, ওঠো, ভালো গুরুর কাছে শেখো। পথ সহজ নয়, কিন্তু তুমি চলতে পারো।"),
+    }),
+    (MAHA, 6, 71, "love,compassion", "happy", {
+        "en": ("'This one is mine, that one is a stranger' is the thought of small minds. For the generous-hearted, the whole world is one family.",
+               "Big hearts treat the whole world like their family."),
+        "hi": ("'यह मेरा है, वह पराया है' यह छोटे मन की सोच है। उदार हृदय वालों के लिए सारी पृथ्वी ही परिवार है।",
+               "बड़े दिल वाले पूरी दुनिया को अपना परिवार मानते हैं।"),
+        "bn": ("'এ আমার, ও পর' — এ ছোট মনের ভাবনা। উদার হৃদয়ের কাছে সমগ্র পৃথিবীই পরিবার।",
+               "বড় হৃদয়ের মানুষ পুরো পৃথিবীকে নিজের পরিবার মনে করে।"),
+    }),
+    (TAO, 8, 1, "humility,peace", "angry,anxious", {
+        "en": ("The highest good is like water. Water benefits all things without competing, and flows to the places others avoid.",
+               "Be like water: helpful to everyone, gentle, and happy in humble places."),
+        "hi": ("सर्वोच्च भलाई जल के समान है। जल बिना होड़ किए सबका भला करता है और उन जगहों तक बहता है जिन्हें लोग छोड़ देते हैं।",
+               "पानी की तरह बनो: सबकी मदद करने वाले, कोमल और विनम्र जगहों में भी खुश।"),
+        "bn": ("সর্বোচ্চ কল্যাণ জলের মতো। জল প্রতিযোগিতা না করে সবার উপকার করে এবং অন্যে যেখান থেকে সরে যায় সেখানেও প্রবাহিত হয়।",
+               "জলের মতো হও: সবার সহায়ক, কোমল এবং বিনীত জায়গাতেও সুখী।"),
+    }),
+    (TAO, 16, 1, "peace,patience", "anxious", {
+        "en": ("Empty yourself of everything. Let the mind rest at peace; all things rise and fall, and each returns to its root in stillness.",
+               "Sit quietly and let your busy thoughts settle, like mud sinking in a glass of water."),
+        "hi": ("स्वयं को सब कुछ से खाली करो। मन को शांति में विश्राम करने दो; सब चीज़ें उठती-गिरती हैं और हर एक शांति में अपनी जड़ को लौटती है।",
+               "चुपचाप बैठो और अपने व्यस्त विचारों को वैसे बैठने दो जैसे पानी के गिलास में मिट्टी नीचे बैठ जाती है।"),
+        "bn": ("নিজেকে সবকিছু থেকে শূন্য করো। মনকে শান্তিতে বিশ্রাম নিতে দাও; সব কিছু ওঠে-পড়ে এবং প্রতিটি নীরবতায় তার মূলে ফেরে।",
+               "চুপচাপ বসো এবং ব্যস্ত চিন্তাগুলোকে থিতিয়ে যেতে দাও, যেমন গ্লাসের জলে কাদা নিচে বসে যায়।"),
+    }),
+    (TAO, 33, 1, "wisdom,courage", "happy", {
+        "en": ("Knowing others is intelligence; knowing yourself is true wisdom. Mastering others is strength; mastering yourself is true power.",
+               "Understanding yourself is the best kind of smart, and controlling yourself is the best kind of strong."),
+        "hi": ("दूसरों को जानना बुद्धिमानी है; स्वयं को जानना सच्चा ज्ञान है। दूसरों पर विजय बल है; स्वयं पर विजय सच्ची शक्ति है।",
+               "खुद को समझना सबसे अच्छी समझदारी है, और खुद पर काबू पाना सबसे अच्छी ताक़त।"),
+        "bn": ("অন্যকে জানা বুদ্ধিমত্তা; নিজেকে জানা প্রকৃত প্রজ্ঞা। অন্যকে জয় করা শক্তি; নিজেকে জয় করা প্রকৃত ক্ষমতা।",
+               "নিজেকে বোঝা সেরা বুদ্ধিমত্তা এবং নিজেকে সামলানো সেরা শক্তি।"),
+    }),
+    (TAO, 44, 1, "gratitude,peace", "happy,anxious", {
+        "en": ("Be content with what you have and you will never be disgraced; know when to stop and you will stay out of danger.",
+               "Being happy with enough keeps you safe and calm."),
+        "hi": ("जो है उसमें संतुष्ट रहो तो कभी अपमानित नहीं होगे; जानो कब रुकना है तो संकट से बचे रहोगे।",
+               "'काफ़ी है' में खुश रहना तुम्हें सुरक्षित और शांत रखता है।"),
+        "bn": ("যা আছে তাতে সন্তুষ্ট থাকো, কখনও অপমানিত হবে না; কখন থামতে হয় জানো, বিপদ থেকে দূরে থাকবে।",
+               "'যথেষ্ট' নিয়ে খুশি থাকা তোমাকে নিরাপদ ও শান্ত রাখে।"),
+    }),
+    (TAO, 63, 1, "forgiveness,compassion", "angry", {
+        "en": ("Repay hatred with kindness. Handle difficulties while they are still easy, and great tasks while they are still small.",
+               "Answer meanness with kindness, and fix small problems before they grow."),
+        "hi": ("घृणा का बदला दया से चुकाओ। कठिनाइयों को तब सँभालो जब वे आसान हों, और बड़े कामों को तब जब वे छोटे हों।",
+               "बुरे बर्ताव का जवाब दया से दो, और छोटी समस्याओं को बड़ी होने से पहले सुलझा लो।"),
+        "bn": ("ঘৃণার প্রতিদান দাও দয়া দিয়ে। কঠিন কাজ সামলাও যখন তা সহজ, বড় কাজ যখন তা ছোট।",
+               "নিষ্ঠুরতার জবাব দয়ায় দাও, আর ছোট সমস্যা বড় হওয়ার আগেই মিটিয়ে ফেলো।"),
+    }),
+    (TAO, 64, 1, "courage,patience", "anxious,sad", {
+        "en": ("A journey of a thousand miles begins with a single step.",
+               "Big goals feel less scary when you take just one small step."),
+        "hi": ("हज़ार मील की यात्रा एक क़दम से शुरू होती है।",
+               "बड़े लक्ष्य तब कम डरावने लगते हैं जब तुम बस एक छोटा क़दम उठाते हो।"),
+        "bn": ("হাজার মাইলের যাত্রা একটি পদক্ষেপ দিয়েই শুরু হয়।",
+               "বড় লক্ষ্য কম ভয়ের লাগে যখন তুমি শুধু একটি ছোট পদক্ষেপ নাও।"),
+    }),
+    (TAO, 67, 1, "compassion,humility", "happy", {
+        "en": ("I have three treasures I keep and cherish: the first is compassion, the second is simplicity, the third is humility.",
+               "Three treasures: be kind, live simply, and stay humble."),
+        "hi": ("मेरे पास तीन ख़ज़ाने हैं जिन्हें मैं सँभालकर रखता हूँ: पहला दया, दूसरा सादगी, तीसरा विनम्रता।",
+               "तीन ख़ज़ाने: दयालु बनो, सादगी से जियो और विनम्र रहो।"),
+        "bn": ("আমার তিনটি সম্পদ আছে যা আমি যত্নে রাখি: প্রথমটি করুণা, দ্বিতীয়টি সরলতা, তৃতীয়টি বিনয়।",
+               "তিনটি সম্পদ: দয়ালু হও, সরলভাবে বাঁচো এবং বিনয়ী থাকো।"),
+    }),
+    (TAO, 78, 1, "patience,courage", "sad,angry", {
+        "en": ("Nothing in the world is softer than water, yet nothing is better at wearing down the hard. The soft overcomes the hard.",
+               "Gentle things like water can wear down a rock. Softness is a quiet kind of strength."),
+        "hi": ("संसार में जल से अधिक कोमल कुछ नहीं, फिर भी कठोर को घिसने में उससे श्रेष्ठ कुछ नहीं। कोमल कठोर पर विजय पाता है।",
+               "पानी जैसी कोमल चीज़ें पत्थर को घिस देती हैं। कोमलता एक शांत किस्म की ताक़त है।"),
+        "bn": ("জগতে জলের চেয়ে কোমল কিছু নেই, তবু কঠিনকে ক্ষয় করতে তার চেয়ে ভালো কিছু নেই। কোমল কঠিনকে জয় করে।",
+               "জলের মতো কোমল জিনিস পাথরকেও ক্ষয় করে। কোমলতা এক নীরব শক্তি।"),
+    }),
+    (ANA, 1, 1, "gratitude,love", "happy", {
+        "en": ("Is it not a joy to learn and to practise what you learn? Is it not a pleasure to have friends come from afar?",
+               "Learning new things and meeting friends are two of the happiest things."),
+        "hi": ("क्या सीखना और जो सीखा उसका अभ्यास करना आनंद नहीं है? क्या दूर से मित्र का आना सुखद नहीं?",
+               "नई बातें सीखना और दोस्तों से मिलना सबसे खुशनुमा चीज़ों में से हैं।"),
+        "bn": ("শেখা এবং যা শেখা হয়েছে তার অনুশীলন করা কি আনন্দের নয়? দূর থেকে বন্ধুর আগমন কি সুখের নয়?",
+               "নতুন কিছু শেখা আর বন্ধুদের সঙ্গে দেখা হওয়া সবচেয়ে সুখের বিষয়গুলোর দুটি।"),
+    }),
+    (ANA, 2, 17, "wisdom,humility", "happy", {
+        "en": ("To know what you know and to know what you do not know: that is true knowledge.",
+               "It is wise to say 'I don't know yet' and keep learning."),
+        "hi": ("जो जानते हो उसे जानना और जो नहीं जानते उसे न जानना — यही सच्चा ज्ञान है।",
+               "'मुझे अभी नहीं पता' कहना समझदारी है। सीखते रहो।"),
+        "bn": ("যা জানো তা জানা এবং যা জানো না তা না জানা — এটাই প্রকৃত জ্ঞান।",
+               "'আমি এখনও জানি না' বলা বুদ্ধিমানের কাজ। শিখতে থাকো।"),
+    }),
+    (ANA, 4, 17, "humility,wisdom", "angry,sad", {
+        "en": ("When you see a good person, think of becoming like them; when you see a bad one, look inward and examine yourself.",
+               "Learn from the best, and when others behave badly, check your own heart."),
+        "hi": ("जब किसी अच्छे व्यक्ति को देखो तो उनके जैसा बनने की सोचो; जब किसी बुरे को देखो तो अपने भीतर झाँककर खुद को परखो।",
+               "अच्छे लोगों से सीखो, और जब कोई बुरा बर्ताव करे तो अपने दिल को जाँचो।"),
+        "bn": ("ভালো মানুষ দেখলে তাঁর মতো হওয়ার কথা ভাবো; খারাপ কাউকে দেখলে নিজের ভেতরে তাকিয়ে নিজেকে যাচাই করো।",
+               "সেরাদের থেকে শেখো, আর কেউ খারাপ আচরণ করলে নিজের হৃদয় পরীক্ষা করো।"),
+    }),
+    (ANA, 7, 22, "humility,wisdom", "happy", {
+        "en": ("When three people walk together, there is always something I can learn from them.",
+               "Everyone you meet can teach you something."),
+        "hi": ("जब तीन लोग साथ चलते हैं तो उनमें मेरे लिए सीखने को कुछ न कुछ ज़रूर होता है।",
+               "तुम जिससे भी मिलते हो, वह तुम्हें कुछ सिखा सकता है।"),
+        "bn": ("তিনজন একসঙ্গে হাঁটলে তাদের মধ্যে আমার শেখার মতো কিছু না কিছু থাকেই।",
+               "তুমি যার সঙ্গেই দেখা করো, সে তোমাকে কিছু শেখাতে পারে।"),
+    }),
+    (ANA, 15, 24, "compassion,love", "angry", {
+        "en": ("What you do not wish for yourself, do not do to others.",
+               "If you wouldn't like it, don't do it to someone else."),
+        "hi": ("जो तुम अपने लिए नहीं चाहते, वह दूसरों के साथ मत करो।",
+               "जो तुम्हें अच्छा न लगे, वह किसी और के साथ मत करो।"),
+        "bn": ("নিজের জন্য যা চাও না, অন্যের সঙ্গে তা করো না।",
+               "নিজের ভালো না লাগলে অন্যের সঙ্গে তা করো না।"),
+    }),
+    (KURAL, 10, 100, "compassion,self-control", "angry", {
+        "en": ("Why use harsh words when sweet words are at hand? It is like picking unripe fruit when ripe fruit is there.",
+               "Kind words are like ripe fruit: sweet and ready. Harsh words are sour and unripe."),
+        "hi": ("मीठे शब्द पास हों तो कठोर शब्द क्यों बोलें? यह पके फल के रहते कच्चा फल तोड़ने जैसा है।",
+               "दयालु शब्द पके फल जैसे मीठे और तैयार हैं। कठोर शब्द खट्टे और कच्चे हैं।"),
+        "bn": ("মিষ্টি কথা হাতের কাছে থাকতে কটু কথা কেন? এ যেন পাকা ফল থাকতে কাঁচা ফল পাড়া।",
+               "দয়ালু কথা পাকা ফলের মতো মিষ্টি ও প্রস্তুত। কটু কথা টক আর কাঁচা।"),
+    }),
+    (KURAL, 8, 72, "love,charity", "happy", {
+        "en": ("The unloving keep everything for themselves; the loving give even their bones to others.",
+               "People full of love gladly share all they have."),
+        "hi": ("प्रेमहीन लोग सब कुछ अपने लिए रखते हैं; प्रेम करने वाले अपनी हड्डियाँ तक दूसरों को दे देते हैं।",
+               "प्रेम से भरे लोग अपना सब कुछ खुशी से बाँटते हैं।"),
+        "bn": ("প্রেমহীনেরা সবকিছু নিজের জন্য রাখে; প্রেমিকেরা নিজের হাড়ও অন্যকে দান করে।",
+               "ভালোবাসায় ভরা মানুষ নিজের সবকিছু খুশি মনে ভাগ করে নেয়।"),
+    }),
+    (KURAL, 11, 102, "gratitude", "happy", {
+        "en": ("A kindness done in time of need may seem small, but it is greater than the whole world.",
+               "A little help when someone really needs it means the world to them."),
+        "hi": ("ज़रूरत के समय की गई भलाई छोटी लगे तब भी पूरे संसार से बड़ी होती है।",
+               "ज़रूरत के वक़्त की गई थोड़ी-सी मदद उसके लिए पूरी दुनिया होती है।"),
+        "bn": ("প্রয়োজনের সময়ে করা উপকার ছোট মনে হলেও সমগ্র পৃথিবীর চেয়ে বড়।",
+               "সত্যিই দরকারের সময়ে সামান্য সাহায্য মানুষের কাছে পুরো পৃথিবীর সমান।"),
+    }),
+    (KURAL, 16, 151, "patience,forgiveness", "angry", {
+        "en": ("As the earth bears those who dig into it, so bear with those who insult you; that is the first of virtues.",
+               "Be patient like the earth, which keeps holding us up even when we dig into her."),
+        "hi": ("जैसे धरती खोदने वालों को सह लेती है, वैसे ही अपमान करने वालों को सह लेना सबसे पहला गुण है।",
+               "धरती की तरह धैर्य रखो, जो खोदे जाने पर भी हमें थामे रखती है।"),
+        "bn": ("মাটি যেমন খননকারীকে সহ্য করে, তেমনই অপমানকারীকে সহ্য করা শ্রেষ্ঠ গুণ।",
+               "পৃথিবীর মতো ধৈর্যশীল হও, যে খুঁড়লেও আমাদের ধরে রাখে।"),
+    }),
+    (KURAL, 32, 314, "forgiveness,compassion", "angry,sad", {
+        "en": ("Punish those who harm you by doing them good, and let your kindness make them feel ashamed.",
+               "Respond to unkindness with kindness, and they will feel sorry by themselves."),
+        "hi": ("जो तुम्हें हानि पहुँचाए, उसे भलाई करके दण्ड दो और अपनी दया से उसे लज्जित होने दो।",
+               "बुराई का जवाब भलाई से दो, वे खुद शर्मिंदा हो जाएँगे।"),
+        "bn": ("যে তোমার ক্ষতি করে তাকে উপকার করে শাস্তি দাও, তোমার দয়ায় সে লজ্জিত হোক।",
+               "অসদাচরণের জবাব সদাচরণে দাও, সে নিজেই লজ্জা পাবে।"),
+    }),
+    (KURAL, 33, 322, "charity,compassion", "happy", {
+        "en": ("To share what you have with all and protect all living things is the best of virtues.",
+               "Sharing your food and caring for every creature is the best thing a person can do."),
+        "hi": ("जो है उसे सबके साथ बाँटना और सब प्राणियों की रक्षा करना सबसे श्रेष्ठ धर्म है।",
+               "अपना खाना बाँटना और हर जीव की देखभाल करना इंसान का सबसे अच्छा काम है।"),
+        "bn": ("যা আছে সবার সঙ্গে ভাগ করা এবং সব প্রাণীকে রক্ষা করাই শ্রেষ্ঠ ধর্ম।",
+               "নিজের খাবার ভাগ করা আর প্রতিটি প্রাণীর যত্ন নেওয়াই মানুষের সেরা কাজ।"),
+    }),
+    (KURAL, 40, 396, "wisdom,hope", "happy,sad", {
+        "en": ("The deeper you dig in sand, the more water springs up; the more you learn, the more knowledge flows.",
+               "The more you learn, the more you can learn. Keep digging!"),
+        "hi": ("रेत में जितना गहरा खोदोगे उतना पानी निकलेगा; जितना सीखोगे उतना ज्ञान बहेगा।",
+               "जितना सीखोगे, उतना और सीख सकोगे। खोदते रहो!"),
+        "bn": ("বালিতে যত গভীর খুঁড়বে তত জল উঠবে; যত শিখবে তত জ্ঞান প্রবাহিত হবে।",
+               "যত শিখবে তত আরও শিখতে পারবে। খুঁড়তে থাকো!"),
+    }),
+    (KURAL, 43, 423, "wisdom,truth", "anxious", {
+        "en": ("Whatever you hear and from whomever you hear it, find the truth in it with careful thought.",
+               "Don't believe everything right away. Think carefully to find what is true."),
+        "hi": ("जो कुछ, जिससे भी सुनो, विवेकपूर्वक उसमें से सत्य को खोज निकालो।",
+               "हर बात पर तुरंत यक़ीन मत करो। सच्चाई जानने के लिए ध्यान से सोचो।"),
+        "bn": ("যা কিছু যার কাছ থেকেই শোনো, বিবেচনা করে তার মধ্যে সত্য খুঁজে বের করো।",
+               "সবকিছু সঙ্গে সঙ্গে বিশ্বাস করো না। সত্য জানতে ভালো করে ভাবো।"),
+    }),
+]
+
+
+from app.content.wisdom_more import VERSES as _MORE  # noqa: E402  (v2: General reaches 100 verses per language)
+VERSES = VERSES + _MORE

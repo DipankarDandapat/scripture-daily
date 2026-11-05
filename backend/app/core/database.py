@@ -15,7 +15,8 @@ elif _url.startswith(("postgres", "mysql")):
 else:
     _connect_args = {}
 
-_connect_args["charset"] = "utf8mb4"
+if _url.startswith("mysql"):
+    _connect_args["charset"] = "utf8mb4"
 
 engine = create_engine(
     _url,

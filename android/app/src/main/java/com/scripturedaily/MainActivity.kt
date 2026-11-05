@@ -97,6 +97,31 @@ import com.scripturedaily.data.CatalogItem
 import com.scripturedaily.data.DeviceRegInput
 import com.scripturedaily.data.FavoriteInput
 import com.scripturedaily.data.FeedbackInput
+import com.scripturedaily.data.MoodCheckinInput
+import com.scripturedaily.features.Overlay
+import com.scripturedaily.features.challenges.ChallengesScreen
+import com.scripturedaily.features.discover.DiscoverItem
+import com.scripturedaily.features.discover.DiscoverScreen
+import com.scripturedaily.features.discover.StoryLibraryScreen
+import com.scripturedaily.features.explain.ExplainSheet
+import com.scripturedaily.features.mood.DefaultMoods
+import com.scripturedaily.features.mood.MoodCard
+import com.scripturedaily.features.mood.MoodJournalScreen
+import com.scripturedaily.features.home.ThemedVerseCard
+import com.scripturedaily.features.home.VerseThemes
+import com.scripturedaily.features.studio.StudioScreen
+import com.scripturedaily.features.studio.StudioTab
+import com.scripturedaily.features.tree.MilestoneDialog
+import com.scripturedaily.features.tree.TreeJourneyScreen
+import com.scripturedaily.features.tree.TreeLogic
+import com.scripturedaily.features.tree.TreeStage
+import com.scripturedaily.features.tree.TreeState
+import com.scripturedaily.features.tree.TreeStore
+import com.scripturedaily.features.tree.WisdomTreeCard
+import com.scripturedaily.features.story.StoryScreen
+import com.scripturedaily.features.story.StorySource
+import com.scripturedaily.features.truths.UniversalTruthsScreen
+import com.scripturedaily.widget.WidgetStudioScreen
 import com.scripturedaily.data.PreferenceInput
 import com.scripturedaily.data.PaletteRefreshWorker
 import com.scripturedaily.data.ReligionItem
@@ -476,7 +501,8 @@ private fun shareVerseImage(context: android.content.Context, verse: Verse) {
     val intent = Intent(Intent.ACTION_SEND).apply {
         type = "image/png"
         putExtra(Intent.EXTRA_STREAM, uri)
-        putExtra(Intent.EXTRA_TEXT, "${verse.text}\n\n${verse.scripture} · ${verse.reference()}")
+        putExtra(Intent.EXTRA_TEXT, "${verse.text}\n\n${verse.scripture} · ${verse.reference()}")
+
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     context.startActivity(Intent.createChooser(intent, "Share verse"))
@@ -558,7 +584,26 @@ private fun ScriptureApp(
     var showHistory by remember { mutableStateOf(false) }
     var showChapterBrowser by remember { mutableStateOf(false) }
     var fontSize by remember { mutableIntStateOf(store.getInt("font_size", 22)) }
-    var streak by remember { mutableIntStateOf(store.getInt("streak", 0)) }
+    // Local calendar day. Re-read on resume and at midnight so the mood card, verse theme and daily verse roll over correctly.
+    var todayDate by remember { mutableStateOf(java.time.LocalDate.now()) }
+    var treeDays by remember { mutableStateOf(TreeStore.days(context)) }
+    val treeState: TreeState = remember(treeDays, todayDate) { TreeLogic.state(treeDays, todayDate) }
+    var showJourney by remember { mutableStateOf(false) }
+    var milestoneStage by remember { mutableStateOf<TreeStage?>(null) }
+    val streak = treeState.currentStreak
+    var overlay by remember { mutableStateOf<Overlay?>(null) }
+    var moods by remember { mutableStateOf(DefaultMoods) }
+    val todayKey = todayDate.toString()
+    var mood by remember { mutableStateOf(if (store.getString("mood_day", null) == java.time.LocalDate.now().toString()) store.getString("mood", null) else null) }
+    // "How are you feeling today?" is hidden for the rest of the local day once a feeling has been submitted (persisted).
+    var moodCardHidden by remember { mutableStateOf(store.getString("mood_done_date", null) == java.time.LocalDate.now().toString()) }
+    var moodMessage by remember { mutableStateOf(if (mood != null) store.getString("mood_message", null) else null) }
+    var moodLoading by remember { mutableStateOf(false) }
+    var moodError by remember { mutableStateOf<String?>(null) }
+    var moodShuffle by remember { mutableIntStateOf(0) }
+    var prefsSyncKey by remember { mutableIntStateOf(0) }
+    var storyAvailable by remember { mutableStateOf(false) }
+    var explainFor by remember { mutableStateOf<Verse?>(null) }
 
     // ── Single sequential startup flow ─────────────────────────────────────────
     LaunchedEffect(Unit) {
@@ -631,6 +676,7 @@ private fun ScriptureApp(
                     val p = resp.body()!!
                     val freqLocal = when (p.frequency) { "6h" -> "Every 6 hours"; "1h" -> "Every hour"; else -> "Daily" }
                     val firstScriptureId = p.scriptureIds.split(",").firstOrNull()?.trim()?.toIntOrNull() ?: scriptureId
+                    if (p.religionId != religion || p.languageId != language) prefsSyncKey++   // changed elsewhere: drop stale verses below
                     religion = p.religionId; language = p.languageId; scriptureId = firstScriptureId; frequency = freqLocal
                     store.edit().putInt("religion", p.religionId).putInt("language", p.languageId)
                         .putInt("scripture", firstScriptureId).putString("frequency", freqLocal).apply()
@@ -764,7 +810,7 @@ private fun ScriptureApp(
     var settingsResume by remember { mutableIntStateOf(0) }
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) settingsResume++
+            if (event == Lifecycle.Event.ON_RESUME) { settingsResume++; todayDate = java.time.LocalDate.now() }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -789,45 +835,91 @@ private fun ScriptureApp(
         }
     }
 
+    suspend fun applyMood(code: String, shuffle: Int = 0) {
+        moodLoading = true; moodError = null
+        try {
+            val result = withContext(Dispatchers.IO) { ApiClient.api.moodVerse(code, religion.takeIf { it > 0 }, language.takeIf { it > 0 }, shuffle) }
+            val remote = result.verse
+            val sid = scriptures.firstOrNull { it.name == remote.scripture }?.id ?: scriptureId
+            val cached = withContext(Dispatchers.IO) {
+                val old = dao.find(remote.id)
+                remote.toCached(sid, language, old?.favorite == true).also { dao.save(it) }
+            }
+            ScriptureWidget.cacheVerseForWidget(context, cached)
+            store.edit().putInt("last_verse_id", remote.id).putString("mood", code).putString("mood_day", todayKey)
+                .putString("last_verse_day", todayKey).putString("mood_message", result.message).apply()
+            verse = remote; mood = code; moodMessage = result.message
+            ScriptureWidget().refreshAll(context)
+            if (shuffle == 0) {
+                store.edit().putString("mood_done_date", java.time.LocalDate.now().toString()).apply()  // survives restarts
+                scope.launch { kotlinx.coroutines.delay(1800); moodCardHidden = true }                   // let the confirmation show, then animate away
+                runCatching { withContext(Dispatchers.IO) { ApiClient.api.recordMood(MoodCheckinInput(code, remote.id)) } }
+            }
+        } catch (_: Exception) {
+            moodError = "Couldn't reach the server. Check your connection and try again."
+        } finally { moodLoading = false }
+    }
+
     suspend fun loadToday(random: Boolean = false, forceLanguage: Int? = null, forceScriptureId: Int? = null) {
         loading = true; error = null
         val langToUse = forceLanguage ?: language
         val scriptureToUse = forceScriptureId ?: scriptureId
         try {
-            val remote = if (random) ApiClient.api.random(religion, langToUse, scriptureToUse)
-                         else ApiClient.api.today()
+            // Always pass the on-device tradition/language so a stale server preference can never leak another tradition.
+            val remote = if (random) ApiClient.api.random(religion, langToUse, null)
+                         else ApiClient.api.today(religion.takeIf { it > 0 }, langToUse.takeIf { it > 0 }, java.time.LocalDate.now().toString())
             val old = withContext(Dispatchers.IO) { dao.find(remote.id) }
             val cached = remote.toCached(scriptureToUse, langToUse, old?.favorite == true)
             withContext(Dispatchers.IO) { dao.save(cached) }
             ScriptureWidget.cacheVerseForWidget(context, cached)
-            store.edit().putInt("last_verse_id", remote.id).apply()
+            store.edit().putInt("last_verse_id", remote.id).putString("last_verse_day", java.time.LocalDate.now().toString())
+                .putInt("current_verse_id", remote.id).apply()
             verse = remote
-            if (!random) {
-                val today = java.time.LocalDate.now().toString()
-                val last = store.getString("last_streak_date", "")
-                val yesterday = java.time.LocalDate.now().minusDays(1).toString()
-                val newStreak = when (last) {
-                    today -> store.getInt("streak", 1)
-                    yesterday -> store.getInt("streak", 0) + 1
-                    else -> 1
-                }
-                store.edit().putString("last_streak_date", today).putInt("streak", newStreak)
-                    .putBoolean("read_$today", true).apply()
-                streak = newStreak
-                // Trigger in-app review on 7-day streak milestone
-                if (newStreak == 7 || newStreak == 30) {
-                    RatingManager.tryLaunchReview(activity)
-                }
-            }
             ScriptureWidget().refreshAll(context)
             withContext(Dispatchers.IO) {
                 LockScreenVerse.applyIfEnabled(context, remote.id, remote.scripture, remote.text, remote.reference())
             }
         } catch (_: Exception) {
             val local = dao.matching(scriptureToUse, langToUse)
-            if (local != null) verse = local.toVerse()
-            else error = "You're offline. Connect once to download your first verse."
+            if (local != null) {
+                verse = local.toVerse()
+                ScriptureWidget.cacheVerseForWidget(context, local)   // offline: widget/lock screen show the cached verse of THIS tradition
+                ScriptureWidget().refreshAll(context)
+                withContext(Dispatchers.IO) { LockScreenVerse.applyIfEnabled(context, local.id, local.scripture, local.text, local.reference()) }
+            } else {
+                ScriptureWidget.clearCachedVerse(context)              // never leave another tradition's verse on the widget
+                ScriptureWidget().refreshAll(context)
+                error = "You're offline. Connect once to download your first verse."
+            }
         } finally { loading = false }
+    }
+
+    /** Called after the tradition or language changed: drop everything derived from the old choice, then reload. */
+    suspend fun refreshForPreferences(changed: Boolean) {
+        if (changed) {
+            store.edit().remove("last_verse_id").remove("current_verse_id").remove("last_verse_day")
+                .remove("mood").remove("mood_day").remove("mood_message").apply()
+            verse = null; mood = null; moodMessage = null; storyAvailable = false
+            ScriptureWidget.clearCachedVerse(context)
+            if (store.getBoolean("lock_screen", false)) withContext(Dispatchers.IO) { LockScreenVerse.clearLockScreenWallpaper(context) }
+        }
+        loadToday(random = false)
+    }
+
+    // Tradition/language changed on the server (e.g. saved from another session): reload so nothing stale is shown.
+    LaunchedEffect(prefsSyncKey) { if (prefsSyncKey > 0) refreshForPreferences(changed = true) }
+
+    /** The daily reading is complete (verse viewed for a few seconds, or saved / shared / explained). One count per day. */
+    fun markReading() {
+        if (!configured || verse == null) return
+        if (TreeStore.markRead(context, todayDate)) {
+            val before = treeDays.size
+            treeDays = TreeStore.days(context)
+            val total = treeDays.size
+            TreeStage.values().firstOrNull { it.first == total && total > before }?.let { milestoneStage = it }
+            if (treeState.currentStreak + 1 == 7 || treeState.currentStreak + 1 == 30) scope.launch { RatingManager.tryLaunchReview(activity) }
+            scope.launch { TreeStore.sync(context)?.let { treeDays = it } }
+        }
     }
 
     suspend fun getToken(): String? =
@@ -866,6 +958,27 @@ private fun ScriptureApp(
 
     var homeLoadKey by remember { mutableIntStateOf(0) }
 
+    // Midnight rollover: a new local day brings the next theme, the mood question and a fresh daily verse.
+    LaunchedEffect(todayDate) {
+        moodCardHidden = store.getString("mood_done_date", null) == todayDate.toString()
+        if (store.getString("mood_day", null) != todayDate.toString()) { mood = null; moodMessage = null }
+        val shown = store.getString("last_verse_day", null)
+        if (configured && shown != null && shown != todayDate.toString()) homeLoadKey++
+        val now = java.time.LocalDateTime.now()
+        kotlinx.coroutines.delay(java.time.Duration.between(now, todayDate.plusDays(1).atStartOfDay()).toMillis().coerceAtLeast(1_000L) + 500L)
+        todayDate = java.time.LocalDate.now()
+    }
+
+    // Reading counts once the daily verse has been on screen for a few seconds.
+    LaunchedEffect(verse?.id, page, todayDate, configured, setupGuidePending) {
+        if (configured && !setupGuidePending && page == "Home" && verse != null && overlay == null) {
+            kotlinx.coroutines.delay(5_000)
+            markReading()
+        }
+    }
+    // Merge reading history with the server when the app opens (so progress follows the user between devices).
+    LaunchedEffect(configured) { if (configured) TreeStore.sync(context)?.let { treeDays = it } }
+
     // ── Unsaved settings guard ────────────────────────────────────────────────
     val savedReligion = store.getInt("religion", 0)
     val savedLanguage = store.getInt("language", 0)
@@ -883,9 +996,11 @@ private fun ScriptureApp(
     LaunchedEffect(homeLoadKey) {
         if (configured && page == "Home") {
             val lastId = store.getInt("last_verse_id", -1)
-            if (lastId > 0) {
+            // Reuse today's verse only if it belongs to the current tradition + language; otherwise fetch a fresh one.
+            if (lastId > 0 && store.getString("last_verse_day", null) == todayDate.toString()) {
                 val cached = withContext(Dispatchers.IO) { dao.find(lastId) }
-                if (cached != null) {
+                val religionName = religions.firstOrNull { it.id == religion }?.name
+                if (cached != null && cached.languageId == language && (religionName == null || cached.religion == religionName)) {
                     verse = cached.toVerse()
                     return@LaunchedEffect
                 }
@@ -960,6 +1075,7 @@ private fun ScriptureApp(
         Triple("Home", R.drawable.ic_nav_home, "Home"),
         Triple("Saved", R.drawable.ic_nav_saved, "Favorites"),
         Triple("Explore", R.drawable.ic_nav_explore, "Explore"),
+        Triple("Discover", R.drawable.ic_nav_discover, "Discover"),
         Triple("Settings", R.drawable.ic_nav_settings, "Settings")
     )
     val useNavigationRail = LocalConfiguration.current.screenWidthDp >= 840
@@ -1072,9 +1188,53 @@ private fun ScriptureApp(
                     } else when (page) {
                 "Home" -> HomeScreen(
                     verse, loading, error, favoriteIds.contains(verse?.id), lockScreen,
-                    onRandom = { scope.launch { loadToday(true) } },
-                    onFavorite = { verse?.let { v -> scope.launch { toggleFavorite(v) } } },
+                    moodSlot = {
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = !moodCardHidden,
+                            exit = androidx.compose.animation.fadeOut(androidx.compose.animation.core.tween(450)) +
+                                androidx.compose.animation.slideOutVertically(androidx.compose.animation.core.tween(450)) { -it / 3 } +
+                                androidx.compose.animation.shrinkVertically(androidx.compose.animation.core.tween(450))
+                        ) {
+                            MoodCard(
+                                moods = moods, selected = mood, loading = moodLoading, message = moodMessage, error = moodError,
+                                onSelect = { code -> moodShuffle = 0; scope.launch { applyMood(code) } },
+                                onAnother = { val m = mood; if (m != null) { moodShuffle++; scope.launch { applyMood(m, moodShuffle) } } },
+                                onClear = {
+                                    mood = null; moodMessage = null; moodError = null
+                                    store.edit().remove("mood").remove("mood_day").remove("mood_message").remove("last_verse_id").apply()
+                                    scope.launch { loadToday() }
+                                },
+                                onJournal = { overlay = Overlay.Journal }
+                            )
+                        }
+                    },
+                    treeSlot = { WisdomTreeCard(treeState, onJourney = { showJourney = true }) },
+                    actionsSlot = {
+                        verse?.let { v ->
+                            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                OutlinedButton(
+                                    onClick = { explainFor = v; markReading() }, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(16.dp),
+                                    border = BorderStroke(1.5.dp, Amber.copy(alpha = 0.5f)), colors = ButtonDefaults.outlinedButtonColors(contentColor = Ink)
+                                ) { Text("🧒  Explain this to me like I'm 5", fontWeight = FontWeight.SemiBold, fontSize = 14.sp) }
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    OutlinedButton(onClick = { overlay = Overlay.Studio(v) }, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(16.dp),
+                                        border = BorderStroke(1.5.dp, Amber.copy(alpha = 0.5f)), colors = ButtonDefaults.outlinedButtonColors(contentColor = Ink),
+                                        contentPadding = PaddingValues(horizontal = 6.dp)) { Text("🎨 Studio", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
+                                    if (storyAvailable) OutlinedButton(onClick = { overlay = Overlay.StoryForVerse(v.id); markReading() }, modifier = Modifier.weight(1f).height(48.dp), shape = RoundedCornerShape(16.dp),
+                                        border = BorderStroke(1.5.dp, Amber.copy(alpha = 0.5f)), colors = ButtonDefaults.outlinedButtonColors(contentColor = Ink),
+                                        contentPadding = PaddingValues(horizontal = 6.dp)) { Text("📖 Story", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
+                                }
+                            }
+                        }
+                    },
+                    onRandom = {
+                        mood = null; moodMessage = null
+                        store.edit().remove("mood").remove("mood_day").remove("mood_message").apply()
+                        scope.launch { loadToday(true) }
+                    },
+                    onFavorite = { verse?.let { v -> markReading(); scope.launch { toggleFavorite(v) } } },
                     onShare = { verse?.let { v ->
+                        markReading()
                         shareVerseImage(context, v)
                         scope.launch {
                             val result = snackbarHostState.showSnackbar(
@@ -1104,13 +1264,13 @@ private fun ScriptureApp(
                     onHideLockScreen = { disableLockScreen() },
                     onHistory = {
                         scope.launch {
-                            try { historyVerses = ApiClient.api.todayHistory() } catch (_: Exception) {}
+                            try { historyVerses = ApiClient.api.todayHistory(7, religion.takeIf { it > 0 }, language.takeIf { it > 0 }) } catch (_: Exception) {}
                             showHistory = true
                         }
                     },
                     onChapterBrowser = { showChapterBrowser = true },
                     fontSize = fontSize,
-                    streak = streak
+                    streak = streak, today = todayDate
                 )
                 "Favorites" -> FavoritesScreen(
                     savedVerses,
@@ -1137,6 +1297,20 @@ private fun ScriptureApp(
                     onLanguageFilter = { searchLanguageFilter = it; results = emptyList() },
                     onScriptureFilter = { searchScriptureFilter = it; results = emptyList() }
                 )
+                "Discover" -> DiscoverScreen(onOpen = { item ->
+                    when (item) {
+                        DiscoverItem.TRUTHS -> overlay = Overlay.Truths
+                        DiscoverItem.CHALLENGES -> overlay = Overlay.Challenges
+                        DiscoverItem.STORIES -> overlay = Overlay.Stories
+                        DiscoverItem.WIDGETS -> overlay = Overlay.Widgets
+                        DiscoverItem.JOURNAL -> overlay = Overlay.Journal
+                        DiscoverItem.STUDIO -> scope.launch {
+                            val v = verse ?: withContext(Dispatchers.IO) { dao.find(store.getInt("last_verse_id", -1))?.toVerse() }
+                            if (v == null) snackbarHostState.showSnackbar("Open a verse on Home first, then come back.")
+                            else overlay = Overlay.Studio(v)
+                        }
+                    }
+                })
                 else -> SettingsScreen(
                     religion, language, frequency, reminders, lockScreen, paletteIntervalHours, fontSize,
                     religions, languages, settingsResume, error,
@@ -1162,6 +1336,7 @@ private fun ScriptureApp(
                             if (selected != null) {
                                 scriptureId = selected.id
                                 val scriptureIdsStr = allScriptures.joinToString(",") { it.id.toString() }
+                                val prefsChanged = religion != store.getInt("religion", 0) || language != store.getInt("language", 0)
                                 store.edit()
                                     .putInt("religion", religion).putInt("language", language)
                                     .putInt("scripture", selected.id).putString("frequency", frequency)
@@ -1177,20 +1352,11 @@ private fun ScriptureApp(
                                 }
                                 VerseSyncWorker.schedule(context, frequency)
                                 PaletteRefreshWorker.schedule(context)
-                                val current = verse
-                                withContext(Dispatchers.IO) {
-                                    if (current != null && (lockScreen || reminders)) {
-                                        LockScreenVerse.applyIfEnabled(
-                                            context, current.id, current.scripture, current.text, current.reference(), forceWallpaper = lockScreen
-                                        )
-                                    } else VerseNotifier.cancel(context)
-                                }
+                                if (!lockScreen && !reminders) withContext(Dispatchers.IO) { VerseNotifier.cancel(context) }
                                 snackbarHostState.showSnackbar("Preferences saved")
-                                val savedLang = language
-                                val savedScript = selected.id
                                 page = "Home"
-                                store.edit().remove("last_verse_id").apply()
-                                loadToday(random = true, forceLanguage = savedLang, forceScriptureId = savedScript)
+                                // loadToday() re-applies the lock screen / notification with the NEW tradition's verse.
+                                refreshForPreferences(changed = prefsChanged)
                             } else {
                                 error = "Couldn't reach the scripture catalog. Your saved settings were not changed."
                                 snackbarHostState.showSnackbar("Couldn't save preferences. Please try again.")
@@ -1240,6 +1406,7 @@ private fun ScriptureApp(
                             if (selected != null) {
                                 scriptureId = selected.id
                                 val scriptureIdsStr = allScriptures.joinToString(",") { it.id.toString() }
+                                val prefsChanged = religion != store.getInt("religion", 0) || language != store.getInt("language", 0)
                                 store.edit()
                                     .putInt("religion", religion).putInt("language", language)
                                     .putInt("scripture", selected.id).putString("frequency", frequency)
@@ -1256,11 +1423,7 @@ private fun ScriptureApp(
                                 VerseSyncWorker.schedule(context, frequency)
                                 PaletteRefreshWorker.schedule(context)
                                 snackbarHostState.showSnackbar("Preferences saved")
-                                val savedLang = language
-                                val savedScript = selected.id
-                                store.edit().remove("last_verse_id").apply()
-                                // Always fetch new verse in background so Home is ready when user navigates there
-                                loadToday(random = true, forceLanguage = savedLang, forceScriptureId = savedScript)
+                                refreshForPreferences(changed = prefsChanged)
                                 page = targetRoute
                             } else {
                                 snackbarHostState.showSnackbar("Couldn't save preferences. Please try again.")
@@ -1330,6 +1493,29 @@ private fun ScriptureApp(
         )
     }
 
+    // ── Feature overlays ───────────────────────────────────────────────────────
+    LaunchedEffect(configured) {
+        if (configured) try { moods = ApiClient.api.moods().ifEmpty { moods } } catch (_: Exception) {}
+    }
+    LaunchedEffect(verse?.id, language) {
+        storyAvailable = false
+        val v = verse ?: return@LaunchedEffect
+        try { storyAvailable = withContext(Dispatchers.IO) { ApiClient.api.storyForVerse(v.id, language.takeIf { it > 0 }).isSuccessful } } catch (_: Exception) {}
+    }
+    val closeOverlay = { overlay = null }
+    when (val o = overlay) {
+        null -> Unit
+        Overlay.Truths -> UniversalTruthsScreen(language, religions.firstOrNull { it.id == religion }?.code, closeOverlay)
+        Overlay.Challenges -> ChallengesScreen(language, religion, closeOverlay)
+        Overlay.Journal -> MoodJournalScreen(closeOverlay)
+        Overlay.Widgets -> WidgetStudioScreen(closeOverlay)
+        Overlay.Stories -> StoryLibraryScreen(language, religion, closeOverlay)
+        is Overlay.Studio -> StudioScreen(o.verse, religion, religions.firstOrNull { it.id == religion }?.code, if (o.video) StudioTab.VIDEO else StudioTab.SHARE, closeOverlay)
+        is Overlay.StoryForVerse -> StoryScreen(StorySource.ForVerse(o.verseId), language, closeOverlay)
+    }
+    explainFor?.let { ExplainSheet(it) { explainFor = null } }
+    if (showJourney) TreeJourneyScreen(treeDays) { showJourney = false }
+    milestoneStage?.let { MilestoneDialog(it) { milestoneStage = null } }
 }
 @Composable
 private fun ResponsiveContentFrame(content: @Composable BoxScope.() -> Unit) {
@@ -1642,8 +1828,10 @@ private fun Onboarding(
                 CircularProgressIndicator(color = Amber, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
             }
         } else {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                localLanguages.forEach { item ->
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+              localLanguages.chunked(3).forEach { chunk ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                chunk.forEach { item ->
                     val selected = language == item.id
                     Box(
                         Modifier.weight(1f).clip(RoundedCornerShape(14.dp))
@@ -1669,6 +1857,9 @@ private fun Onboarding(
                         }
                     }
                 }
+                repeat(3 - chunk.size) { Spacer(Modifier.weight(1f)) }
+                }
+              }
             }
         }
 
@@ -1700,7 +1891,8 @@ private fun Onboarding(
 @OptIn(ExperimentalMaterial3Api::class)
 private fun HomeScreen(
     verse: Verse?, loading: Boolean, error: String?, favorite: Boolean, lockScreen: Boolean,
-    fontSize: Int, streak: Int,
+    fontSize: Int, streak: Int, today: java.time.LocalDate,
+    moodSlot: @Composable () -> Unit, treeSlot: @Composable () -> Unit, actionsSlot: @Composable () -> Unit,
     onRandom: () -> Unit, onFavorite: () -> Unit, onShare: () -> Unit, onShareText: () -> Unit,
     onWhatsAppStatus: () -> Unit, onShowLockScreen: () -> Unit, onHideLockScreen: () -> Unit,
     onHistory: () -> Unit, onChapterBrowser: () -> Unit
@@ -1714,67 +1906,22 @@ private fun HomeScreen(
         modifier = Modifier.fillMaxSize()
     ) {
         Column(Modifier.fillMaxSize().verticalScroll(scrollState).padding(horizontal = 20.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            val today = remember { java.text.SimpleDateFormat("EEEE, MMMM d", java.util.Locale.getDefault()).format(java.util.Date()) }
-            Row(Modifier.clip(RoundedCornerShape(50)).background(Amber.copy(alpha = 0.1f)).padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.AutoAwesome, contentDescription = null, tint = Amber, modifier = Modifier.size(13.dp))
-                Spacer(Modifier.width(6.dp))
-                Text(today, fontSize = 12.sp, color = Ink, fontWeight = FontWeight.Medium)
-            }
-            if (streak > 0) {
-                Row(Modifier.clip(RoundedCornerShape(50)).background(Amber.copy(alpha = 0.15f)).padding(horizontal = 12.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+            val todayLabel = remember(today) { today.format(java.time.format.DateTimeFormatter.ofPattern("EEEE, MMMM d", java.util.Locale.getDefault())) }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.clip(RoundedCornerShape(50)).background(Amber.copy(alpha = 0.1f)).padding(horizontal = 14.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.AutoAwesome, contentDescription = null, tint = Amber, modifier = Modifier.size(13.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(todayLabel, fontSize = 12.sp, color = Ink, fontWeight = FontWeight.Medium)
+                }
+                Spacer(Modifier.weight(1f))
+                if (streak > 0) Row(Modifier.clip(RoundedCornerShape(50)).background(Amber.copy(alpha = 0.15f)).padding(horizontal = 12.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("🔥", fontSize = 13.sp)
                     Spacer(Modifier.width(5.dp))
                     Text("$streak day streak", fontSize = 12.sp, color = Amber, fontWeight = FontWeight.SemiBold)
                 }
-                // ── Week streak card ─────────────────────────────────────
-                val context2 = LocalContext.current
-                val store2 = remember { context2.getSharedPreferences("reader", 0) }
-                val activeDays = remember {
-                    val set = mutableSetOf<Int>()
-                    val today = java.time.LocalDate.now()
-                    for (i in 0..6) {
-                        val day = today.minusDays(i.toLong())
-                        val key = "read_${day}"
-                        if (store2.getBoolean(key, false)) set.add(day.dayOfWeek.value % 7) // 0=Sun
-                    }
-                    set
-                }
-                val dayLabels = listOf("S", "M", "T", "W", "T", "F", "S")
-                val todayDow = remember { java.time.LocalDate.now().dayOfWeek.value % 7 }
-                Box(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                        .background(Amber.copy(alpha = 0.07f))
-                        .border(BorderStroke(1.dp, Amber.copy(alpha = 0.18f)), RoundedCornerShape(16.dp))
-                        .padding(horizontal = 14.dp, vertical = 12.dp)
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("This week", fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = Amber, letterSpacing = 0.8.sp)
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            dayLabels.forEachIndexed { idx, label ->
-                                val isToday = idx == todayDow
-                                val isActive = idx in activeDays
-                                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    Box(
-                                        Modifier.size(32.dp).clip(CircleShape)
-                                            .background(
-                                                when {
-                                                    isActive -> Amber
-                                                    isToday  -> Amber.copy(alpha = 0.2f)
-                                                    else     -> Amber.copy(alpha = 0.06f)
-                                                }
-                                            )
-                                            .border(BorderStroke(if (isToday) 1.5.dp else 0.dp, Amber.copy(alpha = 0.5f)), CircleShape),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        if (isActive) Text("✓", fontSize = 12.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                                    }
-                                    Text(label, fontSize = 10.sp, color = if (isToday) Amber else InkSoft, fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal)
-                                }
-                            }
-                        }
-                    }
-                }
             }
+            moodSlot()
+            treeSlot()
             if (loading && verse == null) {
                 Box(Modifier.fillMaxWidth().height(280.dp).clip(RoundedCornerShape(28.dp)).background(Amber.copy(alpha = 0.06f)), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -1789,31 +1936,7 @@ private fun HomeScreen(
                 }
             }
             if (verse != null) {
-                Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp))) {
-                    Box(Modifier.matchParentSize().background(Brush.linearGradient(listOf(Color(0xFF1A1025), Color(0xFF2D1B4E), Color(0xFF1A1025)))))
-                    Box(Modifier.size(280.dp).align(Alignment.BottomStart).offset(x = (-60).dp, y = 60.dp).background(Brush.radialGradient(listOf(Gold.copy(alpha = 0.22f), Color.Transparent))))
-                    Box(Modifier.size(180.dp).align(Alignment.TopEnd).offset(x = 40.dp, y = (-40).dp).background(Brush.radialGradient(listOf(PurpleMid.copy(alpha = 0.3f), Color.Transparent))))
-                    Box(Modifier.size(120.dp).align(Alignment.TopEnd).offset(x = 30.dp, y = (-30).dp).clip(CircleShape).border(BorderStroke(1.dp, Amber.copy(alpha = 0.12f)), CircleShape))
-                    Box(Modifier.size(80.dp).align(Alignment.BottomStart).offset(x = (-20).dp, y = 20.dp).clip(CircleShape).border(BorderStroke(1.dp, Amber.copy(alpha = 0.1f)), CircleShape))
-                    Box(Modifier.fillMaxWidth().height(1.dp).align(Alignment.TopCenter).offset(y = 56.dp).background(Brush.horizontalGradient(listOf(Color.Transparent, Amber.copy(alpha = 0.25f), Amber.copy(alpha = 0.25f), Color.Transparent))))
-                    Box(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 26.dp)) {
-                        Column(Modifier.fillMaxWidth().padding(bottom = 36.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(Modifier.clip(RoundedCornerShape(8.dp)).background(Amber.copy(alpha = 0.18f)).border(BorderStroke(1.dp, Amber.copy(alpha = 0.3f)), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 5.dp)) {
-                                    Text(verse.scripture.uppercase(), color = Amber, fontSize = 10.sp, letterSpacing = 1.8.sp, fontWeight = FontWeight.Bold)
-                                }
-                                Spacer(Modifier.weight(1f))
-                                Icon(Icons.Outlined.AutoAwesome, contentDescription = null, tint = Amber.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
-                            }
-                            Text("\u201c${verse.text}\u201d", color = Color(0xFFF5F0E8), fontSize = fontSize.sp, lineHeight = (fontSize + 12).sp, fontWeight = FontWeight.Normal)
-                        }
-                        Column(Modifier.align(Alignment.BottomEnd), horizontalAlignment = Alignment.End) {
-                            Box(Modifier.fillMaxWidth(0.3f).height(1.dp).background(Brush.horizontalGradient(listOf(Color.Transparent, Amber.copy(alpha = 0.5f)))))
-                            Spacer(Modifier.height(8.dp))
-                            Text(verse.reference(), textAlign = TextAlign.End, color = Color(0xFF8A8078), fontSize = 11.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.3.sp)
-                        }
-                    }
-                }
+                ThemedVerseCard(verse, VerseThemes.forDate(today), fontSize)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     val favBg by animateColorAsState(if (favorite) Amber else Color.Transparent, tween(300), label = "favBg")
                     val favContent by animateColorAsState(if (favorite) Color.White else Ink, tween(300), label = "favContent")
@@ -1840,6 +1963,7 @@ private fun HomeScreen(
                         Text("Status", fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1)
                     }
                 }
+                actionsSlot()
                 Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(if (lockScreen) Amber.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surface).border(1.dp, if (lockScreen) Amber.copy(alpha = 0.4f) else Amber.copy(alpha = 0.1f), RoundedCornerShape(20.dp)).padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(40.dp).clip(CircleShape).background(if (lockScreen) Amber.copy(alpha = 0.2f) else Amber.copy(alpha = 0.08f)), contentAlignment = Alignment.Center) {
@@ -2200,8 +2324,10 @@ private fun SettingsScreen(
                     CircularProgressIndicator(color = Amber, modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                 }
             } else {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    localLanguages.forEach { item ->
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                  localLanguages.chunked(3).forEach { chunk ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    chunk.forEach { item ->
                         val selected = language == item.id
                         Box(
                             Modifier.weight(1f).clip(RoundedCornerShape(14.dp))
@@ -2227,6 +2353,9 @@ private fun SettingsScreen(
                             }
                         }
                     }
+                    repeat(3 - chunk.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                  }
                 }
             }
 
