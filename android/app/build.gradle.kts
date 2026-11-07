@@ -95,6 +95,8 @@ dependencies {
     implementation("androidx.glance:glance-appwidget:1.1.1")
     implementation("androidx.glance:glance-material3:1.1.1")
     implementation("com.google.android.play:review-ktx:2.0.2")
+    // Force newer fragment version to resolve play:review-ktx transitive dependency on fragment:1.1.0
+    implementation("androidx.fragment:fragment-ktx:1.8.6")
 
     implementation(platform("com.google.firebase:firebase-bom:34.19.0"))
     implementation("com.google.firebase:firebase-analytics")
