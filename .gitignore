@@ -1,0 +1,26 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+android/.gradle/
+android/local.properties
+android/**/build/
+*.iml
+.idea/
+.DS_Store
+prompt_log.txt
+
+android/.kotlin/
+*.jks
+*.keystore
+android/keystore/
+google-services.json
+
+*.p12
+key.properties
+
+# Firebase service account — contains private key, never commit
+backend/firebase-service-account.json
+backend/*-service-account.json
+
+backend/firebase-service-account.json

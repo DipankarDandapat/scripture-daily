@@ -1,0 +1,89 @@
+package com.scripturedaily.data
+
+import android.content.Context
+import androidx.room.Database
+import androidx.room.Dao
+import androidx.room.Entity
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.PrimaryKey
+import androidx.room.Query
+import androidx.room.Room
+import androidx.room.RoomDatabase
+import kotlinx.coroutines.flow.Flow
+
+@Entity(tableName = "cached_verses")
+data class CachedVerse(
+    @PrimaryKey val id: Int,
+    val scriptureId: Int,
+    val languageId: Int,
+    val scripture: String,
+    val religion: String,
+    val book: String?,
+    val chapter: Int,
+    val verseNumber: Int,
+    val language: String,
+    val text: String,
+    val translation: String?,
+    val source: String,
+    val isDemo: Boolean,
+    val savedAt: Long = System.currentTimeMillis(),
+    val favorite: Boolean = false,
+    val readDate: String? = null  // "YYYY-MM-DD" when marked read
+) {
+    fun reference() = "${book?.let { "$it · " } ?: ""}Chapter $chapter · Verse $verseNumber"
+    fun toVerse() = Verse(id, scripture, religion, book, chapter, verseNumber, language, text, translation, source, "", isDemo, scriptureId = scriptureId, languageId = languageId)
+}
+
+fun Verse.toCached(scriptureId: Int, languageId: Int, favorite: Boolean = false, savedAt: Long = System.currentTimeMillis()) = CachedVerse(
+    id, this.scriptureId ?: scriptureId, this.languageId ?: languageId, scripture, religion, book, chapter, verseNumber, language, text, translation, source, isDemo, savedAt, favorite
+)
+
+@Dao
+interface VerseDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun save(verse: CachedVerse)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveAll(verses: List<CachedVerse>)
+    @Query("SELECT * FROM cached_verses WHERE id = :id LIMIT 1") suspend fun find(id: Int): CachedVerse?
+    @Query("SELECT * FROM cached_verses WHERE favorite = 1 ORDER BY savedAt DESC") fun observeFavorites(): Flow<List<CachedVerse>>
+    @Query("SELECT * FROM cached_verses WHERE favorite = 1 ORDER BY savedAt DESC") suspend fun favorites(): List<CachedVerse>
+    @Query("SELECT * FROM cached_verses WHERE scriptureId = :scriptureId AND languageId = :languageId AND favorite = 0 ORDER BY savedAt DESC LIMIT 1") suspend fun matching(scriptureId: Int, languageId: Int): CachedVerse?
+    @Query("SELECT * FROM cached_verses WHERE favorite = 0 ORDER BY savedAt DESC LIMIT 1") suspend fun latestAny(): CachedVerse?
+    @Query("SELECT * FROM cached_verses WHERE scriptureId = :scriptureId AND languageId = :languageId ORDER BY id") suspend fun forCombo(scriptureId: Int, languageId: Int): List<CachedVerse>
+    @Query("UPDATE cached_verses SET favorite = :favorite WHERE id = :id") suspend fun setFavorite(id: Int, favorite: Boolean)
+    @Query("UPDATE cached_verses SET readDate = :date WHERE id = :id") suspend fun setReadDate(id: Int, date: String?)
+    @Query("UPDATE cached_verses SET favorite = 0") suspend fun clearAllFavorites()
+}
+
+// ── Catalog cache (religions + languages, TTL 24 h) ───────────────────────────
+// type: "religion" | "language" | "scripture"
+@Entity(tableName = "cached_catalog")
+data class CachedCatalogItem(
+    @PrimaryKey val key: String,   // e.g. "religion_1", "language_2"
+    val type: String,
+    val itemId: Int,
+    val name: String,
+    val code: String,
+    val religion: String?,         // non-null for scriptures
+    val scripturesJson: String?,   // JSON array for religions: "[{id,name,code},…]"
+    val fetchedAt: Long = System.currentTimeMillis()
+)
+
+@Dao
+interface CatalogDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun saveAll(items: List<CachedCatalogItem>)
+    @Query("SELECT * FROM cached_catalog WHERE type = :type ORDER BY itemId") suspend fun byType(type: String): List<CachedCatalogItem>
+    @Query("SELECT MIN(fetchedAt) FROM cached_catalog WHERE type = :type") suspend fun oldestFetch(type: String): Long?
+    @Query("DELETE FROM cached_catalog WHERE type = :type") suspend fun deleteByType(type: String)
+}
+
+@Database(entities = [CachedVerse::class, CachedCatalogItem::class], version = 4, exportSchema = false)
+abstract class ScriptureDatabase : RoomDatabase() {
+    abstract fun verses(): VerseDao
+    abstract fun catalog(): CatalogDao
+    companion object {
+        @Volatile private var instance: ScriptureDatabase? = null
+        fun get(context: Context): ScriptureDatabase = instance ?: synchronized(this) {
+            instance ?: Room.databaseBuilder(context.applicationContext, ScriptureDatabase::class.java, "scripture_daily.db").fallbackToDestructiveMigration().build().also { instance = it }
+        }
+    }
+}

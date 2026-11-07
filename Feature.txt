@@ -1,0 +1,748 @@
+# WISDOMONE – COMPLETE SETTINGS REDESIGN & VERSE REFRESH MANAGEMENT
+
+Act as a Senior Android Developer, Python FastAPI Backend Developer, Database Architect and UI/UX Designer.
+
+Your task is to redesign the complete Settings experience and fix the existing verse refresh and persistence issues in the WisdomOne application.
+
+IMPORTANT: This is an existing application. First analyse the complete existing frontend, backend, SQLite database, APIs, scheduling mechanism, Android widgets and lock-screen wallpaper implementation.
+
+Do not unnecessarily rewrite existing working functionality.
+
+==================================================
+PART 1: COMPLETE SETTINGS PAGE REDESIGN
+==================================================
+
+Redesign the complete Settings experience using the supplied WisdomOne UI references.
+
+Maintain the existing design identity:
+- Warm cream background.
+- Deep purple primary colour.
+- Golden and soft orange accents.
+- Rounded cards.
+- Elegant typography.
+- Consistent spacing.
+- Premium-quality Android UI/UX.
+- Smooth animations and transitions.
+
+### 1. Settings Home
+
+Keep the following settings menu items:
+
+1. Tradition & Language
+2. Verse Frequency
+3. Lock Screen & Wallpaper
+4. Widget Studio
+5. Reading Preferences
+6. App Theme
+7. Notifications
+8. Battery & Performance
+9. Help & Support
+10. Rate WisdomOne
+
+Remove:
+- My Profile.
+- Downloads.
+
+The application does not require user profile information or a downloads management section.
+
+Keep existing bottom navigation.
+
+### 2. Tradition & Language
+
+Support all existing traditions:
+
+- Hinduism
+- Christianity
+- Islam
+- Buddhism
+- General Wisdom
+
+Support all currently available application languages.
+
+Expected behaviour:
+
+- Save the selected tradition and language persistently.
+- All verses, wallpapers, widgets and recommendations must respect these selections.
+- When the tradition changes, refresh the active verse according to the new tradition.
+- Never display religious content from another tradition.
+- General Wisdom must remain religion-neutral.
+
+### 3. Verse Frequency – SINGLE CENTRALIZED CONTROL
+
+This is the only place where users should configure verse update frequency.
+
+Provide four options:
+
+- Every 1 hour.
+- Every 6 hours.
+- Every 12 hours.
+- Every 24 hours.
+
+Remove duplicate frequency controls from:
+- Lock Screen & Wallpaper.
+- Widget Studio.
+- Other settings screens.
+
+The selected frequency must control the automatic verse update cycle across:
+
+1. Home page daily verse.
+2. Lock-screen wallpaper.
+3. Android home-screen widget.
+
+All three surfaces must use the same active verse.
+
+IMPORTANT:
+Do not create separate scheduling mechanisms for the Home page, lock screen and widget.
+
+Reuse the existing scheduling mechanism and centralize its configuration.
+
+### 4. Lock Screen & Wallpaper
+
+Redesign the existing Lock Screen & Wallpaper screen.
+
+Provide:
+
+A. Auto Verse Wallpaper
+- Enable/disable automatic wallpaper updates.
+- Use the centralized Verse Frequency setting.
+- Do not introduce another frequency selector.
+
+B. Wallpaper Content Mode
+
+Provide two options:
+
+Option 1: Change Verse + Wallpaper
+- When a scheduled verse update occurs, select a new verse.
+- Generate a fresh wallpaper using that verse.
+- Apply the wallpaper automatically.
+
+Option 2: Keep Same Verse + Change Wallpaper
+- Retain the current active verse.
+- Change the wallpaper background according to the selected frequency.
+- Keep the scripture reference and verse text unchanged.
+
+IMPORTANT:
+The second mode must not change the active Home page verse or widget verse.
+
+C. Tradition-Wise Wallpaper Categories
+
+Display wallpaper categories dynamically according to the selected tradition.
+
+Hinduism:
+- Krishna
+- Shiva
+- Ganesha
+- Radha Krishna
+- Bhagavad Gita
+
+Christianity:
+- Jesus
+- Cross
+- Bible
+- Church
+- Biblical Scenes
+
+Islam:
+- Islamic Geometric Patterns
+- Mosques
+- Quran Calligraphy
+- Arabic Artwork
+
+Buddhism:
+- Buddha
+- Dharma
+- Meditation
+- Lotus
+
+General Wisdom:
+- Nature
+- Mountains
+- Sunrise
+- Ocean
+- Flowers
+- Universal Inspiration
+
+Never mix tradition-specific artwork.
+
+General Wisdom must not contain religious images or symbols.
+
+D. Wallpaper Colour Themes
+
+Provide these colour themes:
+
+1. Multicolor (Automatic)
+2. Golden
+3. Royal Purple
+4. Forest Green
+5. Ocean Blue
+6. Soft Sand
+7. Midnight
+
+Multicolor (Automatic):
+- Automatically rotate through beautiful colour palettes.
+- Change the palette according to the scheduled wallpaper update.
+- Generate visually different wallpapers.
+- Use suitable text colours and contrast.
+- Do not simply change a flat background colour.
+
+Fixed themes:
+- Preserve the selected colour theme across updates.
+- Changing the verse must not change the user's fixed colour preference.
+
+E. Wallpaper Preview
+
+Provide:
+- Live wallpaper preview.
+- Selected tradition.
+- Selected language.
+- Selected wallpaper category.
+- Selected colour theme.
+- Current verse and scripture reference.
+- Save and Apply options.
+
+Reuse the existing exact-device-screen-size wallpaper generation pipeline.
+
+Respect lock-screen clock areas, system icons, aspect ratio and text readability.
+
+### 5. Wallpaper Gallery
+
+Create a beautiful image gallery.
+
+Requirements:
+- Filter images by the selected tradition.
+- Provide appropriate categories.
+- Show image previews.
+- Allow users to select a preferred wallpaper style.
+- Show selected-state indicators.
+- Support Multicolor and fixed colour themes.
+- Avoid displaying unrelated religious imagery.
+
+### 6. Widget Studio
+
+Retain the existing Widget Studio functionality.
+
+Provide:
+
+Colour themes:
+- Day
+- Dusk
+- Sage
+- Ocean
+- Sand
+- Midnight
+
+Widget layouts:
+- Standard
+- Compact
+- Large Text
+
+Features:
+- Live widget preview.
+- Add widget to Android home screen.
+- Select colour theme.
+- Select layout.
+- Adjust text appearance where supported.
+
+IMPORTANT:
+Do not add another frequency selector.
+
+Widget refresh must use the centralized Verse Frequency and display the same active verse as the Home page.
+
+Changing widget colours must not affect lock-screen wallpaper colours.
+
+Changing wallpaper colours must not affect widget colours.
+
+### 7. Reading Preferences
+
+Retain and improve:
+- Verse font size.
+- Scripture name visibility.
+- Chapter and verse reference visibility.
+- Translation visibility where available.
+- WisdomOne branding visibility.
+
+### 8. App Theme
+
+Support:
+- Light.
+- Dark.
+- System Default.
+
+### 9. Notifications
+
+Provide independent notification preferences for:
+- Daily verse reminder.
+- Verse update notification.
+- Wallpaper update notification, if enabled.
+- Other existing supported notifications.
+
+Do not send unnecessary repeated notifications.
+
+### 10. Battery & Performance
+
+Provide useful guidance for:
+- Background scheduling.
+- Battery optimization.
+- Reliable widget updates.
+- Wallpaper refresh restrictions.
+
+Do not encourage unnecessary battery consumption.
+
+### 11. Help & Support / Rate WisdomOne
+
+Retain existing functionality and improve visual consistency.
+
+==================================================
+PART 2: CRITICAL ISSUE – VERSE CHANGES ON EVERY API REFRESH
+==================================================
+
+This is one of the most important requirements.
+
+Currently, the Home page verse may change when:
+- The user refreshes the Home page.
+- The application is reopened.
+- The Home screen is recreated.
+- An API request is repeated.
+- The user navigates between screens.
+- The app makes multiple backend requests.
+
+THIS BEHAVIOUR MUST BE FIXED.
+
+A verse must never change simply because an API was called again.
+
+The application must maintain ONE ACTIVE VERSE at a time for the current tradition and language.
+
+### 1. Expected Verse Behaviour
+
+Example:
+
+The user selects:
+- Tradition: Hinduism.
+- Language: English.
+- Verse Frequency: Every 6 hours.
+
+At 10:00 AM:
+- The backend selects one verse.
+- This becomes the active verse.
+- Home page displays that verse.
+- Lock-screen wallpaper uses that verse.
+- Home-screen widget uses that verse.
+
+At 10:15 AM:
+- User refreshes Home page.
+- The same verse must be displayed.
+
+At 10:30 AM:
+- User closes and reopens the application.
+- The same verse must be displayed.
+
+At 11:00 AM:
+- User navigates between Home, Saved, Explore and Settings.
+- The same verse must remain active.
+
+At 11:59 AM:
+- User refreshes the Home page multiple times.
+- The same verse must remain active.
+
+At 12:00 PM:
+- The configured 6-hour update cycle is reached.
+- A new verse is selected automatically.
+- Home page, lock-screen wallpaper and widget update to the same new verse.
+
+The same behaviour must work for all supported traditions and languages.
+
+### 2. Discover Another Verse – Explicit User Action
+
+The existing "Discover another verse" button must remain functional.
+
+Expected behaviour:
+
+1. User opens Home page.
+2. The currently active verse is displayed.
+3. User clicks "Discover another verse".
+4. The application explicitly requests a new verse.
+5. Backend selects a new eligible verse.
+6. The new verse becomes the active verse.
+7. Home page displays the new verse.
+8. Lock-screen wallpaper and widget synchronize with the new active verse.
+9. The scheduled update timer restarts from the explicit selection time.
+
+Only this explicit user action should manually change the active verse before the next scheduled update.
+
+Do not change the verse when:
+- Home page is refreshed.
+- API is called again.
+- App is reopened.
+- User switches tabs.
+- Widget is refreshed.
+- Wallpaper is regenerated using the same verse.
+
+### 3. Time-Based Verse Modes
+
+Support the existing verse selection modes.
+
+For example:
+- Daily mode: Maintain one selected verse for the calendar day.
+- Scheduled frequency mode: Maintain one active verse until the configured update interval expires.
+
+In Daily mode:
+- Do not select a different verse on every Home page visit.
+- Keep the same verse throughout the day unless the user explicitly clicks Discover another verse.
+
+In Scheduled frequency mode:
+- Automatically change the active verse only when the configured interval expires or the user explicitly discovers another verse.
+
+Changing the selected mode or frequency must be handled explicitly and must not accidentally trigger multiple verse selections.
+
+==================================================
+PART 3: BACKEND API DESIGN
+==================================================
+
+Review the existing FastAPI backend before implementing APIs.
+
+Reuse existing endpoints if they already provide the required functionality.
+
+Create or update the following logical API operations.
+
+### API 1: Get Active Verse
+
+GET /api/v1/verses/active
+
+Purpose:
+Return the currently active verse.
+
+Possible response:
+
+{
+  "success": true,
+  "data": {
+    "verse_id": 125,
+    "scripture_id": 1,
+    "tradition_id": 1,
+    "language_id": 1,
+    "book": "Bhagavad Gita",
+    "chapter": 2,
+    "verse_number": 47,
+    "text": "Your existing licensed verse content",
+    "translation": "English",
+    "selected_at": "2026-11-05T10:00:00",
+    "next_update_at": "2026-11-05T16:00:00",
+    "selection_mode": "scheduled"
+  }
+}
+
+IMPORTANT:
+This API must NEVER randomly select a new verse on every GET request.
+
+It must return the already persisted active verse.
+
+Multiple calls must return the same verse ID until the active verse is explicitly changed or the scheduled update is due.
+
+### API 2: Discover Another Verse
+
+POST /api/v1/verses/discover
+
+Purpose:
+Select a new verse only when the user explicitly clicks the Discover another verse button.
+
+Expected behaviour:
+- Select a new eligible verse.
+- Respect selected tradition and language.
+- Avoid immediate repetition.
+- Persist the new active verse.
+- Reset the scheduled update timer.
+- Notify the Home page, lock screen and widget update mechanism.
+
+Return only one selected verse in the response.
+
+### API 3: Get Verse Preferences
+
+GET /api/v1/settings/verse-preferences
+
+Return:
+- Selected tradition.
+- Selected language.
+- Verse frequency.
+- Selection mode.
+- Wallpaper content mode.
+- Wallpaper colour theme.
+- Widget colour theme.
+- Other required preferences.
+
+### API 4: Update Verse Preferences
+
+PUT /api/v1/settings/verse-preferences
+
+Update the user's selected preferences.
+
+If the tradition or language changes:
+- Invalidate the previous active verse if it no longer matches.
+- Select one valid verse for the new combination.
+- Persist it.
+- Synchronize all display surfaces.
+
+If only the wallpaper colour theme changes:
+- Do not change the active verse.
+
+If only the widget colour theme changes:
+- Do not change the active verse.
+
+If the frequency changes:
+- Update the next scheduled refresh time according to the defined scheduling policy.
+- Do not select a random verse merely because the settings screen was saved.
+
+### API 5: Refresh Scheduled Verse
+
+Implement an internal scheduler operation or reuse the existing scheduled job.
+
+When the configured update time is reached:
+- Select one new eligible verse.
+- Persist it as the active verse.
+- Update the next scheduled time.
+- Trigger the wallpaper and widget refresh mechanisms.
+
+Do not expose an unrestricted public API that allows arbitrary clients to rotate the verse without authorization or an explicit user action.
+
+==================================================
+PART 4: SQLITE DATABASE CHANGES
+==================================================
+
+Review the existing SQLite database and SQLAlchemy entities.
+
+Create or update the required tables.
+
+Suggested logical entities:
+
+### 1. User/App Preferences
+
+Store:
+- Tradition ID.
+- Language ID.
+- Verse frequency.
+- Selection mode.
+- Wallpaper content mode.
+- Wallpaper category.
+- Wallpaper colour theme.
+- Widget colour theme.
+- Widget layout.
+- Auto wallpaper enabled/disabled.
+
+### 2. Active Verse State
+
+Store:
+- Active verse ID.
+- Tradition ID.
+- Language ID.
+- Selected timestamp.
+- Next update timestamp.
+- Selection source (scheduled, daily or manual).
+- Last explicitly discovered verse ID.
+
+Ensure only one active verse exists for the relevant installation and preference combination.
+
+### 3. Verse History
+
+Store:
+- Previously displayed verse IDs.
+- Selection timestamp.
+- Selection reason.
+
+Use this to avoid immediately repeating verses.
+
+### 4. Wallpaper Preferences
+
+Store:
+- Selected wallpaper category.
+- Selected colour theme.
+- Wallpaper content mode.
+- Automatic wallpaper status.
+
+### 5. Widget Preferences
+
+Store:
+- Selected widget theme.
+- Selected widget layout.
+- Widget display preferences.
+
+Do not store redundant frequency values in wallpaper or widget preference records.
+
+IMPORTANT:
+The app does not require personal profile information.
+
+If the backend needs to distinguish anonymous installations, use an appropriate non-personal installation identifier or the existing local persistence mechanism. Do not introduce unnecessary collection of names, email addresses or other personal information.
+
+Use proper database migrations and preserve existing valid records.
+
+==================================================
+PART 5: FRONTEND STATE MANAGEMENT
+==================================================
+
+The Home page must not independently select random verses.
+
+Use a single source of truth for the active verse.
+
+Expected frontend behaviour:
+
+1. On application startup, load the persisted active verse.
+2. If a valid active verse exists, display it.
+3. Do not randomly select another verse during rendering.
+4. On Home page refresh, reload the existing active verse.
+5. On tab navigation, retain the active verse.
+6. On application recreation, restore the active verse.
+7. When Discover another verse is clicked, request a new verse explicitly.
+8. When the scheduled interval expires, update the active verse.
+9. Synchronize the updated verse with all dependent components.
+
+Use persistent local caching so that temporary network failures do not cause the verse to change or disappear.
+
+If the backend is unavailable:
+- Display the last valid cached verse.
+- Do not select a random replacement.
+- Retry synchronization when connectivity returns.
+
+==================================================
+PART 6: SCHEDULING AND SYNCHRONIZATION
+==================================================
+
+There must be ONE centralized verse scheduling mechanism.
+
+It should coordinate:
+- Home page.
+- Lock-screen wallpaper.
+- Home-screen widget.
+
+Do not create three separate random verse schedulers.
+
+The scheduled update must be idempotent.
+
+If multiple refresh operations occur simultaneously:
+- Only one new verse should be selected.
+- Concurrent requests must not create duplicate verse selections.
+- Use database transactions or appropriate locking.
+- Update all dependent surfaces using the same active verse ID.
+
+Use Android-supported background scheduling mechanisms.
+
+Account for:
+- Doze mode.
+- Battery optimization.
+- Background execution restrictions.
+- Device restart.
+- Time zone changes.
+- Offline operation.
+
+For anonymous installations, preserve the active verse and settings locally. If backend synchronization is available, keep the server state consistent with the local state.
+
+==================================================
+PART 7: IMPORTANT ACCEPTANCE TEST CASES
+==================================================
+
+Execute all the following tests.
+
+TEST 1:
+Open Home page.
+Record active verse ID.
+Refresh Home page 10 times.
+Expected: Same verse ID every time.
+
+TEST 2:
+Open and close the application 10 times.
+Expected: Same active verse ID.
+
+TEST 3:
+Navigate between all bottom navigation tabs.
+Expected: Active verse remains unchanged.
+
+TEST 4:
+Call GET /api/v1/verses/active 20 times.
+Expected: Same active verse ID until an explicit or scheduled update occurs.
+
+TEST 5:
+Click Discover another verse.
+Expected: New verse selected and persisted.
+
+TEST 6:
+Refresh Home page after discovering a new verse.
+Expected: Newly selected verse remains unchanged.
+
+TEST 7:
+Change tradition from Hinduism to Islam.
+Expected: Active verse changes to a valid Islamic verse.
+
+TEST 8:
+Change language from English to Hindi.
+Expected: Active verse changes to a valid Hindi verse.
+
+TEST 9:
+Set frequency to 6 hours.
+Expected: Verse changes only when the scheduled update is due, or the user explicitly discovers another verse.
+
+TEST 10:
+Change wallpaper colour theme.
+Expected: Active verse remains unchanged.
+
+TEST 11:
+Change widget colour theme.
+Expected: Active verse remains unchanged.
+
+TEST 12:
+Regenerate wallpaper using the same verse.
+Expected: Verse ID remains unchanged.
+
+TEST 13:
+Simulate network failure.
+Expected: Last valid verse remains visible.
+
+TEST 14:
+Trigger multiple scheduled refresh operations simultaneously.
+Expected: Only one new active verse is selected.
+
+TEST 15:
+Verify synchronization.
+Expected: Home page, lock-screen wallpaper and widget display the same active verse in the normal synchronized update mode.
+
+TEST 16:
+Verify Keep Same Verse + Change Wallpaper mode.
+Expected: Wallpaper background changes without changing the active Home page verse or widget verse.
+
+TEST 17:
+Restart the Android device.
+Expected: Persisted preferences and active verse are restored.
+
+==================================================
+PART 8: FINAL DELIVERY REQUIREMENTS
+==================================================
+
+After implementation, provide:
+
+1. Summary of the redesigned Settings screens.
+2. List of removed duplicate frequency controls.
+3. List of modified and newly created frontend files.
+4. List of modified and newly created backend files.
+5. SQLite schema changes and migration scripts.
+6. API endpoint documentation.
+7. Explanation of the active verse persistence mechanism.
+8. Explanation of centralized scheduling.
+9. Test cases executed and actual results.
+10. Any known limitations.
+
+Do not mark a feature complete merely because its UI has been implemented.
+
+Every setting must persist and perform its actual functionality.
+
+Every API must be integrated and tested.
+
+The Home page must never change its active verse simply because of an API refresh, page reload, application reopening or navigation.
+
+The only permitted reasons for changing the active verse are:
+1. The configured scheduled update.
+2. An explicit user action through Discover another verse.
+3. An explicit change of tradition, language or verse selection mode requiring a new valid verse.
+
+IMPORTANT FINAL INSTRUCTION:
+
+First analyse the existing project and prepare an implementation plan.
+
+Then implement the changes in the existing architecture, update the SQLite database safely, integrate all APIs, and perform complete regression testing.
+
+Do not create duplicate functionality or break existing working features.

@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "target_total_images": 100,
+  "included_images": 20,
+  "traditions": {
+    "Hinduism": {
+      "status": "included",
+      "count": 20,
+      "resource_prefix": "wallpaper_hindu_",
+      "format": "webp",
+      "dimensions": [
+        600,
+        900
+      ],
+      "categories": [
+        "Krishna",
+        "Shiva",
+        "Ganesha",
+        "Radha Krishna",
+        "Bhagavad Gita",
+        "Nature"
+      ]
+    },
+    "Christianity": {
+      "status": "pending_asset_pack",
+      "count": 0,
+      "categories": [
+        "Jesus",
+        "Cross",
+        "Bible",
+        "Church",
+        "Biblical Scenes"
+      ]
+    },
+    "Islam": {
+      "status": "pending_asset_pack",
+      "count": 0,
+      "categories": [
+        "Islamic Geometric Patterns",
+        "Mosques",
+        "Quran Calligraphy",
+        "Arabic Artwork"
+      ]
+    },
+    "Buddhism": {
+      "status": "pending_asset_pack",
+      "count": 0,
+      "categories": [
+        "Buddha",
+        "Dharma",
+        "Meditation",
+        "Lotus"
+      ]
+    },
+    "General Wisdom": {
+      "status": "pending_asset_pack",
+      "count": 0,
+      "categories": [
+        "Nature",
+        "Mountains",
+        "Sunrise",
+        "Ocean",
+        "Flowers",
+        "Universal Inspiration"
+      ]
+    }
+  },
+  "notes": "The 20 included Hindu wallpapers are AI-generated original artwork cropped from a 5x4 contact sheet. The remaining 80 images are not fabricated or duplicated; add separately curated/generated assets before claiming the 100-image pack is complete."
+}

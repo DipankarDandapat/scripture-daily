@@ -1,0 +1,15 @@
+384:     val savedVerses by remember { dao.observeFavorites() }.collectAsState(initial = emptyList())
+495:                         if (existing != null) dao.setFavorite(v.id, true)
+499:                     dao.favorites().filter { it.id !in serverIds }.forEach { dao.setFavorite(it.id, false) }
+577:     suspend fun toggleFavorite(v: Verse) {
+581:         if (existing != null) dao.setFavorite(v.id, nowFavorite)
+585:             if (nowFavorite) ApiClient.api.addFavorite(FavoriteInput(v.id))
+586:             else ApiClient.api.removeFavorite(v.id)
+815:                     onFavorite = { verse?.let { v -> scope.launch { toggleFavorite(v) } } },
+839:                 "Favorites" -> FavoritesScreen(
+842:                     onRemove = { cached -> scope.launch { dao.setFavorite(cached.id, false) } }
+852:                     onFavorite = { v -> scope.launch { toggleFavorite(v) } },
+955:             onFavorite = { v -> scope.launch { toggleFavorite(v) } },
+967:             onFavorite = { v -> scope.launch { toggleFavorite(v) } },
+1362: private fun FavoritesScreen(items: List<CachedVerse>, onOpen: (CachedVerse) -> Unit, onRemove: (CachedVerse) -> Unit) {
+1404:                                             .clickable { onRemove(item) },

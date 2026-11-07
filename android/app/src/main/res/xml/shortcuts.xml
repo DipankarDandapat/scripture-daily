@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <shortcut
+        android:shortcutId="today_verse"
+        android:enabled="true"
+        android:icon="@drawable/shortcut_today"
+        android:shortcutShortLabel="@string/shortcut_today_short"
+        android:shortcutLongLabel="@string/shortcut_today_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.scripturedaily"
+            android:targetClass="com.scripturedaily.MainActivity">
+            <extra android:name="shortcut_tab" android:value="Home" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="saved_verses"
+        android:enabled="true"
+        android:icon="@drawable/shortcut_saved"
+        android:shortcutShortLabel="@string/shortcut_saved_short"
+        android:shortcutLongLabel="@string/shortcut_saved_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.scripturedaily"
+            android:targetClass="com.scripturedaily.MainActivity">
+            <extra android:name="shortcut_tab" android:value="Favorites" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="explore"
+        android:enabled="true"
+        android:icon="@drawable/shortcut_explore"
+        android:shortcutShortLabel="@string/shortcut_explore_short"
+        android:shortcutLongLabel="@string/shortcut_explore_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.scripturedaily"
+            android:targetClass="com.scripturedaily.MainActivity">
+            <extra android:name="shortcut_tab" android:value="Explore" />
+        </intent>
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="share_verse"
+        android:enabled="true"
+        android:icon="@drawable/shortcut_share"
+        android:shortcutShortLabel="@string/shortcut_share_short"
+        android:shortcutLongLabel="@string/shortcut_share_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.scripturedaily"
+            android:targetClass="com.scripturedaily.MainActivity">
+            <extra android:name="shortcut_tab" android:value="Share" />
+        </intent>
+    </shortcut>
+
+</shortcuts>
