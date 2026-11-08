@@ -1475,7 +1475,11 @@ private fun ScriptureApp(
     explainFor?.let { v -> ExplainSheet(v, onDismiss = { explainFor = null }, onReflect = { explainFor = null; reflectFor = v }) }
     reflectFor?.let { v -> TodayReflectionSheet(v, onDismiss = { reflectFor = null }, onSaved = { refreshTree() }) }
     if (showJourney) TreeJourneyScreen(treeDays, treeRemote) { showJourney = false }
-    milestoneStage?.let { MilestoneDialog(it) { milestoneStage = null } }
+    // Level-completion interstitial: off by default on the server; only at the natural break after the celebration, never mid-reading.
+    milestoneStage?.let { st ->
+        LaunchedEffect(st) { if (st == TreeStage.FRUITS) com.scripturedaily.ads.AdManager.preloadInterstitial("tree_completion_interstitial") }
+        MilestoneDialog(st) { milestoneStage = null; if (st == TreeStage.FRUITS) com.scripturedaily.ads.AdManager.showInterstitial(activity, "tree_completion_interstitial") }
+    }
 }
 /** Shown for at most a few seconds while the app configuration is fetched (never indefinitely: see AppConfigManager). */
 @Composable
