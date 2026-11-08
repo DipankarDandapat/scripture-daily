@@ -9,6 +9,10 @@ from app.seed import seed_database
 from app.api.v1.routes import router
 from app.api.v1.features import router as features_router
 from app.api.v1.studio import router as studio_router
+from app.api.v1.journal import router as journal_router
+from app.api.v1.config import router as config_router
+from app.services.app_config import ensure_app_config
+from app.services.reflections import ensure_reflection_questions
 
 
 def _ensure_schema() -> None:
@@ -54,7 +58,10 @@ def _add_missing_columns() -> None:
         cols = {c["name"] for c in insp.get_columns("user_preferences")}
         if "wallpaper_mode" not in cols:
             with engine.begin() as conn:
-                conn.execute(text("ALTER TABLE user_preferences ADD COLUMN wallpaper_mode VARCHAR(40) NOT NULL DEFAULT 'change_verse'"))
+                conn.execute(text("ALTER TABLE user_preferences ADD COLUMN wallpaper_mode VARCHAR(40) NOT NULL DEFAULT 'verse_and_image'"))
+        # Legacy wallpaper modes (change_verse / keep_same_verse) are replaced by verse_and_image / keep_image / colors.
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE user_preferences SET wallpaper_mode = 'verse_and_image' WHERE wallpaper_mode IN ('change_verse', 'keep_same_verse')"))
     if "devices" in insp.get_table_names():
         cols = {c["name"] for c in insp.get_columns("devices")}
         if "fcm_token" not in cols:
@@ -68,6 +75,8 @@ Base.metadata.create_all(bind=engine)
 _add_missing_columns()
 with SessionLocal() as _db:
     seed_database(_db)
+    ensure_reflection_questions(_db)
+    ensure_app_config(_db)
 
 init_firebase(settings.firebase_credentials_path)
 
@@ -82,6 +91,8 @@ app.add_middleware(CORSMiddleware, allow_origins=settings.allowed_origins, allow
 app.include_router(router, prefix="/api/v1")
 app.include_router(features_router, prefix="/api/v1")
 app.include_router(studio_router, prefix="/api/v1")
+app.include_router(journal_router, prefix="/api/v1")
+app.include_router(config_router, prefix="/api/v1")
 
 
 @app.get("/")

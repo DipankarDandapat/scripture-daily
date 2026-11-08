@@ -14,6 +14,10 @@ from app.schemas.api import AuthInput, TokenOut, UserOut, CatalogOut, ReligionOu
 from app.core.firebase import send_to_tokens, send_to_topic
 
 router = APIRouter()
+# Lock-screen wallpaper behaviour. verse_and_image = "Change Verse and Image Together" (default); keep_image = "Keep Same Image";
+# colors = both options off, so the verse is drawn on the multi-theme colour backgrounds. Legacy values are mapped, not rejected.
+WALLPAPER_MODES = {"verse_and_image", "keep_image", "colors"}
+WALLPAPER_MODE_ALIASES = {"change_verse": "verse_and_image", "keep_same_verse": "verse_and_image"}
 _ACTIVE_VERSE_LOCKS: dict[str, Lock] = {}
 _ACTIVE_VERSE_LOCKS_GUARD = Lock()
 
@@ -308,8 +312,7 @@ def get_active_verse(user: User = Depends(current_user), db: Session = Depends(g
             state_next = _aware(state.next_update_at)
             same_preferences = state.religion_id == prefs.religion_id and state.language_id == prefs.language_id
             active = db.get(Verse, state.verse_id)
-            wallpaper_only = prefs.wallpaper_mode == "keep_same_verse"
-            if same_preferences and active is not None and (state_next > now or wallpaper_only):
+            if same_preferences and active is not None and state_next > now:
                 return _active_payload(state, active)
             previous_id = state.verse_id
         else:
@@ -383,7 +386,9 @@ def save_preferences(data: PreferenceInput, user: User = Depends(current_user), 
     with _active_verse_lock(user.id):
         db.execute(select(User.id).where(User.id == user.id).with_for_update()).first()
         if data.frequency not in {"daily", "1h", "6h", "12h", "24h"}: raise HTTPException(status_code=422, detail="frequency must be daily, 1h, 6h, 12h, or 24h")
-        if data.wallpaper_mode not in {"change_verse", "keep_same_verse"}: raise HTTPException(status_code=422, detail="wallpaper_mode must be change_verse or keep_same_verse")
+        mode = WALLPAPER_MODE_ALIASES.get(data.wallpaper_mode, data.wallpaper_mode)
+        if mode not in WALLPAPER_MODES: raise HTTPException(status_code=422, detail="wallpaper_mode must be verse_and_image, keep_image or colors")
+        data.wallpaper_mode = mode
         ids = [int(x) for x in data.scripture_ids.split(",") if x.strip().isdigit()]
         if not ids: raise HTTPException(status_code=422, detail="scripture_ids must contain at least one valid ID")
         for sid in ids:

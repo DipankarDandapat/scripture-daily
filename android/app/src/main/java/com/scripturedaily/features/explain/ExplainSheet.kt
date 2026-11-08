@@ -9,7 +9,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -39,7 +42,7 @@ private val cache = HashMap<Int, String>()
 /** "Explain this to me like I'm 5": a short, simple, modern explanation of the verse, in the verse's own language. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ExplainSheet(verse: Verse, onDismiss: () -> Unit) {
+fun ExplainSheet(verse: Verse, onDismiss: () -> Unit, onReflect: (() -> Unit)? = null) {
     var text by remember(verse.id) { mutableStateOf(cache[verse.id]) }
     var error by remember(verse.id) { mutableStateOf<String?>(null) }
     var attempt by remember(verse.id) { mutableIntStateOf(0) }
@@ -70,6 +73,17 @@ fun ExplainSheet(verse: Verse, onDismiss: () -> Unit) {
                 }
                 error != null -> ErrorBox(error!!, { attempt++ })
                 else -> LoadingBox("Making it simple…")
+            }
+            if (onReflect != null) {
+                Spacer(Modifier.height(4.dp))
+                androidx.compose.material3.Button(
+                    onClick = onReflect, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(18.dp),
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = W.Purple, contentColor = W.OnPurple)
+                ) {
+                    Text("🌱  Today's Reflection", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                    Spacer(Modifier.width(8.dp))
+                    androidx.compose.material3.Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null)
+                }
             }
         }
     }

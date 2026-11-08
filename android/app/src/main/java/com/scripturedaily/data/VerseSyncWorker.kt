@@ -20,17 +20,6 @@ class VerseSyncWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val scripture = prefs.getInt("scripture", 0)  // cache label only; verses come from the whole tradition
         return try {
             val db = ScriptureDatabase.get(applicationContext).verses()
-            val wallpaperOnly = prefs.getString("wallpaper_mode", "change_verse") in setOf("keep_same_verse", "Keep same verse, change wallpaper")
-            if (wallpaperOnly) {
-                val activeId = prefs.getInt("last_verse_id", prefs.getInt("current_verse_id", -1))
-                val active = if (activeId > 0) db.find(activeId) else db.matching(scripture, language)
-                if (active != null && prefs.getBoolean("lock_screen", false)) {
-                    if (LockScreenVerse.refreshWallpaperPalette(applicationContext, active.id, active.scripture, active.text, active.reference())) {
-                        VerseNotifier.showWallpaperUpdated(applicationContext)
-                    }
-                }
-                return Result.success()
-            }
             val verse = ApiClient.api.refreshActiveVerse().data.verse
             val previousActiveId = prefs.getInt("last_verse_id", -1)
             if (previousActiveId == verse.id && db.find(verse.id) != null) return Result.success()

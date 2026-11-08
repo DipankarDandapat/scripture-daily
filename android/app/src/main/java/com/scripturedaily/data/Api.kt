@@ -62,7 +62,7 @@ data class PreferenceInput(
     @SerializedName("scripture_ids") val scriptureIds: String,  // comma-separated e.g. "2,3"
     val frequency: String = "daily",
     @SerializedName("notifications_enabled") val notificationsEnabled: Boolean = false,
-    @SerializedName("wallpaper_mode") val wallpaperMode: String = "change_verse"
+    @SerializedName("wallpaper_mode") val wallpaperMode: String = "verse_and_image"
 )
 
 data class DeviceRegInput(
@@ -121,8 +121,27 @@ data class PreferenceOut(
     @SerializedName("scripture_ids") val scriptureIds: String,
     val frequency: String,
     @SerializedName("notifications_enabled") val notificationsEnabled: Boolean,
-    @SerializedName("wallpaper_mode") val wallpaperMode: String = "change_verse"
+    @SerializedName("wallpaper_mode") val wallpaperMode: String = "verse_and_image"
 )
+
+// ── Journal Reflection ───────────────────────────────────────────────────────
+data class ReflectionDto(
+    val id: Int, @SerializedName("verse_id") val verseId: Int?, @SerializedName("question_id") val questionId: Int?,
+    @SerializedName("reflection_date") val reflectionDate: String, val answer: String, val question: String,
+    @SerializedName("verse_text") val verseText: String, @SerializedName("verse_reference") val verseReference: String,
+    val scripture: String, val language: String, @SerializedName("created_at") val createdAt: String, @SerializedName("updated_at") val updatedAt: String
+)
+data class TodayReflectionDto(
+    @SerializedName("reflection_date") val reflectionDate: String, @SerializedName("verse_id") val verseId: Int,
+    @SerializedName("verse_text") val verseText: String, @SerializedName("verse_reference") val verseReference: String,
+    val scripture: String, val language: String, @SerializedName("question_id") val questionId: Int?, val question: String,
+    @SerializedName("is_fallback") val isFallback: Boolean = false, @SerializedName("max_length") val maxLength: Int = 500,
+    val existing: ReflectionDto? = null
+)
+data class ReflectionListDto(val items: List<ReflectionDto>, val total: Int, val limit: Int, val offset: Int, @SerializedName("has_more") val hasMore: Boolean)
+data class ReflectionSaveBody(@SerializedName("verse_id") val verseId: Int, val answer: String, @SerializedName("reflection_date") val reflectionDate: String? = null)
+data class ReflectionUpdateBody(val answer: String)
+data class AppConfigResponse(val version: String, @SerializedName("updated_at") val updatedAt: String?, val config: com.google.gson.JsonObject)
 
 // ── Feature models ───────────────────────────────────────────────────────────
 data class MoodItem(val code: String, val label: String, val emoji: String, val message: String)
@@ -216,13 +235,24 @@ data class TreeMilestoneDto(val stage: String, val label: String, val level: Int
                             @SerializedName("first_day") val firstDay: Int, @SerializedName("last_day") val lastDay: Int, val unlocked: Boolean)
 data class TreeNextDto(val stage: String, val label: String, val level: Int,
                        @SerializedName("at_days") val atDays: Int, @SerializedName("days_to_go") val daysToGo: Int)
+data class TreeActivityDto(val code: String, val title: String, val description: String, val metric: String,
+                           val target: Int, val progress: Int, val completed: Boolean)
+data class TreeActivitiesDto(val level: Int, val title: String, val subtitle: String, val days: String, val items: List<TreeActivityDto>,
+                             @SerializedName("completed_count") val completedCount: Int, @SerializedName("total_count") val totalCount: Int,
+                             @SerializedName("all_completed") val allCompleted: Boolean)
+data class TreeLevelDto(val level: Int, val title: String, val days: String, val completed: Int, val total: Int, val status: String)
 data class TreeDto(
     @SerializedName("total_days") val totalDays: Int, val level: Int, val stage: String,
     @SerializedName("stage_label") val stageLabel: String, val status: String,
     @SerializedName("current_streak") val currentStreak: Int, @SerializedName("longest_streak") val longestStreak: Int,
     @SerializedName("read_today") val readToday: Boolean, @SerializedName("last_read") val lastRead: String?,
-    @SerializedName("next_milestone") val nextMilestone: TreeNextDto?, val milestones: List<TreeMilestoneDto>, val history: List<String>
+    @SerializedName("next_milestone") val nextMilestone: TreeNextDto?, val milestones: List<TreeMilestoneDto>, val history: List<String>,
+    val enabled: Boolean? = null, @SerializedName("started_on") val startedOn: String? = null,
+    @SerializedName("reset_count") val resetCount: Int? = null, val activities: TreeActivitiesDto? = null,
+    @SerializedName("activity_box_visible") val activityBoxVisible: Boolean? = null, val levels: List<TreeLevelDto>? = null
 )
+data class TreeSettingsBody(val enabled: Boolean)
+data class TreeActivityBody(val event: String)
 data class TreeReadBody(val dates: List<String> = emptyList(), @SerializedName("mark_today") val markToday: Boolean = true)
 
 interface ScriptureApi {
@@ -275,6 +305,32 @@ interface ScriptureApi {
     suspend fun studioTemplates(@Query("kind") kind: String = "all", @Query("religion_id") religionId: Int? = null): List<StudioTemplateDto>
 
     @GET("tree") suspend fun tree(@Query("client_date") clientDate: String? = null): TreeDto
+
+    @PUT("tree/settings")
+    suspend fun setTreeEnabled(@Body body: TreeSettingsBody, @Query("client_date") clientDate: String? = null): TreeDto
+
+    @POST("tree/activity")
+    suspend fun treeActivity(@Body body: TreeActivityBody, @Query("client_date") clientDate: String? = null): TreeDto
+
+    // ── Journal Reflection ──
+    @GET("reflections/today")
+    suspend fun todaysReflection(@Query("verse_id") verseId: Int? = null, @Query("client_date") clientDate: String? = null): TodayReflectionDto
+
+    @POST("reflections") suspend fun saveReflection(@Body body: ReflectionSaveBody): Response<ReflectionDto>
+
+    @GET("reflections")
+    suspend fun reflections(
+        @Query("limit") limit: Int = 20, @Query("offset") offset: Int = 0,
+        @Query("month") month: String? = null, @Query("date") date: String? = null
+    ): ReflectionListDto
+
+    @GET("reflections/dates") suspend fun reflectionDates(@Query("days") days: Int = 60): List<String>
+    @GET("reflections/{id}") suspend fun reflection(@Path("id") id: Int): ReflectionDto
+    @PUT("reflections/{id}") suspend fun updateReflection(@Path("id") id: Int, @Body body: ReflectionUpdateBody): Response<ReflectionDto>
+    @DELETE("reflections/{id}") suspend fun deleteReflection(@Path("id") id: Int): Response<Unit>
+
+    // ── Centralised configuration (ads, intervals, flags) ──
+    @GET("config") suspend fun config(@retrofit2.http.Header("If-None-Match") etag: String? = null): Response<AppConfigResponse>
 
     @POST("tree/read")
     suspend fun recordReading(@Query("client_date") clientDate: String? = null, @Body body: TreeReadBody = TreeReadBody()): TreeDto

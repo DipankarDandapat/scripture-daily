@@ -84,6 +84,40 @@ object LockScreenVerse {
         return applied
     }
 
+    /** Result of an explicit "Save & Apply" request. Success is reported only when Android returns a valid wallpaper id. */
+    sealed interface ApplyResult {
+        data object Success : ApplyResult
+        data class Failed(val reason: String) : ApplyResult
+    }
+
+    /**
+     * Applies the current wallpaper configuration to the home screen, lock screen or both.
+     * [which] is a WallpaperManager.FLAG_SYSTEM / FLAG_LOCK mask. Blocking; call off the main thread.
+     */
+    fun applyTo(context: Context, which: Int, verseId: Int, scripture: String, text: String, reference: String): ApplyResult {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val manager = WallpaperManager.getInstance(context)
+        if (!manager.isWallpaperSupported) return ApplyResult.Failed("This device doesn't support changing the wallpaper.")
+        if (!manager.isSetWallpaperAllowed) return ApplyResult.Failed("Wallpaper changes are blocked by this device (a policy or restriction). Check Android settings.")
+        val rotation = prefs.getInt("wallpaper_rotation", 0)
+        val bitmap = render(context, scripture, text, reference, rotation, null, null)
+        return try {
+            val id = manager.setBitmap(bitmap, null, true, which)
+            if (id > 0) {
+                if (which and WallpaperManager.FLAG_LOCK != 0) prefs.edit().putInt(KEY_VERSE_ID, verseId).apply()
+                ApplyResult.Success
+            } else ApplyResult.Failed("Android did not accept the wallpaper. Some phones restrict this; try Home Screen or Lock Screen separately.")
+        } catch (e: SecurityException) {
+            ApplyResult.Failed("Android denied the wallpaper permission.")
+        } catch (e: IOException) {
+            ApplyResult.Failed("Couldn't write the wallpaper: ${e.message ?: "storage error"}.")
+        } catch (e: RuntimeException) {
+            ApplyResult.Failed("This device couldn't apply the wallpaper (${e.javaClass.simpleName}).")
+        } finally {
+            if (!bitmap.isRecycled) bitmap.recycle()
+        }
+    }
+
     /** Refreshes only the palette/background on the existing verse wallpaper; never posts a notification. */
     fun refreshWallpaperPalette(
         context: Context,
@@ -141,21 +175,6 @@ object LockScreenVerse {
         }
     }
 
-    private fun wallpaperImageResource(context: Context, religion: Int, category: String, selectedIndex: Int, rotation: Int): Int {
-        // Generated, bundled Hindu artwork pack. Other traditions use the safe category renderer
-        // until their separately licensed/generated image packs are added to the project.
-        if (religion != 1) return 0
-        val index = when (category) {
-            "Krishna" -> (1 + Math.floorMod(selectedIndex - 1 + rotation, 2)).coerceIn(1, 2)
-            "Shiva" -> (4 + Math.floorMod(selectedIndex - 4 + rotation, 2)).coerceIn(4, 5)
-            "Ganesha" -> (6 + Math.floorMod(selectedIndex - 6 + rotation, 2)).coerceIn(6, 7)
-            "Radha Krishna" -> 3
-            "Bhagavad Gita" -> 8
-            else -> (9 + Math.floorMod(selectedIndex - 9 + rotation, 12)).coerceIn(9, 20)
-        }
-        return context.resources.getIdentifier("wallpaper_hindu_%02d".format(index), "drawable", context.packageName)
-    }
-
     private fun paletteFor(theme: String, rotation: Int): WallpaperPalette {
         val palettes = listOf(
             WallpaperPalette(Color.rgb(255, 207, 150), Color.rgb(150, 93, 151), Color.rgb(39, 24, 65), Color.rgb(255, 224, 155), Color.WHITE, Color.rgb(247, 222, 211)),
@@ -181,21 +200,24 @@ object LockScreenVerse {
         context: Context, scripture: String, text: String, reference: String,
         themeOverride: String? = null, categoryOverride: String? = null,
         textSizeOverride: String? = null, textPositionOverride: String? = null,
-        imageIndexOverride: Int? = null, religionOverride: Int? = null
+        imageIndexOverride: Int? = null, religionOverride: Int? = null, modeOverride: String? = null, showVerseOverride: Boolean? = null,
+        showReferenceOverride: Boolean? = null, widthPx: Int = 0, heightPx: Int = 0
     ): Bitmap {
         val rotation = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt("wallpaper_rotation", 0)
-        return render(context, scripture, text, reference, rotation, themeOverride, categoryOverride, textSizeOverride, textPositionOverride, imageIndexOverride, religionOverride)
+        return render(context, scripture, text, reference, rotation, themeOverride, categoryOverride, textSizeOverride, textPositionOverride, imageIndexOverride, religionOverride, modeOverride,
+            previewSelected = true, showVerseOverride = showVerseOverride, showReferenceOverride = showReferenceOverride, widthPx = widthPx, heightPx = heightPx)
     }
 
     private fun render(
         context: Context, scripture: String, text: String, reference: String, rotation: Int,
         themeOverride: String?, categoryOverride: String?, textSizeOverride: String? = null,
         textPositionOverride: String? = null, imageIndexOverride: Int? = null,
-        religionOverride: Int? = null
+        religionOverride: Int? = null, modeOverride: String? = null, previewSelected: Boolean = false,
+        showVerseOverride: Boolean? = null, showReferenceOverride: Boolean? = null, widthPx: Int = 0, heightPx: Int = 0
     ): Bitmap {
         val metrics = context.resources.displayMetrics
-        val width = metrics.widthPixels.coerceIn(480, 1440)
-        val height = metrics.heightPixels.coerceIn(800, 3200)
+        val width = (if (widthPx > 0) widthPx else metrics.widthPixels).coerceIn(300, 1440)
+        val height = (if (heightPx > 0) heightPx else metrics.heightPixels).coerceIn(500, 3200)
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val theme = themeOverride ?: (prefs.getString("wallpaper_theme", "MULTICOLOR") ?: "MULTICOLOR")
         val palette = paletteFor(theme, rotation)
@@ -204,8 +226,12 @@ object LockScreenVerse {
         val category = categoryOverride ?: (prefs.getString("wallpaper_category", "") ?: "")
         val tradition = religionOverride ?: prefs.getInt("religion", 0)
         val selectedImageIndex = imageIndexOverride ?: prefs.getInt("wallpaper_image_index", 1)
-        val imageResource = wallpaperImageResource(context, tradition, category, selectedImageIndex, rotation)
-        val sourceImage = if (imageResource != 0) BitmapFactory.decodeResource(context.resources, imageResource) else null
+        val mode = WallpaperMode.normalize(modeOverride ?: prefs.getString("wallpaper_mode", WallpaperMode.VERSE_AND_IMAGE))
+        // colors: no artwork (multi-theme backgrounds). keep_image: always the selected image. verse_and_image: walk through the pack,
+        // starting at the selected image, once per applied refresh (the preview shows the selected image itself).
+        val imageIndex = if (mode == WallpaperMode.VERSE_AND_IMAGE && !previewSelected) WallpaperPacks.rotatedIndex(selectedImageIndex, rotation) else WallpaperPacks.clampIndex(selectedImageIndex)
+        val sourceImage = if (mode == WallpaperMode.COLORS) null else WallpaperPacks.load(context, tradition, imageIndex)
+        val imageResource = if (sourceImage != null) 1 else 0
         val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG)
         if (sourceImage != null) {
             val scale = maxOf(width.toFloat() / sourceImage.width, height.toFloat() / sourceImage.height)
@@ -235,7 +261,7 @@ object LockScreenVerse {
         val sceneVariant = Math.floorMod(rotation, 4)
         val sunX = floatArrayOf(.82f, .22f, .68f, .43f)[sceneVariant]
         val sunY = floatArrayOf(.20f, .23f, .16f, .27f)[sceneVariant]
-        canvas.drawCircle(width * sunX, height * sunY, width * (.20f + sceneVariant * .012f), bgPaint)
+        if (imageResource == 0) canvas.drawCircle(width * sunX, height * sunY, width * (.20f + sceneVariant * .012f), bgPaint)
         // Soft mountain/landscape silhouettes make every generated wallpaper feel like artwork, not a flat colour swap.
         val landscape = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.bottom; alpha = 105; style = Paint.Style.FILL }
         val ridge = Path().apply {
@@ -250,18 +276,17 @@ object LockScreenVerse {
             lineTo(width * .78f, height * peaks[4]); lineTo(width.toFloat(), height * peaks[5]);
             lineTo(width.toFloat(), height.toFloat()); lineTo(0f, height.toFloat()); close()
         }
-        canvas.drawPath(ridge, landscape)
-        if (imageResource == 0) drawTraditionArtwork(canvas, category, tradition, palette, width, height, sceneVariant)
+        if (imageResource == 0) canvas.drawPath(ridge, landscape)
         val sparkle = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.accent; alpha = 155; strokeWidth = width * .004f }
-        for (i in 0..11) {
+        if (imageResource == 0) for (i in 0..11) {
             val x = width * ((i * 37 % 97) / 100f)
             val y = height * (.12f + ((i * 19 % 70) / 100f))
             canvas.drawCircle(x, y, width * .004f, sparkle)
         }
 
         val contentWidth = (width * 0.84f).toInt()
-        val showVerse = prefs.getBoolean("wallpaper_show_verse", true)
-        val showReference = prefs.getBoolean("wallpaper_show_reference", true)
+        val showVerse = showVerseOverride ?: prefs.getBoolean("wallpaper_show_verse", true)
+        val showReference = showReferenceOverride ?: prefs.getBoolean("wallpaper_show_reference", true)
         val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.accent; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD); if (scripture.all { it.code < 128 }) letterSpacing = 0.08f }
         val bodyPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.primaryText; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
         val metaPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.secondaryText; typeface = Typeface.DEFAULT }

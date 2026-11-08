@@ -1,69 +1,14 @@
 {
-  "schema_version": 1,
-  "target_total_images": 100,
-  "included_images": 20,
+  "schema_version": 2,
+  "images_per_tradition": 20,
+  "total_images": 100,
+  "location": "android/app/src/main/assets/wallpapers/<slug>/NN.webp",
   "traditions": {
-    "Hinduism": {
-      "status": "included",
-      "count": 20,
-      "resource_prefix": "wallpaper_hindu_",
-      "format": "webp",
-      "dimensions": [
-        600,
-        900
-      ],
-      "categories": [
-        "Krishna",
-        "Shiva",
-        "Ganesha",
-        "Radha Krishna",
-        "Bhagavad Gita",
-        "Nature"
-      ]
-    },
-    "Christianity": {
-      "status": "pending_asset_pack",
-      "count": 0,
-      "categories": [
-        "Jesus",
-        "Cross",
-        "Bible",
-        "Church",
-        "Biblical Scenes"
-      ]
-    },
-    "Islam": {
-      "status": "pending_asset_pack",
-      "count": 0,
-      "categories": [
-        "Islamic Geometric Patterns",
-        "Mosques",
-        "Quran Calligraphy",
-        "Arabic Artwork"
-      ]
-    },
-    "Buddhism": {
-      "status": "pending_asset_pack",
-      "count": 0,
-      "categories": [
-        "Buddha",
-        "Dharma",
-        "Meditation",
-        "Lotus"
-      ]
-    },
-    "General Wisdom": {
-      "status": "pending_asset_pack",
-      "count": 0,
-      "categories": [
-        "Nature",
-        "Mountains",
-        "Sunrise",
-        "Ocean",
-        "Flowers",
-        "Universal Inspiration"
-      ]
-    }
+    "Hinduism":       {"slug": "hinduism",     "count": 20, "dimensions": [600, 900], "source": "Illustrated devotional/nature set shipped with the project (moved from res/drawable-nodpi)"},
+    "Christianity":   {"slug": "christianity", "count": 20, "dimensions": [720, 1280], "source": "Original procedural artwork - tools/generate_wallpapers.py (symbols, architecture, landscapes; no depiction of persons)", "license": "Project-owned, no third-party content"},
+    "Islam":          {"slug": "islam",        "count": 20, "dimensions": [720, 1280], "source": "Original procedural artwork - tools/generate_wallpapers.py (mosques, geometric patterns, arches, lanterns, crescent)", "license": "Project-owned, no third-party content"},
+    "Buddhism":       {"slug": "buddhism",     "count": 20, "dimensions": [720, 1280], "source": "Original procedural artwork - tools/generate_wallpapers.py (meditating silhouette, dharma wheel, lotus, stupa, pagoda)", "license": "Project-owned, no third-party content"},
+    "General Wisdom": {"slug": "general",      "count": 20, "dimensions": [720, 1280], "source": "Original procedural artwork - tools/generate_wallpapers.py (religion-neutral landscapes)", "license": "Project-owned, no third-party content"}
   },
-  "notes": "The 20 included Hindu wallpapers are AI-generated original artwork cropped from a 5x4 contact sheet. The remaining 80 images are not fabricated or duplicated; add separately curated/generated assets before claiming the 100-image pack is complete."
+  "notes": "Regenerate with: python tools/generate_wallpapers.py --out android/app/src/main/assets/wallpapers. Photographic/illustrated packs can replace any slug folder (keep NN.webp names, 20 files) without code changes."
 }

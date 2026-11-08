@@ -94,6 +94,9 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("androidx.glance:glance-appwidget:1.1.1")
     implementation("androidx.glance:glance-material3:1.1.1")
+    implementation("androidx.lifecycle:lifecycle-process:2.8.7")
+    implementation("com.google.android.gms:play-services-ads:23.6.0")
+    implementation("com.google.android.ump:user-messaging-platform:3.1.0")
     implementation("com.google.android.play:review-ktx:2.0.2")
     // Force newer fragment version to resolve play:review-ktx transitive dependency on fragment:1.1.0
     implementation("androidx.fragment:fragment-ktx:1.8.6")
