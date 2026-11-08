@@ -62,7 +62,7 @@ class PreferenceInput(BaseModel):
     language_id: int
     scripture_ids: str = "1"  # comma-separated e.g. "2,3"
     frequency: str = "24h"
-    wallpaper_mode: str = "change_verse"
+    wallpaper_mode: str = "verse_and_image"
     notifications_enabled: bool = False
 
 
@@ -308,9 +308,42 @@ class TreeNext(BaseModel):
     days_to_go: int
 
 
+class TreeActivityOut(BaseModel):
+    code: str
+    title: str
+    description: str
+    metric: str
+    target: int
+    progress: int
+    completed: bool
+
+
+class TreeActivitiesOut(BaseModel):
+    level: int
+    title: str
+    subtitle: str
+    days: str
+    items: list[TreeActivityOut]
+    completed_count: int
+    total_count: int
+    all_completed: bool
+
+
+class TreeLevelOut(BaseModel):
+    level: int
+    title: str
+    days: str
+    completed: int
+    total: int
+    status: str  # done | active | locked
+
+
 class TreeOut(BaseModel):
     total_days: int
     level: int
+    journey_day: int = 0
+    journey_complete: bool = False
+    days_to_journey_complete: int = 150
     stage: str
     stage_label: str
     status: str
@@ -321,8 +354,78 @@ class TreeOut(BaseModel):
     next_milestone: TreeNext | None
     milestones: list[TreeMilestone]
     history: list[str]
+    enabled: bool = True
+    started_on: str | None = None
+    reset_count: int = 0
+    activities: TreeActivitiesOut | None = None
+    activity_box_visible: bool = False
+    levels: list[TreeLevelOut] = Field(default_factory=list)
+
+
+class TreeSettingsInput(BaseModel):
+    enabled: bool
+
+
+class TreeActivityEventInput(BaseModel):
+    event: str = Field(min_length=2, max_length=30)
 
 
 class TreeReadInput(BaseModel):
     dates: list[str] = Field(default_factory=list, max_length=400)  # local dates (YYYY-MM-DD) completed on this device
     mark_today: bool = True  # False = only merge `dates` (a pure sync that does not count today)
+
+
+# ── Journal Reflection ───────────────────────────────────────────────────────
+class ReflectionQuestionOut(BaseModel):
+    verse_id: int
+    question_id: int | None
+    question: str
+    language: str
+    is_fallback: bool = False
+
+
+class ReflectionOut(BaseModel):
+    id: int
+    verse_id: int | None
+    question_id: int | None
+    reflection_date: str
+    answer: str
+    question: str
+    verse_text: str
+    verse_reference: str
+    scripture: str
+    language: str
+    created_at: str
+    updated_at: str
+
+
+class TodayReflectionOut(BaseModel):
+    reflection_date: str
+    verse_id: int
+    verse_text: str
+    verse_reference: str
+    scripture: str
+    language: str
+    question_id: int | None
+    question: str
+    is_fallback: bool = False
+    max_length: int = 500
+    existing: ReflectionOut | None = None
+
+
+class ReflectionListOut(BaseModel):
+    items: list[ReflectionOut]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool
+
+
+class ReflectionSaveInput(BaseModel):
+    verse_id: int
+    answer: str = Field(max_length=2000)
+    reflection_date: str | None = None  # YYYY-MM-DD, defaults to the caller's today
+
+
+class ReflectionUpdateInput(BaseModel):
+    answer: str = Field(max_length=2000)

@@ -14,6 +14,10 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # Idempotent: a fresh database created from the current models already has the column.
+    insp = sa.inspect(op.get_bind())
+    if "fcm_token" in {c["name"] for c in insp.get_columns("devices")}:
+        return
     with op.batch_alter_table("devices") as batch_op:
         batch_op.add_column(sa.Column("fcm_token", sa.String(512), nullable=True))
         batch_op.create_index("ix_devices_fcm_token", ["fcm_token"])

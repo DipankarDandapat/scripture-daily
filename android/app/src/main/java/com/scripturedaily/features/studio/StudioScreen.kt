@@ -75,7 +75,7 @@ enum class StudioTab(val label: String) { SHARE("Share Studio"), VIDEO("Video St
  * share one set of tradition-aware templates, which refresh whenever the user's tradition changes.
  */
 @Composable
-fun StudioScreen(verse: Verse, religionId: Int, religionCode: String?, initialTab: StudioTab, onBack: () -> Unit) {
+fun StudioScreen(verse: Verse, religionId: Int, religionCode: String?, initialTab: StudioTab, onBack: () -> Unit, onActivity: (String) -> Unit = {}) {
     val context = LocalContext.current
     var tab by remember { mutableStateOf(initialTab) }
     var templates by remember(religionCode) { mutableStateOf(StudioTemplates.load(context, religionCode)) }
@@ -90,7 +90,7 @@ fun StudioScreen(verse: Verse, religionId: Int, religionCode: String?, initialTa
     }
     LaunchedEffect(style) { StudioPrefs.save(context, style) }
 
-    OverlayScreen("Studio", onBack) {
+    OverlayScreen(if (tab == StudioTab.SHARE) "Share Studio" else "Video Studio", onBack) {
         TabRow(selectedTabIndex = tab.ordinal, containerColor = Color.Transparent, contentColor = W.Ink) {
             StudioTab.values().forEach { t ->
                 Tab(selected = tab == t, onClick = { tab = t }, text = { Text(t.label, fontWeight = FontWeight.SemiBold) },
@@ -98,7 +98,7 @@ fun StudioScreen(verse: Verse, religionId: Int, religionCode: String?, initialTa
             }
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (tab == StudioTab.SHARE) ShareTab(verse, style, templates) { style = it }
+            if (tab == StudioTab.SHARE) ShareTab(verse, style, templates, onShared = onActivity) { style = it }
             else VideoTab(verse, style, templates) { style = it }
             Spacer(Modifier.height(24.dp))
         }
@@ -197,11 +197,10 @@ private fun TextControls(style: CardStyle, full: Boolean, onChange: (CardStyle) 
 
 // ── Share Studio ───────────────────────────────────────────────────────────────
 @Composable
-private fun ShareTab(verse: Verse, style: CardStyle, templates: List<StudioTemplate>, onChange: (CardStyle) -> Unit) {
+private fun ShareTab(verse: Verse, style: CardStyle, templates: List<StudioTemplate>, onShared: (String) -> Unit, onChange: (CardStyle) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
-    var wallpaperDialog by remember { mutableStateOf(false) }
     val caption = "“${verse.text}”\n\n— ${verse.citation()}\n\nvia WisdomOne"
     suspend fun renderFull(): Bitmap = withContext(Dispatchers.Default) { CardRenderer.render(context, CardContent.from(verse), style) }
 
@@ -224,72 +223,41 @@ private fun ShareTab(verse: Verse, style: CardStyle, templates: List<StudioTempl
         Switch(checked = style.showMark, onCheckedChange = { onChange(style.copy(showMark = it)) }, colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = W.Gold))
     }
     Spacer(Modifier.height(4.dp))
+    // Share Studio's two actions: Share (system share sheet) and WhatsApp Status (WhatsApp's status composer with the image).
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
         Button(
-            onClick = { scope.launch { busy = true; ShareActions.shareImage(context, renderFull(), caption); busy = false } },
-            enabled = !busy, modifier = Modifier.weight(1f).height(52.dp), shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = W.Ink), contentPadding = PaddingValues(horizontal = 8.dp)
-        ) { Icon(Icons.Outlined.Share, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Share", fontWeight = FontWeight.SemiBold) }
+            onClick = { scope.launch { busy = true; ShareActions.shareImage(context, renderFull(), caption); busy = false; onShared("share") } },
+            enabled = !busy, modifier = Modifier.weight(1f).height(54.dp), shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = W.Purple, contentColor = W.OnPurple), contentPadding = PaddingValues(horizontal = 8.dp)
+        ) { Icon(Icons.Outlined.Share, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Share", fontWeight = FontWeight.Bold, fontSize = 15.sp) }
         OutlinedButton(
             onClick = {
                 scope.launch {
                     busy = true
                     val uri = ShareActions.writeCacheImage(context, renderFull(), "wisdomone_status.png")
-                    ShareActions.shareToWhatsApp(context, uri, "image/png", caption); busy = false
+                    val opened = ShareActions.shareToWhatsApp(context, uri, "image/png", caption); busy = false
+                    if (opened) onShared("share")
                 }
             },
-            enabled = !busy, modifier = Modifier.weight(1f).height(52.dp), shape = RoundedCornerShape(16.dp),
-            border = BorderStroke(1.5.dp, Color(0xFF25D366).copy(alpha = 0.7f)), contentPadding = PaddingValues(horizontal = 8.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF1FA855))
-        ) { Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_whatsapp), null, Modifier.size(18.dp), tint = Color.Unspecified); Spacer(Modifier.width(6.dp)); Text("WhatsApp", fontWeight = FontWeight.SemiBold) }
-        OutlinedButton(
-            onClick = {
-                scope.launch {
-                    busy = true
-                    val uri = ShareActions.saveImageToGallery(context, renderFull(), "WisdomOne_${verse.id}_${System.currentTimeMillis()}")
-                    Toast.makeText(context, if (uri != null) "Saved to Pictures/WisdomOne" else "Saving needs Android 10+. Use Share instead.", Toast.LENGTH_SHORT).show()
-                    busy = false
-                }
-            },
-            enabled = !busy, modifier = Modifier.weight(1f).height(52.dp), shape = RoundedCornerShape(16.dp),
-            border = BorderStroke(1.5.dp, W.Gold.copy(alpha = 0.6f)), contentPadding = PaddingValues(horizontal = 8.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = W.Ink)
-        ) { Icon(Icons.Outlined.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Save", fontWeight = FontWeight.SemiBold) }
+            enabled = !busy, modifier = Modifier.weight(1.3f).height(54.dp), shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.5.dp, Color(0xFF25D366)), contentPadding = PaddingValues(horizontal = 8.dp),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = if (W.IsDark) Color(0xFF5BE38A) else Color(0xFF1B8F4A))
+        ) { Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_whatsapp), null, Modifier.size(20.dp), tint = Color.Unspecified); Spacer(Modifier.width(8.dp)); Text("WhatsApp Status", fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1) }
     }
-    OutlinedButton(
-        onClick = { wallpaperDialog = true }, enabled = !busy, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(1.5.dp, W.Gold.copy(alpha = 0.6f)), colors = ButtonDefaults.outlinedButtonColors(contentColor = W.Ink)
-    ) { Icon(Icons.Outlined.Wallpaper, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Set as wallpaper", fontWeight = FontWeight.SemiBold) }
+    TextButton(
+        onClick = {
+            scope.launch {
+                busy = true
+                val uri = ShareActions.saveImageToGallery(context, renderFull(), "WisdomOne_${verse.id}_${System.currentTimeMillis()}")
+                Toast.makeText(context, if (uri != null) "Saved to Pictures/WisdomOne" else "Saving needs Android 10+. Use Share instead.", Toast.LENGTH_SHORT).show()
+                busy = false
+            }
+        },
+        enabled = !busy, modifier = Modifier.fillMaxWidth()
+    ) { Icon(Icons.Outlined.Download, null, Modifier.size(18.dp), tint = W.InkMid); Spacer(Modifier.width(6.dp)); Text("Save image to gallery", fontWeight = FontWeight.SemiBold, color = W.InkMid) }
     if (busy) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
         CircularProgressIndicator(color = W.Gold, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
         Spacer(Modifier.width(8.dp)); Text("Working…", fontSize = 12.sp, color = W.InkSoft)
-    }
-    if (wallpaperDialog) {
-        val metrics = context.resources.displayMetrics
-        suspend fun apply(flag: Int, name: String) {
-            wallpaperDialog = false; busy = true
-            val result = runCatching {
-                withContext(Dispatchers.Default) {
-                    val bmp = CardRenderer.renderSized(context, CardContent.from(verse), style, metrics.widthPixels, metrics.heightPixels)
-                    WallpaperManager.getInstance(context).setBitmap(bmp, null, true, flag); bmp.recycle()
-                }
-            }
-            busy = false
-            Toast.makeText(context, if (result.isSuccess) "$name wallpaper updated" else "Couldn't set the wallpaper on this device", Toast.LENGTH_LONG).show()
-        }
-        AlertDialog(
-            onDismissRequest = { wallpaperDialog = false }, containerColor = W.Parchment,
-            title = { Text("Set as wallpaper", fontWeight = FontWeight.Bold, color = W.Ink) },
-            text = { Text("Sized exactly for your screen (${metrics.widthPixels}×${metrics.heightPixels}) using your current design.", color = W.InkMid, fontSize = 14.sp) },
-            confirmButton = {
-                Column(horizontalAlignment = Alignment.End) {
-                    TextButton(onClick = { scope.launch { apply(WallpaperManager.FLAG_SYSTEM, "Home screen") } }) { Text("Home screen", color = W.Ink) }
-                    TextButton(onClick = { scope.launch { apply(WallpaperManager.FLAG_LOCK, "Lock screen") } }) { Text("Lock screen", color = W.Ink) }
-                    TextButton(onClick = { scope.launch { apply(WallpaperManager.FLAG_SYSTEM or WallpaperManager.FLAG_LOCK, "Home & lock screen") } }) { Text("Both", color = W.Ink, fontWeight = FontWeight.Bold) }
-                }
-            },
-            dismissButton = { TextButton(onClick = { wallpaperDialog = false }) { Text("Cancel", color = W.InkSoft) } }
-        )
     }
 }
 

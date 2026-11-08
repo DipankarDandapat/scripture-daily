@@ -5,11 +5,12 @@
         <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
     </queries>
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
-    <application android:theme="@style/Theme.WisdomOne" android:label="WisdomOne" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:usesCleartextTraffic="true" android:supportsRtl="true">
+    <application android:name=".WisdomOneApplication" android:theme="@style/Theme.WisdomOne" android:label="WisdomOne" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:usesCleartextTraffic="true" android:supportsRtl="true">
         <activity android:name="com.scripturedaily.lockscreen.LockScreenVerseActivity" android:exported="false" android:showOnLockScreen="true" android:screenOrientation="portrait" android:theme="@style/Theme.WisdomOne" />
         <activity android:name="com.scripturedaily.MainActivity" android:exported="true" android:screenOrientation="portrait">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
@@ -51,6 +52,10 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="wisdomone_fcm_v1" />
+
+        <!-- AdMob application ID (ad UNIT ids come from the backend config; debug builds only ever use Google test units). -->
+        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-7872455938809561~3577314080" />
+        <meta-data android:name="com.google.android.gms.ads.DELAY_APP_MEASUREMENT_INIT" android:value="true" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

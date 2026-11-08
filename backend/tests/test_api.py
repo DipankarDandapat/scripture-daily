@@ -6,7 +6,7 @@ os.environ["SD_JWT_SECRET"] = "test-secret-with-at-least-32-characters"
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.main import app
@@ -85,23 +85,31 @@ def test_active_verse_is_persisted_and_only_discover_rotates(client):
     assert islam["religion"] == "Islam" and islam["scripture"] == "Quran"
 
 
-def test_keep_same_verse_wallpaper_mode_prevents_due_rotation(client):
+def test_wallpaper_modes_persist_and_legacy_values_are_mapped(client):
     headers = register(client, "wallpaper-mode@example.com")
     pref = {"religion_id": 1, "language_id": 1, "scripture_ids": "1", "frequency": "1h", "notifications_enabled": False}
     assert client.put("/api/v1/users/preferences", headers=headers, json=pref).status_code == 200
+    assert client.get("/api/v1/users/preferences", headers=headers).json()["wallpaper_mode"] == "verse_and_image"  # default = ON option 1
+    for mode in ("keep_image", "colors", "verse_and_image"):
+        saved = client.put("/api/v1/users/preferences", headers=headers, json={**pref, "wallpaper_mode": mode})
+        assert saved.status_code == 200 and saved.json()["wallpaper_mode"] == mode
+        assert client.get("/api/v1/users/preferences", headers=headers).json()["wallpaper_mode"] == mode
+    # legacy values from older app versions are accepted and mapped, anything else is rejected
+    legacy = client.put("/api/v1/users/preferences", headers=headers, json={**pref, "wallpaper_mode": "keep_same_verse"})
+    assert legacy.status_code == 200 and legacy.json()["wallpaper_mode"] == "verse_and_image"
+    assert client.put("/api/v1/users/preferences", headers=headers, json={**pref, "wallpaper_mode": "nonsense"}).status_code == 422
+    # a due verse rotates in every mode (the verse always changes; only the artwork rule differs)
     first = client.get("/api/v1/verses/active", headers=headers).json()["data"]["verse_id"]
-    with SessionLocal() as db:
-        user_id = client.get("/api/v1/users/me", headers=headers).json()["id"]
-        state = db.get(ActiveVerseState, user_id)
-        state.next_update_at = datetime.now(timezone.utc) - timedelta(minutes=1)
-        db.commit()
-    keep = {**pref, "wallpaper_mode": "keep_same_verse"}
-    assert client.put("/api/v1/users/preferences", headers=headers, json=keep).status_code == 200
-    assert client.get("/api/v1/verses/active", headers=headers).json()["data"]["verse_id"] == first
-    change = {**pref, "wallpaper_mode": "change_verse"}
-    assert client.put("/api/v1/users/preferences", headers=headers, json=change).status_code == 200
-    next_id = client.get("/api/v1/verses/active", headers=headers).json()["data"]["verse_id"]
-    assert next_id != first
+    for mode in ("keep_image", "colors"):
+        client.put("/api/v1/users/preferences", headers=headers, json={**pref, "wallpaper_mode": mode})
+        with SessionLocal() as db:
+            user_id = client.get("/api/v1/users/me", headers=headers).json()["id"]
+            db.get(ActiveVerseState, user_id).next_update_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+            db.commit()
+        nxt = client.get("/api/v1/verses/active", headers=headers).json()["data"]["verse_id"]
+        assert nxt != first
+        first = nxt
+
 
 def test_invalid_preference_combination_is_rejected(client):
     headers = register(client, "reader2@example.com")
@@ -410,9 +418,12 @@ def test_verses_never_leak_across_traditions_or_languages(client):
                 m = client.get("/api/v1/mood/verse", params={"mood": mood, "religion_id": r["id"], "language_id": lang["id"]}).json()["verse"]
                 assert m["language"] == lang["code"] and m["religion"].lower().startswith(r["code"].split()[0])
     # daily verse changes with the (client) calendar day, and is stable within a day
-    a = client.get("/api/v1/verses/today", params={"religion_id": 3, "language_id": 1, "client_date": "2026-11-04"}).json()["id"]
-    assert a == client.get("/api/v1/verses/today", params={"religion_id": 3, "language_id": 1, "client_date": "2026-11-04"}).json()["id"]
-    assert a != client.get("/api/v1/verses/today", params={"religion_id": 3, "language_id": 1, "client_date": "2026-11-05"}).json()["id"]
+    # (client_date is only honoured within one day of UTC today, so use dates relative to today)
+    d0 = datetime.now(timezone.utc).date()
+    d1 = d0 + timedelta(days=1)
+    a = client.get("/api/v1/verses/today", params={"religion_id": 3, "language_id": 1, "client_date": d0.isoformat()}).json()["id"]
+    assert a == client.get("/api/v1/verses/today", params={"religion_id": 3, "language_id": 1, "client_date": d0.isoformat()}).json()["id"]
+    assert a != client.get("/api/v1/verses/today", params={"religion_id": 3, "language_id": 1, "client_date": d1.isoformat()}).json()["id"]
     # invalid combinations are rejected rather than leaking
     assert client.get("/api/v1/verses/random", params={"religion_id": 3, "scripture_id": 1, "language_id": 1}).status_code == 422
     assert client.get("/api/v1/verses/today", params={"client_date": "nope"}).status_code == 422

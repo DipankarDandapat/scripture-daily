@@ -88,7 +88,7 @@ class UserPreference(Base):
     language_id: Mapped[int] = mapped_column(ForeignKey("languages.id"), default=1)
     scripture_ids: Mapped[str] = mapped_column(String(255), default="1")
     frequency: Mapped[str] = mapped_column(String(20), default="daily")
-    wallpaper_mode: Mapped[str] = mapped_column(String(40), default="change_verse")
+    wallpaper_mode: Mapped[str] = mapped_column(String(40), default="verse_and_image")
     notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     user: Mapped[User] = relationship(back_populates="preferences")
 
@@ -352,3 +352,89 @@ class ReadingDay(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[str] = mapped_column(String(10), ForeignKey("users.id", ondelete="CASCADE"), index=True)
     day: Mapped[date] = mapped_column(Date)
+
+
+# ── Journal Reflection ───────────────────────────────────────────────────────
+
+class ReflectionQuestion(Base):
+    """The reflection question shown for a verse (one active question per verse; the verse row already fixes the language)."""
+    __tablename__ = "verse_reflection_questions"
+    __table_args__ = (UniqueConstraint("verse_id", name="uq_reflection_question_verse"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    verse_id: Mapped[int] = mapped_column(ForeignKey("verses.id", ondelete="CASCADE"), index=True)
+    scripture_id: Mapped[int] = mapped_column(ForeignKey("scriptures.id", ondelete="CASCADE"), index=True)
+    language_id: Mapped[int] = mapped_column(ForeignKey("languages.id"), index=True)
+    reflection_question: Mapped[str] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class JournalReflection(Base):
+    """A user's saved answer. Question and verse are snapshotted so history survives later edits to the catalog.
+
+    One reflection per user, verse and day: saving again for the same verse/day updates the existing entry.
+    """
+    __tablename__ = "journal_reflections"
+    __table_args__ = (
+        UniqueConstraint("user_id", "verse_id", "reflection_date", name="uq_reflection_user_verse_day"),
+        Index("ix_reflection_user_date", "user_id", "reflection_date"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(10), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    verse_id: Mapped[int | None] = mapped_column(ForeignKey("verses.id", ondelete="SET NULL"), nullable=True)
+    reflection_question_id: Mapped[int | None] = mapped_column(ForeignKey("verse_reflection_questions.id", ondelete="SET NULL"), nullable=True)
+    reflection_date: Mapped[date] = mapped_column(Date)
+    reflection_answer: Mapped[str] = mapped_column(Text)
+    question_text: Mapped[str] = mapped_column(Text)            # snapshot
+    verse_text: Mapped[str] = mapped_column(Text, default="")  # snapshot
+    verse_reference: Mapped[str] = mapped_column(String(240), default="")  # snapshot, e.g. "Bhagavad Gita · Chapter 3 · Verse 19"
+    scripture_name: Mapped[str] = mapped_column(String(120), default="")   # snapshot
+    language_code: Mapped[str] = mapped_column(String(12), default="en")   # snapshot
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+# ── Wisdom Tree settings + activity events ───────────────────────────────────
+
+class TreeSetting(Base):
+    """Per-user Wisdom Tree switch. Re-enabling after a disable restarts the journey from the first activity."""
+    __tablename__ = "tree_settings"
+    user_id: Mapped[str] = mapped_column(String(10), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    started_on: Mapped[date | None] = mapped_column(Date, nullable=True)  # reading days/activities before this date are ignored
+    reset_count: Mapped[int] = mapped_column(Integer, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class TreeActivityDone(Base):
+    """An activity the user has completed (kept even if the underlying count later drops, e.g. a verse is un-saved)."""
+    __tablename__ = "tree_activity_done"
+    __table_args__ = (UniqueConstraint("user_id", "code", name="uq_tree_activity_done"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(10), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    code: Mapped[str] = mapped_column(String(40))
+    completed_on: Mapped[date] = mapped_column(Date)
+
+
+class TreeActivityEvent(Base):
+    """A client-reported Wisdom Tree activity (share, explain, story, …). Counted inside the active level's window."""
+    __tablename__ = "tree_activity_events"
+    __table_args__ = (Index("ix_tree_event_user_event_day", "user_id", "event", "day"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(10), ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    event: Mapped[str] = mapped_column(String(30))
+    day: Mapped[date] = mapped_column(Date)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# ── Centralised key-value configuration ──────────────────────────────────────
+
+class AppConfigEntry(Base):
+    """A configuration key served by ``GET /config`` (value is JSON-encoded so any type can be stored)."""
+    __tablename__ = "app_config"
+    key: Mapped[str] = mapped_column(String(120), primary_key=True)
+    value: Mapped[str] = mapped_column(Text)
+    description: Mapped[str] = mapped_column(String(300), default="")
+    is_public: Mapped[bool] = mapped_column(Boolean, default=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

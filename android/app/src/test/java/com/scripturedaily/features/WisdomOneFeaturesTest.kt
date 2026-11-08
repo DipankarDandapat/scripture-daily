@@ -101,7 +101,7 @@ class TreeLogicTest {
         assertEquals(150, completed.totalDays)
         assertTrue(completed.journeyComplete)
         assertEquals(0, completed.daysToJourneyComplete)
-        assertEquals(150, TreeLogic.state((1..155).map { today.minusDays(it.toLong()) }.toSet(), today).totalDays)
+        assertEquals(155, TreeLogic.state((1..155).map { today.minusDays(it.toLong()) }.toSet(), today).totalDays)
     }
 
     @Test fun `same day counted once because progress is a set of dates`() {
