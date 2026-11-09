@@ -86,3 +86,16 @@ MetaAnalytics.track(context, MetaAnalytics.Event.FIRST_VERSE_READ)
 2. Use the **Meta Events Manager → Test Events** tab with your device's
    advertising ID to verify events arrive in real time.
 3. Revert the hard-code before merging.
+
+
+```
+
+Event	                      Parameters
+onboarding_completed	       tradition (e.g. "Hinduism"), language_id
+daily_reminder_enabled	       source ("reminders")
+verse_saved                    scripture  (e.g. "Bhagavad Gita"), saved_count
+mood_checked_in	               mood  (e.g. "anxious")
+explain_opened	               scripture
+story_opened	               scripture
+share_studio_opened	           scripture
+```

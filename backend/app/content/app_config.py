@@ -73,9 +73,19 @@ PLACEMENTS = {
     "settings_bottom_banner": _p("settings", "BANNER_ADAPTIVE_ANCHORED"),
     "journal_list_inline": _p("journal", "NATIVE_ADVANCED"),
     "app_open_ad": _p("app", "APP_OPEN"),
+    # Share Studio
+    "studio_share_rewarded": _p("share_studio", "REWARDED"),
+    "studio_whatsapp_rewarded": _p("share_studio", "REWARDED"),
+    "studio_save_image_rewarded": _p("share_studio", "REWARDED"),
+    # Video Studio
+    "studio_generate_video_rewarded": _p("share_studio", "REWARDED_INTERSTITIAL"),
+    "studio_share_video_rewarded": _p("share_studio", "REWARDED"),
+    "studio_whatsapp_video_rewarded": _p("share_studio", "REWARDED"),
+    "studio_save_video_rewarded": _p("share_studio", "REWARDED"),
+    "studio_make_another_interstitial": _p("share_studio", "INTERSTITIAL"),
 }
 # Screens where an ad must never appear however the placements are configured (scripture reading + reflection writing).
-BLOCKED_SCREENS = ["reflection_editor", "explain_sheet", "share_studio"]
+BLOCKED_SCREENS = ["reflection_editor", "explain_sheet"]
 
 DEFAULTS: dict[str, tuple[object, str]] = {
     "config_schema_version": (1, "Bump when the shape of a config value changes in a way old apps cannot read."),
@@ -96,4 +106,5 @@ DEFAULTS: dict[str, tuple[object, str]] = {
     "ads_privacy": ({"require_consent": True, "tag_for_child_directed_treatment": False, "tag_for_under_age_of_consent": False,
                      "max_ad_content_rating": "PG"}, "Consent (UMP) and age-appropriate ad settings applied before the SDK loads ads."),
     "wisdom_tree_default_enabled": (True, "Whether new installs start with the Wisdom Tree on."),
+    "meta_ads_enabled": (False, "Meta (Facebook) SDK event tracking. true = events flow to Meta Events Manager. false = all MetaAnalytics.track() calls are no-ops."),
 }

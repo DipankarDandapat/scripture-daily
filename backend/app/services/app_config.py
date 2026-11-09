@@ -25,7 +25,57 @@ def ensure_app_config(db: Session) -> int:
             added += 1
     if added:
         db.commit()
+    _merge_new_placements(db)
+    _remove_blocked_screen(db, "share_studio")
     return added
+
+
+# Placements added after the initial DB seed — merged into the existing ads_placements row.
+_NEW_PLACEMENTS = {
+    "studio_share_rewarded":           {"enabled": False, "screen": "share_studio", "format": "REWARDED",              "ad_unit_id": ""},
+    "studio_whatsapp_rewarded":        {"enabled": False, "screen": "share_studio", "format": "REWARDED",              "ad_unit_id": ""},
+    "studio_save_image_rewarded":      {"enabled": False, "screen": "share_studio", "format": "REWARDED",              "ad_unit_id": ""},
+    "studio_generate_video_rewarded":  {"enabled": False, "screen": "share_studio", "format": "REWARDED_INTERSTITIAL", "ad_unit_id": ""},
+    "studio_share_video_rewarded":     {"enabled": False, "screen": "share_studio", "format": "REWARDED",              "ad_unit_id": ""},
+    "studio_whatsapp_video_rewarded":  {"enabled": False, "screen": "share_studio", "format": "REWARDED",              "ad_unit_id": ""},
+    "studio_save_video_rewarded":      {"enabled": False, "screen": "share_studio", "format": "REWARDED",              "ad_unit_id": ""},
+    "studio_make_another_interstitial":{"enabled": False, "screen": "share_studio", "format": "INTERSTITIAL",         "ad_unit_id": ""},
+}
+
+
+def _merge_new_placements(db: Session) -> None:
+    """Add any missing studio placements into the existing ads_placements DB row without overwriting existing ones."""
+    row = db.get(AppConfigEntry, "ads_placements")
+    if row is None:
+        return
+    try:
+        current: dict = json.loads(row.value)
+    except Exception:
+        return
+    missing = {k: v for k, v in _NEW_PLACEMENTS.items() if k not in current}
+    if not missing:
+        return
+    current.update(missing)
+    row.value = json.dumps(current, sort_keys=True)
+    row.updated_at = datetime.now(timezone.utc)
+    db.commit()
+
+
+def _remove_blocked_screen(db: Session, screen: str) -> None:
+    """Remove a screen from ads_blocked_screens if it is still listed there."""
+    row = db.get(AppConfigEntry, "ads_blocked_screens")
+    if row is None:
+        return
+    try:
+        screens: list = json.loads(row.value)
+    except Exception:
+        return
+    if screen not in screens:
+        return
+    screens.remove(screen)
+    row.value = json.dumps(screens)
+    row.updated_at = datetime.now(timezone.utc)
+    db.commit()
 
 
 def public_config(db: Session) -> tuple[dict, str, datetime | None]:
@@ -53,7 +103,7 @@ def _check_unit_map(name: str, value: object, allow_blank: bool) -> None:
 
 def validate_config_value(key: str, value: object) -> None:
     """Reject malformed advertising configuration so a bad edit can never crash apps in the field."""
-    if key in {"ads_enabled", "ads_use_test_ids", "wisdom_tree_default_enabled"} and not isinstance(value, bool):
+    if key in {"ads_enabled", "ads_use_test_ids", "wisdom_tree_default_enabled", "meta_ads_enabled"} and not isinstance(value, bool):
         _bad(f"{key} must be true or false")
     if key == "ads_app_id" and not (isinstance(value, str) and re.match(r"^ca-app-pub-\d{16}~\d{10}$", value)):
         _bad("ads_app_id must look like ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY")
@@ -93,11 +143,20 @@ def validate_config_value(key: str, value: object) -> None:
             _bad("ads_privacy.max_ad_content_rating must be one of G, PG, T, MA")
 
 
-def set_config(db: Session, key: str, value: object, description: str | None = None, is_public: bool | None = None) -> AppConfigEntry:
+def set_config(db: Session, key: str, value: object, description: str | None = None, is_public: bool | None = None, merge: bool = False) -> AppConfigEntry:
     if not re.match(r"^[a-z][a-z0-9_]{1,119}$", key):
         _bad("key must be lower_snake_case")
-    validate_config_value(key, value)
     row = db.get(AppConfigEntry, key)
+    # Merge: validate the partial input first, then merge into the full existing value
+    if merge and isinstance(value, dict) and row is not None:
+        try:
+            existing = json.loads(row.value)
+        except Exception:
+            existing = {}
+        if isinstance(existing, dict):
+            validate_config_value(key, value)   # validate only the incoming partial dict
+            value = {**existing, **value}        # merge: existing keys preserved, incoming keys overwrite
+    validate_config_value(key, value)
     if row is None:
         row = AppConfigEntry(key=key, value="null", description=description or "", is_public=True if is_public is None else is_public)
         db.add(row)
