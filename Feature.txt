@@ -746,3 +746,44 @@ First analyse the existing project and prepare an implementation plan.
 Then implement the changes in the existing architecture, update the SQLite database safely, integrate all APIs, and perform complete regression testing.
 
 Do not create duplicate functionality or break existing working features.
+
+
+
+
+
+-------------------------------------
+
+curl --location --request POST 'http://localhost:8000/api/v1/notify/all?title=Daily+Verse&body=Your+verse+is+ready&topic=all_users' \
+--header 'X-Admin-Token: WisdomOne@2024'
+
+
+
+curl http://localhost:8000/api/v1/admin/config \
+  -H "X-Admin-Token: WisdomOne@2024"
+
+curl -X PUT http://localhost:8000/api/v1/admin/config/ads_enabled \
+-H "X-Admin-Token: WisdomOne@2024" \
+-H "Content-Type: application/json" \
+-d '{"value": false}'
+
+curl -X PUT http://localhost:8000/api/v1/admin/config/ads_use_test_ids \
+  -H "X-Admin-Token: WisdomOne@2024" \
+  -H "Content-Type: application/json" \
+  -d '{"value": false}'
+
+
+curl -X PUT http://localhost:8000/api/v1/admin/config/ads_placements \
+  -H "X-Admin-Token: WisdomOne@2024" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "value": {
+      "home_top_banner": {"enabled": true, "screen": "home", "format": "BANNER_ADAPTIVE_ANCHORED", "ad_unit_id": ""},
+      "discover_inline_native": {"enabled": true, "screen": "discover", "format": "NATIVE_ADVANCED", "ad_unit_id": ""}
+    }
+  }'
+
+
+ curl -X PUT http://localhost:8000/api/v1/admin/config/wisdom_tree_default_enabled \
+  -H "X-Admin-Token: WisdomOne@2024" \
+  -H "Content-Type: application/json" \
+  -d '{"value": false}'

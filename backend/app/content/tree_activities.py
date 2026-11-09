@@ -24,7 +24,7 @@ LEVELS: list[dict] = [
          {"code": "l1_mood", "title": "Check in with your mood", "description": "Record 3 mood check-ins.", "metric": "mood_checkins", "target": 3},
          {"code": "l1_explain", "title": "Understand simply", "description": "Open “Explain this like I’m 5” on 2 verses.", "metric": "explain", "target": 2},
          {"code": "l1_reflect", "title": "Your first reflection", "description": "Write and save your first Today’s Reflection.", "metric": "reflections", "target": 1},
-         {"code": "l1_share", "title": "Spread the light", "description": "Share a verse with someone.", "metric": "share", "target": 1},
+         {"code": "l1_share", "title": "Share with the World", "description": "Share a verse with someone.", "metric": "share", "target": 1},
      ]},
     {"level": 2, "title": "Growing Roots", "days": "Days 31–60", "subtitle": "Go deeper into stories, themes and challenges.",
      "activities": [

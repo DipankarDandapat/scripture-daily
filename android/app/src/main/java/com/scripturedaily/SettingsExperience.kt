@@ -325,6 +325,27 @@ fun SettingsExperienceScreen(
                         InfoCard("The theme applies to the whole app straight away.")
                     }
                     "notifications" -> {
+                        // Re-read SharedPrefs every time this section is shown so values reflect
+                        // permission grants that happened outside the app (e.g. lock-screen toggle on Home).
+                        LaunchedEffect(Unit) {
+                            selectedReminders = prefs.getBoolean("reminders", false)
+                            notifyVerseUpdates = prefs.getBoolean("notify_verse_updates", false)
+                            notifyWallpaperUpdates = prefs.getBoolean("notify_wallpaper_updates", false)
+                        }
+                        // When master reminders switch is turned ON, also enable the sub-toggles
+                        // so they reflect the actual notification state.
+                        LaunchedEffect(selectedReminders) {
+                            if (selectedReminders) {
+                                if (!notifyVerseUpdates) {
+                                    notifyVerseUpdates = true
+                                    prefs.edit().putBoolean("notify_verse_updates", true).apply()
+                                }
+                                if (!notifyWallpaperUpdates) {
+                                    notifyWallpaperUpdates = true
+                                    prefs.edit().putBoolean("notify_wallpaper_updates", true).apply()
+                                }
+                            }
+                        }
                         ToggleCard("Verse reminders", "Notify when a new verse is scheduled", selectedReminders, icon = Icons.Outlined.Notifications) { selectedReminders = it; onReminders(it) }
                         ToggleCard("Verse update notifications", "Notify when the active verse changes", notifyVerseUpdates, icon = Icons.AutoMirrored.Outlined.MenuBook) { notifyVerseUpdates = it; prefs.edit().putBoolean("notify_verse_updates", it).apply() }
                         ToggleCard("Wallpaper update notifications", "Notify when the lock-screen artwork changes", notifyWallpaperUpdates, icon = Icons.Outlined.Image) { notifyWallpaperUpdates = it; prefs.edit().putBoolean("notify_wallpaper_updates", it).apply() }

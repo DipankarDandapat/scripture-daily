@@ -46,7 +46,7 @@ object AppConfigManager {
 
     /** Built-in fallback used until a config has ever been fetched. Ads stay OFF so nothing is requested without a server decision. */
     val SAFE_DEFAULTS: JsonObject = JsonParser.parseString(
-        """{"config_schema_version":1,"config_refresh_min_interval_seconds":$DEFAULT_MIN_INTERVAL_SECONDS,"ads_enabled":false,"ads_use_test_ids":true,"wisdom_tree_default_enabled":true}"""
+        """{"config_schema_version":1,"config_refresh_min_interval_seconds":$DEFAULT_MIN_INTERVAL_SECONDS,"ads_enabled":false,"ads_use_test_ids":true,"wisdom_tree_default_enabled":true,"meta_ads_enabled":false}"""
     ).asJsonObject
 
     private val _state = MutableStateFlow(ConfigSnapshot("defaults", SAFE_DEFAULTS, ConfigSource.DEFAULTS, 0L))

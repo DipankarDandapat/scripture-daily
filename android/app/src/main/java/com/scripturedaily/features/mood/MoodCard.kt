@@ -52,6 +52,11 @@ import com.scripturedaily.ui.SurfaceCard
 import com.scripturedaily.ui.W
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /** Offline fallback only; the app normally loads the list from GET /moods. */
 val DefaultMoods = listOf(
@@ -154,13 +159,28 @@ fun MoodJournalContent(modifier: Modifier = Modifier, onOpenReflections: (() -> 
                         }
                     }
                 }
-                Text("Recent Check-ins", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = W.Ink)
-                s.recent.forEach { c ->
-                    val m = DefaultMoods.firstOrNull { it.code == c.mood }
-                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(W.Surface).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(m?.emoji ?: "🙂", fontSize = 22.sp); Spacer(Modifier.width(10.dp))
-                        Text(m?.label ?: c.mood, fontWeight = FontWeight.SemiBold, color = W.Ink, modifier = Modifier.weight(1f))
-                        Text(c.createdAt.take(16).replace('T', ' '), fontSize = 11.sp, color = W.InkSoft)
+                val cutoff = LocalDate.now(ZoneId.systemDefault()).minusDays(4) // today + 4 prior = 5 days
+                val recentFiveDays = s.recent.filter { c ->
+                    runCatching {
+                        val local = ZonedDateTime.parse(c.createdAt).withZoneSameInstant(ZoneId.systemDefault())
+                        !local.toLocalDate().isBefore(cutoff)
+                    }.getOrDefault(true)
+                }
+                if (recentFiveDays.isNotEmpty()) {
+                    Text("My Daily Journal", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = W.Ink)
+                    recentFiveDays.forEach { c ->
+                        val m = DefaultMoods.firstOrNull { it.code == c.mood }
+                        val localLabel = remember(c.createdAt) {
+                            runCatching {
+                                val local = ZonedDateTime.parse(c.createdAt).withZoneSameInstant(ZoneId.systemDefault())
+                                local.format(DateTimeFormatter.ofPattern("MMM d · h:mm a", Locale.getDefault()))
+                            }.getOrDefault(c.createdAt.take(16).replace('T', ' '))
+                        }
+                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(W.Surface).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Text(m?.emoji ?: "🙂", fontSize = 22.sp); Spacer(Modifier.width(10.dp))
+                            Text(m?.label ?: c.mood, fontWeight = FontWeight.SemiBold, color = W.Ink, modifier = Modifier.weight(1f))
+                            Text(localLabel, fontSize = 11.sp, color = W.InkSoft)
+                        }
                     }
                 }
             }

@@ -143,6 +143,7 @@ import com.scripturedaily.data.VerseSyncWorker
 import com.scripturedaily.data.toCached
 import com.scripturedaily.lockscreen.LockScreenVerse
 import com.google.firebase.messaging.FirebaseMessaging
+import com.scripturedaily.analytics.MetaAnalytics
 import com.scripturedaily.notification.WisdomOneMessagingService
 import com.scripturedaily.notification.VerseNotifier
 import com.scripturedaily.widget.ScriptureWidget
@@ -289,7 +290,8 @@ class MainActivity : ComponentActivity() {
             getSharedPreferences("reader", 0).getString("bearer_token", null)
         }
         // Fetch (or retrieve cached) FCM token so it is ready for backend registration
-        FirebaseMessaging.getInstance().token.addOnSuccessListener { token ->
+        @Suppress("DEPRECATION")
+        FirebaseMessaging.getInstance().getToken().addOnSuccessListener { token ->
             android.util.Log.d("FCM", "Device FCM token: $token")
             val prefs = getSharedPreferences("reader", 0)
             prefs.edit().putString("fcm_token", token).apply()
@@ -714,6 +716,7 @@ private fun ScriptureApp(
                 reminders = true
                 store.edit().putBoolean("reminders", true).apply()
                 VerseSyncWorker.schedule(context, frequency)
+                MetaAnalytics.track(context, MetaAnalytics.Event.DAILY_REMINDER_ENABLED)
             }
             "lock" -> {
                 if (granted) {
@@ -751,6 +754,7 @@ private fun ScriptureApp(
             else ApiClient.api.removeFavorite(v.id)
         } catch (_: Exception) {}
         snackbarHostState.showSnackbar(if (nowFavorite) "Saved verse" else "Removed from saved verses")
+        if (nowFavorite) MetaAnalytics.track(context, MetaAnalytics.Event.VERSE_SAVED)
         // Trigger in-app review at 3rd, 10th, 25th save
         if (nowFavorite) {
             val newCount = savedVerses.size + 1
@@ -779,6 +783,7 @@ private fun ScriptureApp(
                 store.edit().putString("mood_done_date", java.time.LocalDate.now().toString()).apply()  // survives restarts
                 scope.launch { kotlinx.coroutines.delay(1800); moodCardHidden = true }                   // let the confirmation show, then animate away
                 runCatching { withContext(Dispatchers.IO) { ApiClient.api.recordMood(MoodCheckinInput(code, remote.id)) } }
+                MetaAnalytics.track(context, MetaAnalytics.Event.MOOD_CHECKED_IN)
             }
         } catch (_: Exception) {
             moodError = "Couldn't reach the server. Check your connection and try again."
@@ -893,7 +898,10 @@ private fun ScriptureApp(
 
     fun enableLockScreen() {
         lockScreen = true
-        store.edit().putBoolean("lock_screen", true).apply()
+        store.edit().putBoolean("lock_screen", true)
+            .putBoolean("notify_verse_updates", true)
+            .putBoolean("notify_wallpaper_updates", true)
+            .apply()
         val needsPermission = Build.VERSION.SDK_INT >= 33 &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         scope.launch {
@@ -1030,6 +1038,7 @@ private fun ScriptureApp(
                                         configured = true
                         setupGuidePending = true
                         homeLoadKey++
+                        MetaAnalytics.track(context, MetaAnalytics.Event.ONBOARDING_COMPLETED)
                     } else error = "Connect to the internet to load the selected scripture catalog."
                 }
             }
@@ -1133,6 +1142,7 @@ private fun ScriptureApp(
                             reminders = true
                             store.edit().putBoolean("reminders", true).apply()
                             VerseSyncWorker.schedule(context, frequency)
+                            MetaAnalytics.track(context, MetaAnalytics.Event.DAILY_REMINDER_ENABLED)
                             scope.launch { snackbarHostState.showSnackbar("Verse reminders are enabled.") }
                         }
                     },
@@ -1182,16 +1192,16 @@ private fun ScriptureApp(
                     // The five-level journey is complete at 150 distinct reading days.
                     // Keep the achievement/history in the journey data, but remove the tree card from Home.
                     treeSlot = if (treeState.journeyComplete || !treeEnabled) null else {
-                        { WisdomTreeCard(treeState, onJourney = { showJourney = true }, activities = treeRemote?.activities, showActivities = treeRemote?.activityBoxVisible == true) }
+                        { WisdomTreeCard(treeState, onJourney = { showJourney = true }) }
                     },
                     actionsSlot = {
                         verse?.let { v ->
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 OutlinedButton(
-                                    onClick = { explainFor = v; markReading(); reportTreeActivity("explain") }, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(16.dp),
+                                    onClick = { explainFor = v; markReading(); reportTreeActivity("explain"); MetaAnalytics.track(context, MetaAnalytics.Event.EXPLAIN_OPENED) }, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(16.dp),
                                     border = BorderStroke(1.5.dp, Amber.copy(alpha = 0.5f)), colors = ButtonDefaults.outlinedButtonColors(contentColor = Ink)
                                 ) { Text("🧒  Explain this to me like I'm 5", fontWeight = FontWeight.SemiBold, fontSize = 14.sp) }
-                                if (storyAvailable) OutlinedButton(onClick = { overlay = Overlay.StoryForVerse(v.id); markReading(); reportTreeActivity("story") }, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(16.dp),
+                                if (storyAvailable) OutlinedButton(onClick = { overlay = Overlay.StoryForVerse(v.id); markReading(); reportTreeActivity("story"); MetaAnalytics.track(context, MetaAnalytics.Event.STORY_OPENED) }, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(16.dp),
                                     border = BorderStroke(1.5.dp, Amber.copy(alpha = 0.5f)), colors = ButtonDefaults.outlinedButtonColors(contentColor = Ink),
                                     contentPadding = PaddingValues(horizontal = 6.dp)) { Text("📖 Story", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
                             }
@@ -1204,7 +1214,7 @@ private fun ScriptureApp(
                         scope.launch { loadToday(true) }
                     },
                     onFavorite = { verse?.let { v -> markReading(); scope.launch { toggleFavorite(v) } } },
-                    onSpread = { verse?.let { v -> markReading(); overlay = Overlay.Studio(v) } },
+                    onSpread = { verse?.let { v -> markReading(); overlay = Overlay.Studio(v); MetaAnalytics.track(context, MetaAnalytics.Event.SHARE_STUDIO_OPENED) } },
                     onShowLockScreen = { enableLockScreen() },
                     onHideLockScreen = { disableLockScreen() },
                     onHistory = {
@@ -1937,7 +1947,7 @@ private fun HomeScreen(
                     ) {
                         Icon(Icons.Outlined.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Spread the Light", fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
+                        Text("Share with the World", fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
                     }
                 }
                 actionsSlot()
