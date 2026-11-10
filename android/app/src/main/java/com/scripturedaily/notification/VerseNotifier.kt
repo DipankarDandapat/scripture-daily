@@ -30,14 +30,9 @@ object VerseNotifier {
         reference: String
     ): Boolean {
         val prefs = context.getSharedPreferences("reader", Context.MODE_PRIVATE)
-<<<<<<< HEAD
-        val showOnLockScreen = prefs.getBoolean("lock_screen", false)
-        val remindersEnabled = prefs.getBoolean("reminders", false)
-=======
         val updatesEnabled = prefs.getBoolean("notify_verse_updates", false)
         val showOnLockScreen = prefs.getBoolean("lock_screen", false) && updatesEnabled
         val remindersEnabled = prefs.getBoolean("reminders", false) || updatesEnabled
->>>>>>> settings_redesign
         if (!showOnLockScreen && !remindersEnabled) {
             cancel(context)
             return false
@@ -139,8 +134,6 @@ object VerseNotifier {
         }
     }
 
-<<<<<<< HEAD
-=======
 
     fun showWallpaperUpdated(context: Context) {
         val prefs = context.getSharedPreferences("reader", Context.MODE_PRIVATE)
@@ -169,7 +162,6 @@ object VerseNotifier {
         runCatching { NotificationManagerCompat.from(context).notify(1003, notification) }
     }
 
->>>>>>> settings_redesign
     fun cancelLockScreen(context: Context) {
         NotificationManagerCompat.from(context).cancel(LOCK_NOTIFICATION_ID)
     }

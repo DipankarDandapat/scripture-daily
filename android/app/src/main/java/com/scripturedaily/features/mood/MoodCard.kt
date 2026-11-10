@@ -20,10 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
-<<<<<<< HEAD
-=======
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
->>>>>>> settings_redesign
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -55,14 +52,11 @@ import com.scripturedaily.ui.SurfaceCard
 import com.scripturedaily.ui.W
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-<<<<<<< HEAD
-=======
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
->>>>>>> settings_redesign
 
 /** Offline fallback only; the app normally loads the list from GET /moods. */
 val DefaultMoods = listOf(
@@ -72,10 +66,7 @@ val DefaultMoods = listOf(
     MoodItem("angry", "Angry", "😠", "Pause for a moment. Here is a verse to cool the fire.")
 )
 
-<<<<<<< HEAD
-=======
 @Composable
->>>>>>> settings_redesign
 fun moodColor(code: String): Color = when (code) {
     "anxious" -> Color(0xFF6C8EAD); "happy" -> Color(0xFFE0A530); "sad" -> Color(0xFF7A62A8); "angry" -> Color(0xFFC0563F); else -> W.Gold
 }
@@ -127,15 +118,12 @@ fun MoodCard(
 
 @Composable
 fun MoodJournalScreen(onBack: () -> Unit) {
-<<<<<<< HEAD
-=======
     OverlayScreen("Mood Journal", onBack) { MoodJournalContent(Modifier.weight(1f), onOpenReflections = {}) }
 }
 
 /** Mood statistics + recent check-ins. [onOpenReflections] adds the "Your Reflections" shortcut card from the Journal design. */
 @Composable
 fun MoodJournalContent(modifier: Modifier = Modifier, onOpenReflections: (() -> Unit)? = null) {
->>>>>>> settings_redesign
     var summary by remember { mutableStateOf<MoodSummary?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var attempt by remember { mutableIntStateOf(0) }
@@ -144,40 +132,6 @@ fun MoodJournalContent(modifier: Modifier = Modifier, onOpenReflections: (() -> 
         try { summary = withContext(Dispatchers.IO) { ApiClient.api.moodSummary(30) } }
         catch (_: Exception) { error = "Couldn't load your mood journal. Check your connection." }
     }
-<<<<<<< HEAD
-    OverlayScreen("Mood Journal", onBack) {
-        val s = summary
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            when {
-                error != null -> ErrorBox(error!!, { attempt++ })
-                s == null -> LoadingBox()
-                s.total == 0 -> EmptyBox("No check-ins yet. Tap a mood on the Home screen to start your journal.")
-                else -> {
-                    Text("Last ${s.days} days · ${s.total} check-ins", fontSize = 13.sp, color = W.InkSoft)
-                    s.topMood?.let { top ->
-                        val m = DefaultMoods.firstOrNull { it.code == top }
-                        SurfaceCard { Text("Most often: ${m?.emoji ?: ""} ${m?.label ?: top}", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = W.Ink) }
-                    }
-                    SurfaceCard {
-                        DefaultMoods.forEach { m ->
-                            val n = s.counts[m.code] ?: 0
-                            Row(Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text("${m.emoji} ${m.label}", fontSize = 13.sp, modifier = Modifier.width(96.dp), color = W.InkMid)
-                                Box(Modifier.weight(1f).height(12.dp).clip(RoundedCornerShape(6.dp)).background(moodColor(m.code).copy(alpha = 0.15f))) {
-                                    Box(Modifier.fillMaxWidth(if (s.total == 0) 0f else n.toFloat() / s.total).height(12.dp).clip(RoundedCornerShape(6.dp)).background(moodColor(m.code)))
-                                }
-                                Text("$n", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.End, modifier = Modifier.width(32.dp), color = W.Ink)
-                            }
-                        }
-                    }
-                    Text("Recent", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = W.Gold, letterSpacing = 1.2.sp)
-                    s.recent.forEach { c ->
-                        val m = DefaultMoods.firstOrNull { it.code == c.mood }
-                        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(Color.White).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(m?.emoji ?: "🙂", fontSize = 22.sp); Spacer(Modifier.width(10.dp))
-                            Text(m?.label ?: c.mood, fontWeight = FontWeight.SemiBold, color = W.Ink, modifier = Modifier.weight(1f))
-                            Text(c.createdAt.take(16).replace('T', ' '), fontSize = 11.sp, color = W.InkSoft)
-=======
     val s = summary
     Column(modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         when {
@@ -226,15 +180,10 @@ fun MoodJournalContent(modifier: Modifier = Modifier, onOpenReflections: (() -> 
                             Text(m?.emoji ?: "🙂", fontSize = 22.sp); Spacer(Modifier.width(10.dp))
                             Text(m?.label ?: c.mood, fontWeight = FontWeight.SemiBold, color = W.Ink, modifier = Modifier.weight(1f))
                             Text(localLabel, fontSize = 11.sp, color = W.InkSoft)
->>>>>>> settings_redesign
                         }
                     }
                 }
             }
-<<<<<<< HEAD
-            Spacer(Modifier.height(20.dp))
-        }
-=======
         }
         if (onOpenReflections != null) SurfaceCard(onClick = onOpenReflections) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -248,6 +197,5 @@ fun MoodJournalContent(modifier: Modifier = Modifier, onOpenReflections: (() -> 
             }
         }
         Spacer(Modifier.height(20.dp))
->>>>>>> settings_redesign
     }
 }

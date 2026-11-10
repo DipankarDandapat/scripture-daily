@@ -31,9 +31,6 @@ import kotlin.math.sin
 
 /** The Home daily-verse card, styled by [theme] (one of ten, rotating by calendar day). */
 @Composable
-<<<<<<< HEAD
-fun ThemedVerseCard(verse: Verse, theme: VerseTheme, fontSize: Int, modifier: Modifier = Modifier) {
-=======
 fun ThemedVerseCard(
     verse: Verse,
     theme: VerseTheme,
@@ -44,7 +41,6 @@ fun ThemedVerseCard(
     showTranslation: Boolean = true,
     showBranding: Boolean = true
 ) {
->>>>>>> settings_redesign
     val text = Color(theme.text); val ref = Color(theme.reference); val accent = Color(theme.accent)
     val light = VerseThemes.contrast(theme.top, 0xFF000000) > 8.0
     val family = if (theme.serif) FontFamily.Serif else FontFamily.Default
@@ -57,11 +53,7 @@ fun ThemedVerseCard(
             drawArt(theme.art, accent, Color(theme.text))
         }
         Column(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-<<<<<<< HEAD
-            Row(verticalAlignment = Alignment.CenterVertically) {
-=======
             if (showScripture) Row(verticalAlignment = Alignment.CenterVertically) {
->>>>>>> settings_redesign
                 Box(Modifier.clip(RoundedCornerShape(8.dp)).background(Color(theme.chip).let { if (theme.chip == 0L) Color.Transparent else it })
                     .border(1.dp, accent.copy(alpha = 0.7f), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 5.dp)) {
                     Text(verse.scripture.uppercase(), color = if (light) Color(theme.reference) else accent,
@@ -71,10 +63,6 @@ fun ThemedVerseCard(
             Text("“${verse.text}”", color = text, fontSize = fontSize.sp, lineHeight = (fontSize + 12).sp, fontFamily = family,
                 fontWeight = FontWeight.Normal, textAlign = if (theme.serif) TextAlign.Center else TextAlign.Start,
                 style = androidx.compose.ui.text.TextStyle(textDirection = androidx.compose.ui.text.style.TextDirection.Content), modifier = Modifier.fillMaxWidth())
-<<<<<<< HEAD
-            Box(Modifier.fillMaxWidth(0.3f).height(1.dp).align(Alignment.End).background(accent.copy(alpha = 0.6f)))
-            Text(verse.reference(), color = ref, fontSize = 12.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.3.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
-=======
             if (showTranslation && !verse.translation.isNullOrBlank()) {
                 Text(verse.translation, color = ref.copy(alpha = 0.85f), fontSize = 10.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
             }
@@ -83,7 +71,6 @@ fun ThemedVerseCard(
                 Text(verse.reference(), color = ref, fontSize = 12.sp, fontWeight = FontWeight.Medium, letterSpacing = 0.3.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
             }
             if (showBranding) Text("WisdomOne", color = ref.copy(alpha = 0.72f), fontSize = 9.sp, textAlign = TextAlign.End, modifier = Modifier.fillMaxWidth())
->>>>>>> settings_redesign
         }
     }
 }

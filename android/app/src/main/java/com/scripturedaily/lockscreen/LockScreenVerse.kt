@@ -3,31 +3,20 @@ package com.scripturedaily.lockscreen
 import android.app.WallpaperManager
 import android.content.Context
 import android.graphics.Bitmap
-<<<<<<< HEAD
-=======
 import android.graphics.BitmapFactory
 import android.graphics.Matrix
 import android.graphics.RectF
->>>>>>> settings_redesign
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
-<<<<<<< HEAD
-=======
 import android.graphics.LinearGradient
 import android.graphics.Path
 import android.graphics.Shader
->>>>>>> settings_redesign
 import android.os.Build
 import android.text.Layout
 import android.text.StaticLayout
 import android.text.TextPaint
-<<<<<<< HEAD
-import android.text.TextUtils
-import com.scripturedaily.lockscreentime.TimePalette
-=======
->>>>>>> settings_redesign
 import com.scripturedaily.notification.VerseNotifier
 import java.io.IOException
 
@@ -55,11 +44,7 @@ object LockScreenVerse {
     ): String? {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val wallpaperEnabled = prefs.getBoolean(KEY_ENABLED, false)
-<<<<<<< HEAD
-        val notify = wallpaperEnabled || prefs.getBoolean("reminders", false)
-=======
         val notify = wallpaperEnabled || prefs.getBoolean("reminders", false) || prefs.getBoolean("notify_verse_updates", false)
->>>>>>> settings_redesign
         if (!wallpaperEnabled && !notify) return null
 
         val shouldSetWallpaper = wallpaperEnabled &&
@@ -69,10 +54,7 @@ object LockScreenVerse {
                 if (success) prefs.edit().putInt(KEY_VERSE_ID, verseId).apply()
             }
         } else false
-<<<<<<< HEAD
-=======
         if (wallpaperSet) VerseNotifier.showWallpaperUpdated(context)
->>>>>>> settings_redesign
         val notified = notify && VerseNotifier.show(context, verseId, scripture, text, reference)
         val message = when {
             wallpaperSet && notified -> "Today's verse wallpaper and lock-screen notification are active."
@@ -88,8 +70,6 @@ object LockScreenVerse {
         return message
     }
 
-<<<<<<< HEAD
-=======
     /** Applies the currently configured wallpaper immediately, even when automatic updates are disabled. */
     fun applyWallpaperNow(
         context: Context,
@@ -138,7 +118,6 @@ object LockScreenVerse {
         }
     }
 
->>>>>>> settings_redesign
     /** Refreshes only the palette/background on the existing verse wallpaper; never posts a notification. */
     fun refreshWallpaperPalette(
         context: Context,
@@ -146,16 +125,6 @@ object LockScreenVerse {
         scripture: String,
         text: String,
         reference: String
-<<<<<<< HEAD
-    ) {
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        if (!prefs.getBoolean(KEY_ENABLED, false)) return
-        if (setLockWallpaper(context, scripture, text, reference)) {
-            prefs.edit().putInt(KEY_VERSE_ID, verseId).apply()
-        }
-    }
-
-=======
     ): Boolean {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (!prefs.getBoolean(KEY_ENABLED, false)) return false
@@ -167,7 +136,6 @@ object LockScreenVerse {
     fun isWallpaperAppliedForVerse(context: Context, verseId: Int): Boolean =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(KEY_VERSE_ID, -1) == verseId
 
->>>>>>> settings_redesign
     /** Clears only the lock-screen wallpaper; the home-screen wallpaper is untouched. */
     fun clearLockScreenWallpaper(context: Context) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().remove(KEY_VERSE_ID).apply()
@@ -183,26 +151,18 @@ object LockScreenVerse {
         }
     }
 
-<<<<<<< HEAD
-    private fun setLockWallpaper(context: Context, scripture: String, text: String, reference: String): Boolean {
-        val bitmap = render(context, scripture, text, reference)
-=======
     private data class WallpaperPalette(val top: Int, val middle: Int, val bottom: Int, val accent: Int, val primaryText: Int, val secondaryText: Int)
 
     private fun setLockWallpaper(context: Context, scripture: String, text: String, reference: String): Boolean {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val rotation = prefs.getInt("wallpaper_rotation", 0)
         val bitmap = render(context, scripture, text, reference, rotation, null, null)
->>>>>>> settings_redesign
         return try {
             val manager = WallpaperManager.getInstance(context)
             if (!manager.isWallpaperSupported || !manager.isSetWallpaperAllowed) return false
             manager.setBitmap(bitmap, null, true, WallpaperManager.FLAG_LOCK)
-<<<<<<< HEAD
-=======
             // Every refresh advances the scene; Multicolor also advances the palette, fixed themes do not.
             prefs.edit().putInt("wallpaper_rotation", rotation + 1).apply()
->>>>>>> settings_redesign
             true
         } catch (_: IOException) {
             false
@@ -215,71 +175,6 @@ object LockScreenVerse {
         }
     }
 
-<<<<<<< HEAD
-    private fun render(context: Context, scripture: String, text: String, reference: String): Bitmap {
-        val metrics = context.resources.displayMetrics
-        val width = metrics.widthPixels.coerceIn(480, 1440)
-        val height = metrics.heightPixels.coerceIn(800, 3200)
-        val interval = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getInt("palette_interval_hours", 6)
-        val palette = TimePalette.now(interval)
-        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-        val canvas = Canvas(bitmap)
-        canvas.drawColor(palette.background)
-
-        val contentWidth = (width * 0.84f).toInt()
-        val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = palette.accent
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            if (scripture.all { it.code < 128 }) letterSpacing = 0.08f
-        }
-        val bodyPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = palette.primaryText
-            typeface = Typeface.DEFAULT
-        }
-        val metaPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = palette.secondaryText
-            typeface = Typeface.DEFAULT
-        }
-        val footerPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = palette.accent
-            typeface = Typeface.DEFAULT
-            textAlign = Paint.Align.CENTER
-            textSize = width * 0.028f
-        }
-
-        val title = layout(scripture.uppercase(), titlePaint, width * 0.034f, contentWidth, 3)
-        val referenceLayout = layout(reference, metaPaint, width * 0.032f, contentWidth, 3)
-        val bandTop = height * 0.34f
-        val bandBottom = height * 0.80f
-        val gap = height * 0.028f
-        val fixedHeight = title.height + referenceLayout.height + gap * 2
-        val maxBodyHeight = (bandBottom - bandTop - fixedHeight).coerceAtLeast(height * 0.16f)
-        var bodySize = width * 0.058f
-        val minBodySize = width * 0.034f
-        var body = layout("“$text”", bodyPaint, bodySize, contentWidth, 18)
-        while (body.height > maxBodyHeight && bodySize > minBodySize) {
-            bodySize -= width * 0.002f
-            body = layout("“$text”", bodyPaint, bodySize, contentWidth, 18)
-        }
-
-        val blockHeight = title.height + gap + body.height + gap + referenceLayout.height
-        var y = bandTop + ((bandBottom - bandTop - blockHeight).coerceAtLeast(0f) / 2f)
-        val left = (width - contentWidth) / 2f
-        canvas.save()
-        canvas.translate(left, y)
-        title.draw(canvas)
-        y = title.height + gap
-        canvas.translate(0f, y)
-        body.draw(canvas)
-        canvas.translate(0f, body.height + gap)
-        referenceLayout.draw(canvas)
-        canvas.restore()
-        canvas.drawText("WisdomOne", width / 2f, height * 0.92f, footerPaint)
-        return bitmap
-    }
-
-=======
     private fun paletteFor(theme: String, rotation: Int): WallpaperPalette {
         val palettes = listOf(
             WallpaperPalette(Color.rgb(255, 207, 150), Color.rgb(150, 93, 151), Color.rgb(39, 24, 65), Color.rgb(255, 224, 155), Color.WHITE, Color.rgb(247, 222, 211)),
@@ -551,17 +446,12 @@ object LockScreenVerse {
         }
     }
 
->>>>>>> settings_redesign
     private fun layout(text: String, paint: TextPaint, textSizePx: Float, width: Int, maxLines: Int): StaticLayout {
         paint.textSize = textSizePx
         return StaticLayout.Builder.obtain(text, 0, text.length, paint, width.coerceAtLeast(1))
             .setAlignment(Layout.Alignment.ALIGN_CENTER)
             .setIncludePad(false)
             .setMaxLines(maxLines)
-<<<<<<< HEAD
-            .setEllipsize(TextUtils.TruncateAt.END)
-=======
->>>>>>> settings_redesign
             .setLineSpacing(0f, 1.15f)
             .setBreakStrategy(Layout.BREAK_STRATEGY_SIMPLE)
             .build()

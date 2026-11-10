@@ -38,12 +38,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-<<<<<<< HEAD
-=======
 import com.scripturedaily.data.TreeActivitiesDto
 import com.scripturedaily.data.TreeActivityDto
 import com.scripturedaily.data.TreeDto
->>>>>>> settings_redesign
 import com.scripturedaily.ui.OverlayScreen
 import com.scripturedaily.ui.W
 import java.time.LocalDate
@@ -124,13 +121,9 @@ private fun DrawScope.trunk(cx: Float, w: Float, h: Float, locked: Boolean, bran
 }
 
 /** Soft sunrise-style card background used by the Home tree card and the journey screen. */
-<<<<<<< HEAD
-private val CardBg = Brush.linearGradient(listOf(Color(0xFFFFF4DC), Color(0xFFFBE9EF), Color(0xFFEDE6F8)))
-=======
 private val CardBgLight = Brush.linearGradient(listOf(Color(0xFFFFF4DC), Color(0xFFFBE9EF), Color(0xFFEDE6F8)))
 private val CardBgDark = Brush.linearGradient(listOf(Color(0xFF3A2F26), Color(0xFF33243A), Color(0xFF2A2342)))
 private val CardBg: Brush @Composable get() = if (W.IsDark) CardBgDark else CardBgLight
->>>>>>> settings_redesign
 
 @Composable
 fun TreeIllustration(stage: TreeStage, modifier: Modifier = Modifier, locked: Boolean = false, animated: Boolean = false, description: String = "") {
@@ -140,11 +133,7 @@ fun TreeIllustration(stage: TreeStage, modifier: Modifier = Modifier, locked: Bo
 
 /** The single progress card on Home: tree, level + status, encouragement, "View journey" and the five milestones. */
 @Composable
-<<<<<<< HEAD
-fun WisdomTreeCard(state: TreeState, onJourney: () -> Unit, modifier: Modifier = Modifier) {
-=======
 fun WisdomTreeCard(state: TreeState, onJourney: () -> Unit, modifier: Modifier = Modifier, activities: TreeActivitiesDto? = null, showActivities: Boolean = false) {
->>>>>>> settings_redesign
     Column(
         modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(CardBg).border(BorderStroke(1.dp, W.Gold.copy(alpha = 0.25f)), RoundedCornerShape(26.dp))
             .padding(start = 18.dp, end = 12.dp, top = 16.dp, bottom = 12.dp)
@@ -168,8 +157,6 @@ fun WisdomTreeCard(state: TreeState, onJourney: () -> Unit, modifier: Modifier =
         Box(Modifier.fillMaxWidth().height(1.dp).background(W.Gold.copy(alpha = 0.25f)))
         Spacer(Modifier.height(8.dp))
         MilestoneRow(state)
-<<<<<<< HEAD
-=======
         // This level's own activities. When every one is done (nothing pending) the box is not composed at all.
         if (showActivities && activities != null && !activities.allCompleted) {
             Spacer(Modifier.height(10.dp))
@@ -215,7 +202,6 @@ private fun ActivityRow(item: TreeActivityDto) {
             }
         }
         if (!item.completed) Text("${item.progress}/${item.target}", fontSize = 11.sp, color = W.InkSoft, modifier = Modifier.padding(start = 6.dp, top = 2.dp))
->>>>>>> settings_redesign
     }
 }
 
@@ -226,11 +212,7 @@ fun MilestoneRow(state: TreeState) {
             val unlocked = state.unlocked(s); val current = s == state.stage && state.totalDays > 0
             Column(
                 Modifier.weight(1f).padding(horizontal = 2.dp).clip(RoundedCornerShape(16.dp))
-<<<<<<< HEAD
-                    .then(if (current) Modifier.background(Color.White.copy(alpha = 0.55f)).border(BorderStroke(1.5.dp, Color(0xFFE9B949)), RoundedCornerShape(16.dp)) else Modifier)
-=======
                     .then(if (current) Modifier.background(W.Surface.copy(alpha = 0.55f)).border(BorderStroke(1.5.dp, Color(0xFFE9B949)), RoundedCornerShape(16.dp)) else Modifier)
->>>>>>> settings_redesign
                     .padding(vertical = 6.dp).semantics { contentDescription = "${s.label}, ${s.range}, ${if (unlocked) "unlocked" else "locked"}" },
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
@@ -278,11 +260,7 @@ private fun milestoneMessage(s: TreeStage) = when (s) {
 
 /** "View journey": the tree, unlocked milestones, reading history, totals and the next milestone. */
 @Composable
-<<<<<<< HEAD
-fun TreeJourneyScreen(days: Set<LocalDate>, onBack: () -> Unit) {
-=======
 fun TreeJourneyScreen(days: Set<LocalDate>, remote: TreeDto?, onBack: () -> Unit) {
->>>>>>> settings_redesign
     val today = LocalDate.now()
     val state = remember(days, today) { TreeLogic.state(days, today) }
     OverlayScreen("Your Wisdom Journey", onBack) {
@@ -290,11 +268,7 @@ fun TreeJourneyScreen(days: Set<LocalDate>, remote: TreeDto?, onBack: () -> Unit
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(CardBg).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 TreeIllustration(state.stage, Modifier.size(210.dp), animated = true, description = "Your Wisdom Tree, ${state.stage.label} stage")
                 Box(Modifier.clip(RoundedCornerShape(50)).background(Color(0xFFFFE8A6)).padding(horizontal = 14.dp, vertical = 6.dp)) {
-<<<<<<< HEAD
-                    Text("Level ${state.level} · ${state.status}", fontWeight = FontWeight.Bold, color = Color(0xFF4A3410), fontSize = 13.sp)
-=======
                     Text("Level ${state.level} of ${TreeLogic.MAX_LEVELS} · Day ${state.journeyDay}/${TreeLogic.DAYS_PER_LEVEL}", fontWeight = FontWeight.Bold, color = Color(0xFF4A3410), fontSize = 13.sp)
->>>>>>> settings_redesign
                 }
                 Spacer(Modifier.height(10.dp))
                 Text(TreeLogic.message(state), fontSize = 14.sp, color = W.InkMid, textAlign = TextAlign.Center, lineHeight = 20.sp)
@@ -306,13 +280,6 @@ fun TreeJourneyScreen(days: Set<LocalDate>, remote: TreeDto?, onBack: () -> Unit
                 Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(W.Gold.copy(alpha = 0.12f)).padding(14.dp)) {
                     Text("Next: ${it.emoji} ${it.label} — ${state.daysToNext} more reading ${if (state.daysToNext == 1) "day" else "days"} (growth never resets; it simply waits for you).", fontSize = 13.sp, color = W.InkMid, lineHeight = 18.sp)
                 }
-<<<<<<< HEAD
-            } ?: Text("Your tree has reached full bloom — and it keeps flourishing with every day you read.", fontSize = 13.sp, color = W.InkMid)
-            Text("MILESTONES", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = W.Gold, letterSpacing = 1.2.sp)
-            TreeStage.values().forEach { s ->
-                val unlocked = state.unlocked(s)
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = if (unlocked) 0.9f else 0.5f)).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-=======
             } ?: Text(
                 if (state.journeyComplete) "You completed all five levels. Your achievement is permanently preserved in your reading history."
                 else "Level ${state.level} is complete. Your next level begins with your next completed daily reading.",
@@ -343,7 +310,6 @@ fun TreeJourneyScreen(days: Set<LocalDate>, remote: TreeDto?, onBack: () -> Unit
             TreeStage.values().forEach { s ->
                 val unlocked = state.unlocked(s)
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(W.Surface.copy(alpha = if (unlocked) 0.9f else 0.5f)).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
->>>>>>> settings_redesign
                     TreeIllustration(s, Modifier.size(54.dp), locked = !unlocked)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
@@ -362,11 +328,7 @@ fun TreeJourneyScreen(days: Set<LocalDate>, remote: TreeDto?, onBack: () -> Unit
 
 @Composable
 private fun Stat(label: String, value: String, modifier: Modifier) {
-<<<<<<< HEAD
-    Column(modifier.clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.85f)).padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-=======
     Column(modifier.clip(RoundedCornerShape(16.dp)).background(W.Surface.copy(alpha = 0.85f)).padding(vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
->>>>>>> settings_redesign
         Text(value, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = W.PurpleDark); Text(label, fontSize = 11.sp, color = W.InkSoft)
     }
 }
@@ -375,11 +337,7 @@ private fun Stat(label: String, value: String, modifier: Modifier) {
 @Composable
 private fun HistoryGrid(days: Set<LocalDate>, today: LocalDate) {
     val start = today.minusDays(((today.dayOfWeek.value % 7) + 28).toLong())  // Sunday, 4 weeks ago
-<<<<<<< HEAD
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = 0.85f)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-=======
     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(W.Surface.copy(alpha = 0.85f)).padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
->>>>>>> settings_redesign
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { listOf("S", "M", "T", "W", "T", "F", "S").forEach { Text(it, fontSize = 10.sp, color = W.InkSoft, modifier = Modifier.width(34.dp), textAlign = TextAlign.Center) } }
         for (week in 0 until 5) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             for (d in 0 until 7) {

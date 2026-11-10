@@ -60,16 +60,10 @@ enum class WidgetLayout(val label: String, val description: String) {
     REFERENCE_FIRST("Reference first", "Verse reference up front")
 }
 
-<<<<<<< HEAD
-/** Calm colour themes; AUTO follows the time of day like the original widget. */
-enum class WidgetTheme(val label: String, val bg: Int, val text: Int, val accent: Int, val secondary: Int) {
-    AUTO("Time of day", 0, 0, 0, 0),
-=======
 /** Widget palettes are independent from lock-screen wallpaper palettes and verse frequency. */
 enum class WidgetTheme(val label: String, val bg: Int, val text: Int, val accent: Int, val secondary: Int) {
     AUTO("Time of day", 0, 0, 0, 0),
     DAY("Day", 0xFFFFF0D9.toInt(), 0xFF2D2035.toInt(), 0xFFB87536.toInt(), 0xFF806B61.toInt()),
->>>>>>> settings_redesign
     DUSK("Dusk", 0xFF2D1B4E.toInt(), 0xFFF5F0E8.toInt(), 0xFFD4A574.toInt(), 0xFFB5A8C4.toInt()),
     SAGE("Sage", 0xFF233D33.toInt(), 0xFFF1F6EF.toInt(), 0xFFB9DDA0.toInt(), 0xFFA9C4B1.toInt()),
     OCEAN("Ocean", 0xFF14344F.toInt(), 0xFFF2F8FC.toInt(), 0xFF9FD8F5.toInt(), 0xFFAECBDD.toInt()),
@@ -79,15 +73,10 @@ enum class WidgetTheme(val label: String, val bg: Int, val text: Int, val accent
 
 object WidgetPrefs {
     private const val PREFS = "reader"
-<<<<<<< HEAD
-    fun theme(context: Context): WidgetTheme =
-        WidgetTheme.values().firstOrNull { it.name == context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("widget_theme", null) } ?: WidgetTheme.AUTO
-=======
     fun theme(context: Context): WidgetTheme {
         val stored = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("widget_theme", null)
         return WidgetTheme.values().firstOrNull { it.name == stored && it != WidgetTheme.AUTO } ?: WidgetTheme.DAY
     }
->>>>>>> settings_redesign
     fun setTheme(context: Context, theme: WidgetTheme) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("widget_theme", theme.name).apply()
     }
@@ -95,32 +84,20 @@ object WidgetPrefs {
 
 private class Colors(val bg: Color, val text: Color, val accent: Color, val secondary: Color)
 
-<<<<<<< HEAD
-private class VerseSnapshot(val scripture: String?, val text: String?, val reference: String?, val verseId: Int, val savedAt: Long, val theme: WidgetTheme) {
-=======
 private class VerseSnapshot(val scripture: String?, val text: String?, val reference: String?, val verseId: Int, val savedAt: Long, val theme: WidgetTheme, val textScale: Float) {
->>>>>>> settings_redesign
     companion object {
         fun read(p: SharedPreferences) = VerseSnapshot(
             p.getString("widget_scripture", null), p.getString("widget_text", null), p.getString("widget_reference", null),
             p.getInt("current_verse_id", -1), p.getLong("widget_saved_at", 0L),
-<<<<<<< HEAD
-            WidgetTheme.values().firstOrNull { it.name == p.getString("widget_theme", null) } ?: WidgetTheme.AUTO
-=======
             WidgetTheme.values().firstOrNull { it.name == p.getString("widget_theme", null) && it != WidgetTheme.AUTO } ?: WidgetTheme.DAY,
             (p.getInt("widget_text_scale", 100).coerceIn(80, 120) / 100f)
->>>>>>> settings_redesign
         )
     }
 }
 
 private fun colorsFor(context: Context, theme: WidgetTheme): Colors {
     return if (theme == WidgetTheme.AUTO) {
-<<<<<<< HEAD
-        val p = TimePalette.now(context.getSharedPreferences("reader", Context.MODE_PRIVATE).getInt("palette_interval_hours", 6))
-=======
         val p = TimePalette.now()
->>>>>>> settings_redesign
         Colors(Color(p.background), Color(p.primaryText), Color(p.accent), Color(p.secondaryText))
     } else Colors(Color(theme.bg), Color(theme.text), Color(theme.accent), Color(theme.secondary))
 }
@@ -150,10 +127,7 @@ open class WisdomWidget(private val layout: WidgetLayout) : GlanceAppWidget() {
             val reference = snap.reference
             val verseId = snap.verseId
             val savedAt = snap.savedAt
-<<<<<<< HEAD
-=======
             val scale = snap.textScale
->>>>>>> settings_redesign
             val colors = colorsFor(context, snap.theme)
             val hasVerse = scripture != null && text != null && reference != null
             val open = actionStartActivity(Intent(context, MainActivity::class.java).apply {
@@ -171,13 +145,8 @@ open class WisdomWidget(private val layout: WidgetLayout) : GlanceAppWidget() {
                         WidgetLayout.COMPACT -> Row(GlanceModifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
                             Column(GlanceModifier.defaultWeight().clickable(open)) {
                                 Text(if (hasVerse) "“$text”" else "Open WisdomOne to load a verse",
-<<<<<<< HEAD
-                                    style = TextStyle(color = ColorProvider(colors.text), fontSize = 12.sp), maxLines = 3)
-                                if (hasVerse) Text(reference ?: "", style = TextStyle(color = ColorProvider(colors.secondary), fontSize = 9.sp), maxLines = 1)
-=======
                                     style = TextStyle(color = ColorProvider(colors.text), fontSize = (12f * scale).sp), maxLines = 3)
                                 if (hasVerse) Text(reference ?: "", style = TextStyle(color = ColorProvider(colors.secondary), fontSize = (9f * scale).sp), maxLines = 1)
->>>>>>> settings_redesign
                             }
                             Spacer(GlanceModifier.width(8.dp))
                             RefreshButton(colors, compact = true)
@@ -185,50 +154,24 @@ open class WisdomWidget(private val layout: WidgetLayout) : GlanceAppWidget() {
                         WidgetLayout.LARGE_TEXT -> Column(GlanceModifier.fillMaxSize()) {
                             Column(GlanceModifier.defaultWeight().fillMaxWidth().clickable(open)) {
                                 Text(if (hasVerse) "“$text”" else "Open WisdomOne to load a verse",
-<<<<<<< HEAD
-                                    style = TextStyle(color = ColorProvider(colors.text), fontSize = if (tall) 22.sp else 18.sp, fontWeight = FontWeight.Medium), maxLines = if (tall) 7 else 4)
-                                Spacer(GlanceModifier.height(6.dp))
-                                Text(reference ?: "", style = TextStyle(color = ColorProvider(colors.accent), fontSize = 13.sp, fontWeight = FontWeight.Bold), maxLines = 1)
-=======
                                     style = TextStyle(color = ColorProvider(colors.text), fontSize = (if (tall) 22f else 18f).times(scale).sp, fontWeight = FontWeight.Medium), maxLines = if (tall) 7 else 4)
                                 Spacer(GlanceModifier.height(6.dp))
                                 Text(reference ?: "", style = TextStyle(color = ColorProvider(colors.accent), fontSize = (13f * scale).sp, fontWeight = FontWeight.Bold), maxLines = 1)
->>>>>>> settings_redesign
                             }
                             RefreshButton(colors, compact = false)
                         }
                         WidgetLayout.REFERENCE_FIRST -> Column(GlanceModifier.fillMaxSize()) {
                             Column(GlanceModifier.defaultWeight().fillMaxWidth().clickable(open)) {
-<<<<<<< HEAD
-                                Text(reference ?: "WISDOMONE", style = TextStyle(color = ColorProvider(colors.accent), fontSize = 17.sp, fontWeight = FontWeight.Bold), maxLines = 2)
-                                Text(scripture ?: "", style = TextStyle(color = ColorProvider(colors.secondary), fontSize = 11.sp), maxLines = 1)
-                                Spacer(GlanceModifier.height(8.dp))
-                                Text(if (hasVerse) "“$text”" else "Open WisdomOne to load a verse",
-                                    style = TextStyle(color = ColorProvider(colors.text), fontSize = 14.sp), maxLines = if (tall) 6 else 3)
-=======
                                 Text(reference ?: "WISDOMONE", style = TextStyle(color = ColorProvider(colors.accent), fontSize = (17f * scale).sp, fontWeight = FontWeight.Bold), maxLines = 2)
                                 Text(scripture ?: "", style = TextStyle(color = ColorProvider(colors.secondary), fontSize = (11f * scale).sp), maxLines = 1)
                                 Spacer(GlanceModifier.height(8.dp))
                                 Text(if (hasVerse) "“$text”" else "Open WisdomOne to load a verse",
                                     style = TextStyle(color = ColorProvider(colors.text), fontSize = (14f * scale).sp), maxLines = if (tall) 6 else 3)
->>>>>>> settings_redesign
                             }
                             RefreshButton(colors, compact = false)
                         }
                         WidgetLayout.STANDARD -> Column(GlanceModifier.fillMaxSize()) {
                             Column(GlanceModifier.defaultWeight().fillMaxWidth().clickable(open)) {
-<<<<<<< HEAD
-                                Text(scripture?.uppercase() ?: "WISDOMONE", style = TextStyle(color = ColorProvider(colors.accent), fontSize = 10.sp, fontWeight = FontWeight.Bold), maxLines = 1)
-                                Spacer(GlanceModifier.height(8.dp))
-                                Text(if (hasVerse) "“$text”" else "Open the app to load today’s verse.",
-                                    style = TextStyle(color = ColorProvider(colors.text), fontSize = 14.sp), maxLines = if (tall) 6 else 3)
-                            }
-                            Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                Column(GlanceModifier.defaultWeight()) {
-                                    Text(reference ?: "", style = TextStyle(color = ColorProvider(colors.secondary), fontSize = 10.sp), maxLines = 1)
-                                    val ago = updatedAgo(savedAt)
-                                    if (ago.isNotEmpty() && tall) Text("Updated $ago", style = TextStyle(color = ColorProvider(colors.secondary), fontSize = 9.sp))
-=======
                                 Text(scripture?.uppercase() ?: "WISDOMONE", style = TextStyle(color = ColorProvider(colors.accent), fontSize = (10f * scale).sp, fontWeight = FontWeight.Bold), maxLines = 1)
                                 Spacer(GlanceModifier.height(8.dp))
                                 Text(if (hasVerse) "“$text”" else "Open the app to load today’s verse.",
@@ -239,7 +182,6 @@ open class WisdomWidget(private val layout: WidgetLayout) : GlanceAppWidget() {
                                     Text(reference ?: "", style = TextStyle(color = ColorProvider(colors.secondary), fontSize = (10f * scale).sp), maxLines = 1)
                                     val ago = updatedAgo(savedAt)
                                     if (ago.isNotEmpty() && tall) Text("Updated $ago", style = TextStyle(color = ColorProvider(colors.secondary), fontSize = (9f * scale).sp))
->>>>>>> settings_redesign
                                 }
                                 RefreshButton(colors, compact = false)
                             }
@@ -257,19 +199,11 @@ private fun RefreshButton(colors: Colors, compact: Boolean) {
         GlanceModifier
             .background(ColorProvider(colors.accent.copy(alpha = 0.22f))).cornerRadius(18.dp)
             .padding(horizontal = if (compact) 10.dp else 14.dp, vertical = if (compact) 8.dp else 7.dp)
-<<<<<<< HEAD
-            .semantics { contentDescription = "Show a different verse" }
-            .clickable(actionRunCallback<CycleVerseCallback>()),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(if (compact) "↻" else "↻  New verse", style = TextStyle(color = ColorProvider(colors.accent), fontSize = if (compact) 18.sp else 12.sp, fontWeight = FontWeight.Bold))
-=======
             .semantics { contentDescription = "Refresh the current verse display" }
             .clickable(actionRunCallback<CycleVerseCallback>()),
         contentAlignment = Alignment.Center
     ) {
         Text(if (compact) "↻" else "↻  Refresh", style = TextStyle(color = ColorProvider(colors.accent), fontSize = if (compact) 18.sp else 12.sp, fontWeight = FontWeight.Bold))
->>>>>>> settings_redesign
     }
 }
 
@@ -326,36 +260,6 @@ class LargeTextWidget : WisdomWidget(WidgetLayout.LARGE_TEXT)
 class ReferenceFirstWidget : WisdomWidget(WidgetLayout.REFERENCE_FIRST)
 
 /**
-<<<<<<< HEAD
- * "Tap to refresh": swaps in a different verse straight from the widget, without opening the app.
- * Uses the network when available and falls back to verses already cached on the device.
- */
-class CycleVerseCallback : ActionCallback {
-    override suspend fun onAction(context: Context, glanceId: GlanceId, parameters: ActionParameters) {
-        ApiClient.ensureInit(context)
-        val prefs = context.getSharedPreferences("reader", Context.MODE_PRIVATE)
-        val religion = prefs.getInt("religion", 1)
-        val language = prefs.getInt("language", 0).takeIf { it > 0 } ?: 1
-        val scripture = prefs.getInt("scripture", 0)  // only labels the offline cache; the server draws from the whole tradition
-        val current = prefs.getInt("current_verse_id", -1)
-        val dao = ScriptureDatabase.get(context).verses()
-
-        val fresh: CachedVerse? = try {
-            val remote = ApiClient.api.random(religion, language, null, current.takeIf { it > 0 })
-            val cached = remote.toCached(scripture, language, dao.find(remote.id)?.favorite == true)
-            dao.save(cached)
-            cached
-        } catch (_: Exception) {
-            val pool = if (scripture > 0) dao.forCombo(scripture, language) else emptyList()
-            if (pool.isEmpty()) null else pool.firstOrNull { it.id > current } ?: pool.first()
-        }
-        if (fresh != null) {
-            ScriptureWidget.cacheVerseForWidget(context, fresh)
-            prefs.edit().putInt("last_verse_id", fresh.id).apply()
-            runCatching { LockScreenVerse.applyIfEnabled(context, fresh.id, fresh.scripture, fresh.text, fresh.reference()) }
-        }
-        ScriptureWidget.updateEverywhere(context)
-=======
  * Widget refresh redraws the currently active verse without changing its selection.
  * Use the explicit Discover action in the app when a different verse is wanted.
  */
@@ -369,7 +273,6 @@ class CycleVerseCallback : ActionCallback {
             if (active != null) ScriptureWidget.cacheVerseForWidget(context, active)
         }
         ScriptureWidget().refreshAll(context)
->>>>>>> settings_redesign
     }
 }
 

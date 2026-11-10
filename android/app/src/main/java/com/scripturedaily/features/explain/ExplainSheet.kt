@@ -9,14 +9,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-<<<<<<< HEAD
-import androidx.compose.foundation.shape.RoundedCornerShape
-=======
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
->>>>>>> settings_redesign
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
@@ -46,11 +42,7 @@ private val cache = HashMap<Int, String>()
 /** "Explain this to me like I'm 5": a short, simple, modern explanation of the verse, in the verse's own language. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-<<<<<<< HEAD
-fun ExplainSheet(verse: Verse, onDismiss: () -> Unit) {
-=======
 fun ExplainSheet(verse: Verse, onDismiss: () -> Unit, onReflect: (() -> Unit)? = null) {
->>>>>>> settings_redesign
     var text by remember(verse.id) { mutableStateOf(cache[verse.id]) }
     var error by remember(verse.id) { mutableStateOf<String?>(null) }
     var attempt by remember(verse.id) { mutableIntStateOf(0) }
@@ -82,8 +74,6 @@ fun ExplainSheet(verse: Verse, onDismiss: () -> Unit, onReflect: (() -> Unit)? =
                 error != null -> ErrorBox(error!!, { attempt++ })
                 else -> LoadingBox("Making it simple…")
             }
-<<<<<<< HEAD
-=======
             if (onReflect != null) {
                 Spacer(Modifier.height(4.dp))
                 androidx.compose.material3.Button(
@@ -95,7 +85,6 @@ fun ExplainSheet(verse: Verse, onDismiss: () -> Unit, onReflect: (() -> Unit)? =
                     androidx.compose.material3.Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null)
                 }
             }
->>>>>>> settings_redesign
         }
     }
 }

@@ -1,9 +1,4 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
-<<<<<<< HEAD
-  <path android:fillColor="#887494" android:pathData="M15.8,2.8A9.2,9.2 0,1 0,21 17.5A8,8 0,0 1,15.8 2.8Z"/>
-  <path android:fillColor="#D5A66F" android:pathData="M17.6,5.1l0.8,2.1 2.2,0.1 -1.7,1.3 0.6,2.1 -1.9,-1.2 -1.8,1.2 0.6,-2.1 -1.8,-1.3 2.2,-0.1Z"/>
-=======
   <path android:fillColor="@android:color/transparent" android:strokeColor="#000000" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M15.5,3.2A9,9 0,1 0,20.8,16.5A7.5,7.5 0,0 1,15.5,3.2Z"/>
   <path android:fillColor="@android:color/transparent" android:strokeColor="#000000" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M18.2,6.4l0.6,1.6 1.7,0.1 -1.3,1.1 0.5,1.7 -1.5,-1 -1.5,1 0.5,-1.7 -1.3,-1.1 1.7,-0.1Z"/>
->>>>>>> settings_redesign
 </vector>

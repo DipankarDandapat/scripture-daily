@@ -23,23 +23,6 @@ android {
         buildConfigField("String", "API_BASE_URL", "\"$apiBase\"")
     }
 
-<<<<<<< HEAD
-    // Release signing configuration
-    signingConfigs {
-        create("release") {
-            storeFile = rootProject.file("app/wisdomone-key.p12")
-            storePassword = "dipankar"
-            keyAlias = "wisdomone-alias"
-            keyPassword = "dipankar"
-            storeType = "PKCS12"
-        }
-    }
-
-    // Release build configuration
-    buildTypes {
-        getByName("release") {
-            signingConfig = signingConfigs.getByName("release")
-=======
     // Release signing secrets are supplied locally through Gradle properties or environment variables.
     val releaseStorePath = providers.gradleProperty("WISDOMONE_STORE_FILE").orNull ?: System.getenv("WISDOMONE_STORE_FILE")
     val releaseStorePassword = providers.gradleProperty("WISDOMONE_STORE_PASSWORD").orNull ?: System.getenv("WISDOMONE_STORE_PASSWORD")
@@ -62,7 +45,6 @@ android {
     buildTypes {
         getByName("release") {
             signingConfig = if (signingConfigs.findByName("release") != null) signingConfigs.getByName("release") else null
->>>>>>> settings_redesign
             isMinifyEnabled = false
         }
     }
@@ -112,36 +94,27 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.0")
     implementation("androidx.glance:glance-appwidget:1.1.1")
     implementation("androidx.glance:glance-material3:1.1.1")
-<<<<<<< HEAD
-    implementation("com.google.android.play:review-ktx:2.0.2")
-=======
     implementation("androidx.lifecycle:lifecycle-process:2.8.7")
     implementation("com.google.android.gms:play-services-ads:23.6.0")
     implementation("com.google.android.ump:user-messaging-platform:3.1.0")
     implementation("com.google.android.play:review-ktx:2.0.2")
     // Force newer fragment version to resolve play:review-ktx transitive dependency on fragment:1.1.0
     implementation("androidx.fragment:fragment-ktx:1.8.6")
->>>>>>> settings_redesign
 
     implementation(platform("com.google.firebase:firebase-bom:34.19.0"))
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-config")
     implementation("com.google.firebase:firebase-crashlytics")
-<<<<<<< HEAD
-=======
     implementation("com.google.firebase:firebase-messaging")
->>>>>>> settings_redesign
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("com.github.chuckerteam.chucker:library:4.0.0")
     releaseImplementation("com.github.chuckerteam.chucker:library-no-op:4.0.0")
 
-<<<<<<< HEAD
-=======
     // Meta (Facebook) SDK — Core only; sufficient for install attribution and custom events.
     implementation("com.facebook.android:facebook-core:19.0.0")
 
->>>>>>> settings_redesign
+
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")

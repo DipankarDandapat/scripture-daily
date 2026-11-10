@@ -2,13 +2,9 @@ package com.scripturedaily.features.tree
 
 import android.content.Context
 import com.scripturedaily.data.ApiClient
-<<<<<<< HEAD
-import com.scripturedaily.data.TreeReadBody
-=======
 import com.scripturedaily.data.TreeDto
 import com.scripturedaily.data.TreeReadBody
 import com.scripturedaily.data.TreeSettingsBody
->>>>>>> settings_redesign
 import java.time.LocalDate
 
 /**
@@ -22,12 +18,6 @@ object TreeStore {
 
     private fun prefs(context: Context) = context.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
-<<<<<<< HEAD
-    fun days(context: Context): Set<LocalDate> {
-        val p = prefs(context)
-        migrateLegacy(context)
-        return p.getStringSet(KEY, emptySet()).orEmpty().mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() }.toSet()
-=======
     /** Reading days that count toward the *current* journey: nothing before the last restart (re-enable) is included. */
     fun days(context: Context): Set<LocalDate> {
         val p = prefs(context)
@@ -48,7 +38,6 @@ object TreeStore {
         val e = p.edit().putBoolean("tree_enabled", enabled)
         if (enabled && !was) e.putString("tree_started_on", today.toString())
         e.apply()
->>>>>>> settings_redesign
     }
 
     /** One-time import of the old streak system's `read_YYYY-MM-DD` flags and streak counter so nobody loses progress. */
@@ -65,22 +54,6 @@ object TreeStore {
 
     /** Records [date] as read. Returns true if this is a new day (repeat reads on the same day never count twice). */
     fun markRead(context: Context, date: LocalDate = LocalDate.now()): Boolean {
-<<<<<<< HEAD
-        val current = days(context)
-        if (date in current) return false
-        prefs(context).edit().putStringSet(KEY, (current + date).map { it.toString() }.toSet()).apply()
-        return true
-    }
-
-    /** Pushes local days to the server and merges back whatever the server knows (union). Safe to call offline. */
-    suspend fun sync(context: Context): Set<LocalDate>? = try {
-        val local = days(context)
-        val recent = local.sortedDescending().take(400).map { it.toString() }
-        val tree = ApiClient.api.recordReading(LocalDate.now().toString(), TreeReadBody(recent, markToday = LocalDate.now() in local))
-        val merged = local + tree.history.mapNotNull { runCatching { LocalDate.parse(it) }.getOrNull() }
-        prefs(context).edit().putStringSet(KEY, merged.map { it.toString() }.toSet()).apply()
-        merged
-=======
         if (!enabled(context)) return false
         val current = days(context)
         if (date in current) return false
@@ -116,6 +89,5 @@ object TreeStore {
         applyEnabled(context, enabled)
         dto.startedOn?.let { prefs(context).edit().putString("tree_started_on", it).apply() }
         dto
->>>>>>> settings_redesign
     } catch (_: Exception) { null }
 }

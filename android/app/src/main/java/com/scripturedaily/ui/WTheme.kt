@@ -28,15 +28,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.CircularProgressIndicator
-<<<<<<< HEAD
-=======
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
->>>>>>> settings_redesign
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -51,21 +48,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-<<<<<<< HEAD
-/** Shared WisdomOne palette used by the feature screens (mirrors the colours in MainActivity). */
-object W {
-    val Purple = Color(0xFF3D2060)
-    val PurpleDark = Color(0xFF2D1B4E)
-    val PurpleMid = Color(0xFF5C3D8F)
-    val Gold = Color(0xFFD4A574)
-    val GoldLight = Color(0xFFE8C49A)
-    val Parchment = Color(0xFFF7F2EE)
-    val Ink = Color(0xFF1A1025)
-    val InkMid = Color(0xFF4A3D5C)
-    val InkSoft = Color(0xFF8A7A9A)
-    val Error = Color(0xFF9C463D)
-    val Success = Color(0xFF3F7D5A)
-=======
 /** Colour roles for one theme. Light values are the original WisdomOne palette; dark values keep body text >= 4.5:1 contrast. */
 @Immutable
 class WPalette(
@@ -132,7 +114,6 @@ fun WisdomOneTheme(dark: Boolean, content: @Composable () -> Unit) {
         outline = p.inkSoft, outlineVariant = Color(0xFFD9CDE6), error = p.error
     )
     CompositionLocalProvider(LocalWPalette provides p) { MaterialTheme(colorScheme = scheme, content = content) }
->>>>>>> settings_redesign
 }
 
 /** Full-screen overlay with a back arrow, title and system-bar insets. Handles the system back gesture. */

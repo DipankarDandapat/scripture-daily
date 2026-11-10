@@ -32,19 +32,11 @@ data class CachedVerse(
     val readDate: String? = null  // "YYYY-MM-DD" when marked read
 ) {
     fun reference() = "${book?.let { "$it · " } ?: ""}Chapter $chapter · Verse $verseNumber"
-<<<<<<< HEAD
-    fun toVerse() = Verse(id, scripture, religion, book, chapter, verseNumber, language, text, translation, source, "", isDemo)
-}
-
-fun Verse.toCached(scriptureId: Int, languageId: Int, favorite: Boolean = false, savedAt: Long = System.currentTimeMillis()) = CachedVerse(
-    id, scriptureId, languageId, scripture, religion, book, chapter, verseNumber, language, text, translation, source, isDemo, savedAt, favorite
-=======
     fun toVerse() = Verse(id, scripture, religion, book, chapter, verseNumber, language, text, translation, source, "", isDemo, scriptureId = scriptureId, languageId = languageId)
 }
 
 fun Verse.toCached(scriptureId: Int, languageId: Int, favorite: Boolean = false, savedAt: Long = System.currentTimeMillis()) = CachedVerse(
     id, this.scriptureId ?: scriptureId, this.languageId ?: languageId, scripture, religion, book, chapter, verseNumber, language, text, translation, source, isDemo, savedAt, favorite
->>>>>>> settings_redesign
 )
 
 @Dao
