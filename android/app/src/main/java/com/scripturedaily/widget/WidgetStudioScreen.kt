@@ -109,7 +109,6 @@ fun WidgetStudioScreen(onBack: () -> Unit) {
                     WidgetPreview(layout, theme, scripture, text, reference, textScale / 100f)
                 }
             }
-            Text("Lock screen: on Android 14+ and many Samsung/Pixel phones, open Lock screen settings → Widgets and add a WisdomOne widget. The refresh button works there too.", fontSize = 12.sp, color = W.InkSoft, lineHeight = 17.sp)
             Spacer(Modifier.height(20.dp))
         }
     }

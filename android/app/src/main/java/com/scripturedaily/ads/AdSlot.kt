@@ -45,14 +45,15 @@ import com.scripturedaily.ui.W
  * global switch is on; collapses again if the ad fails so a failed request never leaves a blank gap.
  */
 @Composable
-fun AdSlot(placementId: String, modifier: Modifier = Modifier, formatOverride: AdFormat? = null, slotKey: String = "") {
+fun AdSlot(placementId: String, modifier: Modifier = Modifier, formatOverride: AdFormat? = null, slotKey: String = "", screenOverride: String? = null) {
     val cfg by AdManager.config.collectAsState()
     val ready by AdManager.ready.collectAsState()
     val resolved = remember(cfg, placementId, formatOverride) { cfg.resolve(placementId, formatOverride) }
     if (!ready || resolved == null || resolved.format.isFullScreen) return
     val reserveKey = resolved.id + slotKey
-    val allowed = remember(resolved.screen, reserveKey) { AdManager.reserve(resolved.screen, reserveKey) }
-    DisposableEffect(resolved.screen, reserveKey) { onDispose { AdManager.release(resolved.screen, reserveKey) } }
+    val screen = screenOverride ?: resolved.screen
+    val allowed = remember(screen, reserveKey) { AdManager.reserve(screen, reserveKey) }
+    DisposableEffect(screen, reserveKey) { onDispose { AdManager.release(screen, reserveKey) } }
     if (!allowed) return
     when {
         resolved.format.isBanner -> BannerSlot(resolved, modifier)

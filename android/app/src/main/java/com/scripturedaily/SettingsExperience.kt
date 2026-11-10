@@ -1,4 +1,4 @@
-package com.scripturedaily
+﻿package com.scripturedaily
 
 import android.app.WallpaperManager
 import android.content.Context
@@ -8,7 +8,6 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -32,14 +31,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
@@ -66,7 +64,7 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
-private data class SettingEntry(val title: String, val subtitle: String, val icon: ImageVector, val route: String)
+private data class SettingEntry(val title: String, val subtitle: String, val icon: ImageVector, val route: String, val painterRes: Int? = null)
 
 /**
  * Settings, following design/approved_settings_ui_reference.png, "WisdomOne Settings and Wallpaper Suite.png" and
@@ -100,6 +98,8 @@ fun SettingsExperienceScreen(
     val prefs = remember { context.getSharedPreferences("reader", Context.MODE_PRIVATE) }
     val scope = rememberCoroutineScope()
     var route by remember { mutableStateOf("home") }
+    var showUnsavedDialog by remember { mutableStateOf(false) }
+    var pendingRoute by remember { mutableStateOf("") }
     var selectedReligion by remember(religion) { mutableIntStateOf(religion) }
     var selectedLanguage by remember(language) { mutableIntStateOf(language) }
     var selectedFrequency by remember(frequency) { mutableStateOf(if (frequency == "Daily") "Every 24 hours" else frequency) }
@@ -137,7 +137,10 @@ fun SettingsExperienceScreen(
         }
     }
 
-    BackHandler(enabled = route != "home") { route = "home" }
+    fun hasUnsavedTraditionChanges() = route == "tradition" && (selectedReligion != religion || selectedLanguage != language)
+    BackHandler(enabled = route != "home") {
+        if (hasUnsavedTraditionChanges()) { pendingRoute = "home"; showUnsavedDialog = true } else route = "home"
+    }
     val selectedTraditionItem = religions.firstOrNull { it.id == selectedReligion }
     val selectedTradition = selectedTraditionItem?.name ?: WallpaperPacks.traditionName(selectedReligion)
     var previousReligion by remember { mutableIntStateOf(selectedReligion) }
@@ -152,12 +155,12 @@ fun SettingsExperienceScreen(
                 Text("Personalise your experience", color = W.InkMid, fontSize = 13.sp)
                 Spacer(Modifier.height(4.dp))
                 val entries = listOf(
-                    SettingEntry("Tradition & Language", "$selectedTradition · ${availableLanguages.firstOrNull { it.id == language }?.name ?: "Language"}", Icons.Outlined.Spa, "tradition"),
+                    SettingEntry("Tradition & Language", "$selectedTradition \u00b7 ${availableLanguages.firstOrNull { it.id == language }?.name ?: "Language"}", Icons.Outlined.Spa, "tradition", painterRes = traditionIcon(selectedTraditionItem?.code ?: "")),
                     SettingEntry("Verse Frequency", frequencyLabel(frequency), Icons.Outlined.Schedule, "frequency"),
                     SettingEntry("Lock Screen & Wallpaper", "Design, style & colour themes", Icons.Outlined.Image, "wallpaper"),
                     SettingEntry("Widget Studio", "Create and customise widgets", Icons.Outlined.Widgets, "widget"),
                     SettingEntry("Reading Preferences", "Font size, verse display & style", Icons.Outlined.TextFields, "reading"),
-                    SettingEntry("App Theme", "Light · Dark · System", Icons.Outlined.DarkMode, "theme"),
+                    SettingEntry("App Theme", "Light Â· Dark Â· System", Icons.Outlined.DarkMode, "theme"),
                     SettingEntry("Notifications", "Verse alerts & reminders", Icons.Outlined.Notifications, "notifications"),
                     SettingEntry("Battery & Performance", "Optimise background updates", Icons.Outlined.FlashOn, "battery"),
                     SettingEntry("Help & Support", "FAQs, contact us", Icons.AutoMirrored.Outlined.HelpOutline, "help"),
@@ -176,14 +179,16 @@ fun SettingsExperienceScreen(
                 Spacer(Modifier.height(16.dp))
             }
         } else {
-            SettingsSubHeader(title = routeTitle(route), subtitle = routeSubtitle(route), onBack = { route = "home" })
+            SettingsSubHeader(title = routeTitle(route), subtitle = routeSubtitle(route), onBack = {
+                if (hasUnsavedTraditionChanges()) { pendingRoute = "home"; showUnsavedDialog = true } else route = "home"
+            })
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 when (route) {
                     "tradition" -> {
-                        LotusBanner()
+                        TraditionBanner(religions.firstOrNull { it.id == selectedReligion })
                         SectionTitle("YOUR TRADITION")
                         religions.forEach { item ->
-                            SelectionRow(item.name, item.scriptures.joinToString(", ") { it.name }, painterResource(traditionIcon(item.code)), selectedReligion == item.id) { selectedReligion = item.id }
+                            SelectionRow(item.name, item.scriptures.joinToString(", ") { it.name }, painterResource(traditionIcon(item.code)), selectedReligion == item.id, iconTint = Color.Unspecified) { selectedReligion = item.id }
                         }
                         SectionTitle("SELECT LANGUAGE")
                         if (loadingLanguages) LinearProgressIndicator(Modifier.fillMaxWidth(), color = W.Purple)
@@ -210,7 +215,30 @@ fun SettingsExperienceScreen(
                         }
                     }
                     "frequency" -> {
-                        FrequencyHero()
+                                                Box(
+                            Modifier.fillMaxWidth()
+                                .layout { measurable, constraints ->
+                                    val extra = 36.dp.roundToPx()
+                                    val placeable = measurable.measure(constraints.copy(maxWidth = constraints.maxWidth + extra))
+                                    layout(placeable.width, placeable.height) { placeable.place(-extra / 2, 0) }
+                                }
+                                .height(160.dp)
+                        ) {
+                            Image(
+                                painter = painterResource(R.drawable.verse_frequency_banner),
+                                contentDescription = null,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.FillWidth
+                            )
+                            Box(Modifier.fillMaxWidth().height(80.dp).align(Alignment.TopCenter)
+                                .background(Brush.verticalGradient(listOf(W.Parchment, W.Parchment.copy(alpha = 0.85f), Color.Transparent))))
+                            Box(Modifier.fillMaxWidth().height(70.dp).align(Alignment.BottomCenter)
+                                .background(Brush.verticalGradient(listOf(Color.Transparent, W.Parchment.copy(alpha = 0.9f), W.Parchment))))
+                            Box(Modifier.width(64.dp).fillMaxHeight().align(Alignment.CenterStart)
+                                .background(Brush.horizontalGradient(listOf(W.Parchment, W.Parchment.copy(alpha = 0.85f), Color.Transparent))))
+                            Box(Modifier.width(64.dp).fillMaxHeight().align(Alignment.CenterEnd)
+                                .background(Brush.horizontalGradient(listOf(Color.Transparent, W.Parchment.copy(alpha = 0.85f), W.Parchment))))
+                        }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             listOf("Every hour" to "1 Hour", "Every 6 hours" to "6 Hours", "Every 12 hours" to "12 Hours", "Every 24 hours" to "24 Hours").forEach { (option, label) ->
                                 FrequencyChip(label, selectedFrequency == option, Modifier.weight(1f)) {
@@ -239,7 +267,7 @@ fun SettingsExperienceScreen(
                         }
                         if (wallpaperMode == WallpaperMode.COLORS) InfoCard("Both options are off, so your verse appears on the colour themes below instead of artwork.")
 
-                        SectionTitle("WALLPAPER GALLERY · ${selectedTradition.uppercase()}")
+                        SectionTitle("WALLPAPER GALLERY Â· ${selectedTradition.uppercase()}")
                         WallpaperGallery(context, selectedReligion, wallpaperImageIndex, enabled = wallpaperMode != WallpaperMode.COLORS) { wallpaperImageIndex = it }
                         Text(
                             when (wallpaperMode) {
@@ -353,7 +381,6 @@ fun SettingsExperienceScreen(
                         SecondaryAction("Open Android notification settings") { context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)) }
                     }
                     "battery" -> {
-                        InfoCard("Verse updates use Android WorkManager and the frequency selected in Verse Frequency. Android may defer background work during Doze mode or battery saver.")
                         SettingRow(Icons.Outlined.Schedule, "Background scheduling", "One central scheduled job controls verse updates.")
                         SettingRow(Icons.Outlined.Widgets, "Widget refresh", "The widget updates when the active verse changes.")
                         SettingRow(Icons.Outlined.Image, "Wallpaper refresh", "The wallpaper follows your lock-screen wallpaper mode.")
@@ -365,7 +392,6 @@ fun SettingsExperienceScreen(
                         SettingRow(Icons.Outlined.Lock, "Privacy", "WisdomOne does not require a personal profile to use these settings.")
                         SettingRow(Icons.Outlined.Sync, "Verse synchronisation", "Home, widget and lock screen share the same active verse.")
                         SecondaryAction("Leave feedback") { onFeedback() }
-                        if (onAdsLab != null) SecondaryAction("Ads test lab (debug builds only)") { onAdsLab() }
                     }
                     else -> { onRate(); route = "home" }
                 }
@@ -374,7 +400,7 @@ fun SettingsExperienceScreen(
         }
     }
 
-    // Save & Apply Wallpaper → choose where it goes.
+    // Save & Apply Wallpaper â†’ choose where it goes.
     if (applySheet) {
         @OptIn(ExperimentalMaterial3Api::class)
         ModalBottomSheet(onDismissRequest = { applySheet = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = W.Parchment) {
@@ -436,9 +462,31 @@ fun SettingsExperienceScreen(
             dismissButton = { TextButton(onClick = { treeConfirm = null }) { Text("Cancel", color = W.InkMid) } }
         )
     }
+    if (showUnsavedDialog) {
+        AlertDialog(
+            onDismissRequest = { showUnsavedDialog = false }, containerColor = W.Surface,
+            title = { Text("Unsaved Changes", fontWeight = FontWeight.Bold, color = W.Ink) },
+            text = { Text("You've changed your preference. Save before leaving?", color = W.InkMid, fontSize = 14.sp) },
+            confirmButton = {
+                TextButton(onClick = {
+                    showUnsavedDialog = false
+                    onSavePreferences(selectedReligion, selectedLanguage, selectedFrequency, selectedReminders, wallpaperMode)
+                    route = pendingRoute
+                }) { Text("Save", color = W.PurpleDark, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showUnsavedDialog = false
+                    selectedReligion = religion
+                    selectedLanguage = language
+                    route = pendingRoute
+                }) { Text("Discard", color = W.InkMid) }
+            }
+        )
+    }
 }
 
-// ── Shared building blocks ────────────────────────────────────────────────────────────────
+// â”€â”€ Shared building blocks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @Composable private fun rememberVector(v: ImageVector): ImageVector = v
 
@@ -446,8 +494,8 @@ fun SettingsExperienceScreen(
     Box(modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(W.Gold.copy(alpha = .18f)), contentAlignment = Alignment.Center) { Icon(icon, null, tint = W.Gold, modifier = Modifier.size(24.dp)) }
 }
 
-@Composable private fun IconBadge(painter: Painter, modifier: Modifier = Modifier) {
-    Box(modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(W.Gold.copy(alpha = .18f)), contentAlignment = Alignment.Center) { Icon(painter, null, tint = W.Gold, modifier = Modifier.size(26.dp)) }
+@Composable private fun IconBadge(painter: Painter, modifier: Modifier = Modifier, tint: Color = W.Gold) {
+    Box(modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(W.Gold.copy(alpha = .18f)), contentAlignment = Alignment.Center) { Icon(painter, null, tint = tint, modifier = Modifier.size(26.dp)) }
 }
 
 @Composable private fun SettingsSubHeader(title: String, subtitle: String, onBack: () -> Unit) {
@@ -466,7 +514,7 @@ fun SettingsExperienceScreen(
             .border(1.dp, if (highlighted) W.PurpleMid.copy(alpha = .35f) else W.Gold.copy(alpha = .22f), RoundedCornerShape(17.dp)).clickable(onClick = onClick).padding(horizontal = 13.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconBadge(entry.icon)
+        if (entry.painterRes != null) IconBadge(painterResource(entry.painterRes), tint = Color.Unspecified) else IconBadge(entry.icon)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) { Text(entry.title, color = W.Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp); Text(entry.subtitle, color = W.InkMid, fontSize = 12.sp) }
         Icon(Icons.AutoMirrored.Outlined.KeyboardArrowRight, null, tint = W.InkMid)
@@ -475,14 +523,14 @@ fun SettingsExperienceScreen(
 
 @Composable private fun SectionTitle(text: String) { Text(text, color = W.Gold, fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.1.sp) }
 
-@Composable private fun SelectionRow(title: String, subtitle: String, icon: Any, selected: Boolean, onClick: () -> Unit) {
+@Composable private fun SelectionRow(title: String, subtitle: String, icon: Any, selected: Boolean, iconTint: Color = W.Gold, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(if (selected) W.SurfaceAlt else W.Surface)
             .border(if (selected) 1.5.dp else 1.dp, if (selected) W.PurpleMid else W.Gold.copy(alpha = .25f), RoundedCornerShape(16.dp)).clickable(onClick = onClick).padding(12.dp)
             .semantics { contentDescription = "$title${if (selected) ", selected" else ""}" },
         verticalAlignment = Alignment.CenterVertically
     ) {
-        when (icon) { is Painter -> IconBadge(icon); is ImageVector -> IconBadge(icon) }
+        when (icon) { is Painter -> IconBadge(icon, tint = iconTint); is ImageVector -> IconBadge(icon) }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) { Text(title, color = W.Ink, fontWeight = FontWeight.Bold, fontSize = 15.sp); if (subtitle.isNotBlank()) Text(subtitle, color = W.InkMid, fontSize = 12.sp, lineHeight = 16.sp) }
         Box(Modifier.size(22.dp).clip(CircleShape).border(1.8.dp, if (selected) W.PurpleMid else W.InkSoft, CircleShape), contentAlignment = Alignment.Center) { if (selected) Box(Modifier.size(12.dp).clip(CircleShape).background(W.PurpleMid)) }
@@ -521,22 +569,39 @@ fun SettingsExperienceScreen(
     Row(verticalAlignment = Alignment.CenterVertically) { Icon(icon, null, tint = W.Gold, modifier = Modifier.size(26.dp)); Spacer(Modifier.width(12.dp)); Text(text, color = W.Ink, fontSize = 13.sp, lineHeight = 18.sp) }
 }
 
-@Composable private fun LotusBanner() {
-    Box(Modifier.fillMaxWidth().height(86.dp).clip(RoundedCornerShape(20.dp)).background(Brush.verticalGradient(listOf(W.SurfaceAlt, W.Parchment))), contentAlignment = Alignment.Center) {
-        Icon(painterResource(R.drawable.tradition_hinduism), null, tint = W.Gold, modifier = Modifier.size(56.dp))
+@Composable private fun TraditionBanner(religion: ReligionItem?) {
+    val code = religion?.code?.lowercase() ?: ""
+    val bannerRes = when {
+        code.contains("hindu")     -> R.drawable.banner_hinduism
+        code.contains("christian") -> R.drawable.banner_christianity
+        code.contains("islam")     -> R.drawable.banner_islam
+        code.contains("buddh")     -> R.drawable.banner_buddhism
+        else                              -> R.drawable.banner_general_wisdom
     }
-}
-
-@Composable private fun FrequencyHero() {
-    Canvas(Modifier.fillMaxWidth().height(150.dp).clip(RoundedCornerShape(22.dp))) {
-        val w = size.width; val h = size.height
-        drawRect(Brush.verticalGradient(listOf(Color(0xFF7FB5E8), Color(0xFFFFE2B8), Color(0xFFFFC98A))))
-        drawCircle(Color(0xFFFFF3C4).copy(alpha = .45f), h * .42f, Offset(w * .5f, h * .62f))
-        drawCircle(Color(0xFFFFE9A0), h * .2f, Offset(w * .5f, h * .62f))
-        fun ridge(color: Color, ys: List<Float>) { val p = Path().apply { moveTo(0f, h); ys.forEachIndexed { i, y -> lineTo(w * i / (ys.size - 1), h * y) }; lineTo(w, h); close() }; drawPath(p, color) }
-        ridge(Color(0xFF8E7BB5), listOf(.72f, .45f, .66f, .38f, .62f, .5f, .7f))
-        ridge(Color(0xFF5E4C8E), listOf(.85f, .7f, .8f, .64f, .82f, .72f, .86f))
-        for (i in 0..9) { val x = w * (0.04f + i * 0.105f); val th = h * (0.18f + (i % 3) * 0.05f); val p = Path().apply { moveTo(x - th * .28f, h * .93f); lineTo(x, h * .93f - th); lineTo(x + th * .28f, h * .93f); close() }; drawPath(p, Color(0xFF2E4A4A)) }
+    Box(
+        Modifier.fillMaxWidth()
+            .layout { measurable, constraints ->
+                val extra = 36.dp.roundToPx()
+                val placeable = measurable.measure(constraints.copy(maxWidth = constraints.maxWidth + extra))
+                layout(placeable.width, placeable.height) { placeable.place(-extra / 2, 0) }
+            }
+            .height(160.dp)
+    ) {
+        Image(
+            painter = painterResource(bannerRes),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.FillWidth
+        )
+        // Top fade - tall enough to fully cover any image edge colour
+        Box(Modifier.fillMaxWidth().height(80.dp).align(Alignment.TopCenter)
+            .background(Brush.verticalGradient(listOf(W.Parchment, W.Parchment.copy(alpha = 0.85f), Color.Transparent))))
+        // Bottom fade
+        Box(Modifier.fillMaxWidth().height(70.dp).align(Alignment.BottomCenter)
+            .background(Brush.verticalGradient(listOf(Color.Transparent, W.Parchment.copy(alpha = 0.9f), W.Parchment))))
+        // Right fade
+        Box(Modifier.width(64.dp).fillMaxHeight().align(Alignment.CenterEnd)
+            .background(Brush.horizontalGradient(listOf(Color.Transparent, W.Parchment.copy(alpha = 0.85f), W.Parchment))))
     }
 }
 
@@ -564,7 +629,7 @@ fun SettingsExperienceScreen(
 @Composable private fun PrimaryAction(text: String, icon: ImageVector? = null, onClick: () -> Unit) { Button(onClick = onClick, modifier = Modifier.fillMaxWidth().height(54.dp), shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = W.Purple, contentColor = W.OnPurple)) { if (icon != null) { Icon(icon, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)) }; Text(text, fontWeight = FontWeight.Bold) } }
 @Composable private fun SecondaryAction(text: String, onClick: () -> Unit) { OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, W.Gold)) { Text(text, color = W.Ink, fontWeight = FontWeight.SemiBold) } }
 
-// ── Wallpaper gallery: 20 images, 4 per visible group, swipe horizontally ─────────────────
+// â”€â”€ Wallpaper gallery: 20 images, 4 per visible group, swipe horizontally â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @Composable private fun WallpaperGallery(context: Context, religionId: Int, selected: Int, enabled: Boolean, onSelect: (Int) -> Unit) {
     val pages = WallpaperPacks.COUNT / 4
@@ -597,7 +662,7 @@ fun SettingsExperienceScreen(
     }
 }
 
-// ── Realistic lock-screen preview ──────────────────────────────────────────────────────────
+// â”€â”€ Realistic lock-screen preview â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @Composable
 private fun LockScreenPreview(
@@ -615,7 +680,7 @@ private fun LockScreenPreview(
         val active = cached?.takeIf { it.religion.equals(tradition, ignoreCase = true) && it.languageId == languageId }
         val scripture = active?.scripture ?: tradition
         val verseText = active?.text ?: "Let wisdom guide your thoughts and bring peace to your day."
-        val reference = active?.reference() ?: "Daily inspiration · WisdomOne"
+        val reference = active?.reference() ?: "Daily inspiration Â· WisdomOne"
         val rendered = withContext(Dispatchers.IO) {
             LockScreenVerse.previewBitmap(context, scripture, verseText, reference, theme, null, textSize, textPosition, imageIndex, religionId, mode, showVerse, showReference, 360, 780)
         }
@@ -659,7 +724,7 @@ private fun routeSubtitle(route: String) = when (route) {
     else -> ""
 }
 private fun frequencyLabel(value: String) = when (value) { "Every hour" -> "Every 1 hour"; "Every 6 hours" -> "Every 6 hours"; "Every 12 hours" -> "Every 12 hours"; "Every 24 hours", "Daily" -> "Every 24 hours"; else -> value }
-private fun traditionIcon(code: String) = when (code.lowercase()) { "hinduism" -> R.drawable.tradition_hinduism; "christianity" -> R.drawable.tradition_christianity; "islam" -> R.drawable.tradition_islam; "buddhism" -> R.drawable.tradition_buddhism; else -> R.drawable.tradition_general_wisdom }
+private fun traditionIcon(code: String) = when (code.lowercase()) { "hinduism" -> R.drawable.ic_tradition_hinduism; "christianity" -> R.drawable.ic_tradition_christianity; "islam" -> R.drawable.ic_tradition_islam; "buddhism" -> R.drawable.ic_tradition_buddhism; else -> R.drawable.ic_tradition_general_wisdom }
 private fun themeBrush(theme: String): Brush = when (theme) {
     "GOLDEN" -> Brush.linearGradient(listOf(Color(0xFFFFD58A), Color(0xFFB96D28), Color(0xFF4C2A39)))
     "ROYAL_PURPLE" -> Brush.linearGradient(listOf(Color(0xFF9B6AC0), Color(0xFF492166), Color(0xFF1B102D)))

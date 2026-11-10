@@ -1,4 +1,4 @@
-package com.scripturedaily
+﻿package com.scripturedaily
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -1761,11 +1761,11 @@ private fun Onboarding(
                 val selected = religion == item.id
                 val scriptureNames = item.scriptures.joinToString(", ") { it.name }
                 val traditionIconRes = when (item.code.lowercase()) {
-                    "hinduism"       -> R.drawable.tradition_hinduism
-                    "christianity"   -> R.drawable.tradition_christianity
-                    "islam"          -> R.drawable.tradition_islam
-                    "buddhism"       -> R.drawable.tradition_buddhism
-                    else             -> R.drawable.tradition_general_wisdom
+                    "hinduism"       -> R.drawable.ic_tradition_hinduism
+                    "christianity"   -> R.drawable.ic_tradition_christianity
+                    "islam"          -> R.drawable.ic_tradition_islam
+                    "buddhism"       -> R.drawable.ic_tradition_buddhism
+                    else             -> R.drawable.ic_tradition_general_wisdom
                 }
                 Box(
                     Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(16.dp))
@@ -1779,7 +1779,7 @@ private fun Onboarding(
                                 .background(if (selected) Amber.copy(alpha = 0.15f) else W.SurfaceAlt),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(painter = painterResource(traditionIconRes), contentDescription = null, tint = if (selected) Amber else InkSoft, modifier = Modifier.size(26.dp))
+                            Icon(painter = painterResource(traditionIconRes), contentDescription = null, tint = Color.Unspecified, modifier = Modifier.size(32.dp))
                         }
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
@@ -1973,7 +1973,7 @@ private fun HomeScreen(
                 Text(if (loading) "Finding a verse…" else "Discover another verse", fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
             }
             AdSlot("home_inline_banner")
-            AdSlot("home_bottom_banner")
+            AdSlot("home_bottom_banner", screenOverride = "home_bottom")
             Text("Take a breath. Carry the thought with you.", modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center, color = InkSoft, fontSize = 13.sp)
             Spacer(Modifier.height(8.dp))
         }
