@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+﻿from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -14,11 +14,8 @@ class Settings(BaseSettings):
     cors_origins: str = "*"
     # Challenges: at most one new day can be completed per calendar day (set false for demos/tests)
     challenge_one_per_day: bool = True
-<<<<<<< HEAD
-=======
     # Firebase Admin SDK service account JSON file path (optional — FCM push only works when set)
     firebase_credentials_path: str = ""
->>>>>>> settings_redesign
 
     @property
     def allowed_origins(self) -> list[str]:

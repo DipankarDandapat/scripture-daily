@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+﻿from pydantic import BaseModel, EmailStr, Field, ConfigDict
 
 
 class AuthInput(BaseModel):
@@ -40,11 +40,8 @@ class CatalogOut(BaseModel):
 
 class VerseOut(BaseModel):
     id: int
-<<<<<<< HEAD
-=======
     scripture_id: int
     language_id: int
->>>>>>> settings_redesign
     scripture: str
     religion: str
     book: str | None
@@ -64,12 +61,8 @@ class PreferenceInput(BaseModel):
     religion_id: int
     language_id: int
     scripture_ids: str = "1"  # comma-separated e.g. "2,3"
-<<<<<<< HEAD
-    frequency: str = "daily"
-=======
     frequency: str = "24h"
     wallpaper_mode: str = "verse_and_image"
->>>>>>> settings_redesign
     notifications_enabled: bool = False
 
 
@@ -85,14 +78,11 @@ class DeviceInput(BaseModel):
     device_token: str = Field(min_length=8, max_length=512)
     platform: str = "android"
     device_model: str | None = None
-<<<<<<< HEAD
-=======
     fcm_token: str | None = Field(default=None, max_length=512)
 
 
 class FcmTokenInput(BaseModel):
     fcm_token: str = Field(min_length=10, max_length=512)
->>>>>>> settings_redesign
 
 
 class FeedbackInput(BaseModel):
@@ -318,11 +308,6 @@ class TreeNext(BaseModel):
     days_to_go: int
 
 
-<<<<<<< HEAD
-class TreeOut(BaseModel):
-    total_days: int
-    level: int
-=======
 class TreeActivityOut(BaseModel):
     code: str
     title: str
@@ -359,7 +344,6 @@ class TreeOut(BaseModel):
     journey_day: int = 0
     journey_complete: bool = False
     days_to_journey_complete: int = 150
->>>>>>> settings_redesign
     stage: str
     stage_label: str
     status: str
@@ -370,8 +354,6 @@ class TreeOut(BaseModel):
     next_milestone: TreeNext | None
     milestones: list[TreeMilestone]
     history: list[str]
-<<<<<<< HEAD
-=======
     enabled: bool = True
     started_on: str | None = None
     reset_count: int = 0
@@ -386,14 +368,11 @@ class TreeSettingsInput(BaseModel):
 
 class TreeActivityEventInput(BaseModel):
     event: str = Field(min_length=2, max_length=30)
->>>>>>> settings_redesign
 
 
 class TreeReadInput(BaseModel):
     dates: list[str] = Field(default_factory=list, max_length=400)  # local dates (YYYY-MM-DD) completed on this device
     mark_today: bool = True  # False = only merge `dates` (a pure sync that does not count today)
-<<<<<<< HEAD
-=======
 
 
 # ── Journal Reflection ───────────────────────────────────────────────────────
@@ -450,4 +429,3 @@ class ReflectionSaveInput(BaseModel):
 
 class ReflectionUpdateInput(BaseModel):
     answer: str = Field(max_length=2000)
->>>>>>> settings_redesign

@@ -1,4 +1,4 @@
-"""Feature endpoints: mood-based verses, Universal Truths, challenges + badges, stories, explanations."""
+﻿"""Feature endpoints: mood-based verses, Universal Truths, challenges + badges, stories, explanations."""
 import random
 from datetime import date, datetime, timedelta, timezone
 
@@ -137,12 +137,8 @@ def record_mood(data: MoodCheckinInput, user: User = Depends(current_user), db: 
         raise HTTPException(status_code=404, detail="Verse not found")
     row = MoodCheckin(user_id=user.id, mood=mood, verse_id=data.verse_id)
     db.add(row); db.commit(); db.refresh(row)
-<<<<<<< HEAD
-    return MoodCheckinOut(id=row.id, mood=row.mood, verse_id=row.verse_id, created_at=row.created_at.isoformat())
-=======
     created_iso = (row.created_at.isoformat() + "+00:00") if row.created_at.tzinfo is None else row.created_at.astimezone(timezone.utc).isoformat()
     return MoodCheckinOut(id=row.id, mood=row.mood, verse_id=row.verse_id, created_at=created_iso)
->>>>>>> settings_redesign
 
 
 @router.get("/mood/summary", response_model=MoodSummaryOut)
@@ -154,10 +150,6 @@ def mood_summary(days: int = Query(default=30, ge=1, le=365), user: User = Depen
     for r in rows:
         counts[r.mood] = counts.get(r.mood, 0) + 1
     top = max(counts, key=counts.get) if rows else None
-<<<<<<< HEAD
-    return MoodSummaryOut(days=days, total=len(rows), counts=counts, top_mood=top,
-                          recent=[MoodCheckinOut(id=r.id, mood=r.mood, verse_id=r.verse_id, created_at=r.created_at.isoformat()) for r in rows[:10]])
-=======
     def _utc_iso(dt: datetime) -> str:
         """Always return an ISO-8601 string with UTC offset so clients can convert to local time."""
         if dt.tzinfo is None:          # SQLite stores naive UTC datetimes
@@ -166,7 +158,6 @@ def mood_summary(days: int = Query(default=30, ge=1, le=365), user: User = Depen
 
     return MoodSummaryOut(days=days, total=len(rows), counts=counts, top_mood=top,
                           recent=[MoodCheckinOut(id=r.id, mood=r.mood, verse_id=r.verse_id, created_at=_utc_iso(r.created_at)) for r in rows[:10]])
->>>>>>> settings_redesign
 
 
 # ── Explain like I'm 5 ───────────────────────────────────────────────────────

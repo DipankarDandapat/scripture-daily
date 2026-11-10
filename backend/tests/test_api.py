@@ -1,4 +1,4 @@
-import os
+﻿import os
 import tempfile
 import uuid
 os.environ["SD_DATABASE_URL"] = f"sqlite:///{tempfile.gettempdir()}/scripture_test_{uuid.uuid4().hex}.db"
@@ -6,18 +6,11 @@ os.environ["SD_JWT_SECRET"] = "test-secret-with-at-least-32-characters"
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
-<<<<<<< HEAD
-from app.core.config import settings
-from app.core.database import SessionLocal
-from app.main import app
-from app.models.entities import Language, Scripture, Verse, VerseMood
-=======
 from datetime import date, datetime, timedelta, timezone
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.main import app
 from app.models.entities import Language, Scripture, Verse, VerseMood, ActiveVerseState
->>>>>>> settings_redesign
 
 MIN_PER_COMBO = 30
 
@@ -56,8 +49,6 @@ def test_core_flow(client):
     assert client.get("/api/v1/favorites").status_code == 401
 
 
-<<<<<<< HEAD
-=======
 
 def test_active_verse_is_persisted_and_only_discover_rotates(client):
     headers = register(client, "active-verse@example.com")
@@ -120,7 +111,6 @@ def test_wallpaper_modes_persist_and_legacy_values_are_mapped(client):
         first = nxt
 
 
->>>>>>> settings_redesign
 def test_invalid_preference_combination_is_rejected(client):
     headers = register(client, "reader2@example.com")
     response = client.put("/api/v1/users/preferences", headers=headers, json={"religion_id": 2, "language_id": 1, "scripture_ids": "1", "frequency": "daily", "notifications_enabled": False})
@@ -428,18 +418,12 @@ def test_verses_never_leak_across_traditions_or_languages(client):
                 m = client.get("/api/v1/mood/verse", params={"mood": mood, "religion_id": r["id"], "language_id": lang["id"]}).json()["verse"]
                 assert m["language"] == lang["code"] and m["religion"].lower().startswith(r["code"].split()[0])
     # daily verse changes with the (client) calendar day, and is stable within a day
-<<<<<<< HEAD
-    a = client.get("/api/v1/verses/today", params={"religion_id": 3, "language_id": 1, "client_date": "2026-11-04"}).json()["id"]
-    assert a == client.get("/api/v1/verses/today", params={"religion_id": 3, "language_id": 1, "client_date": "2026-11-04"}).json()["id"]
-    assert a != client.get("/api/v1/verses/today", params={"religion_id": 3, "language_id": 1, "client_date": "2026-11-05"}).json()["id"]
-=======
     # (client_date is only honoured within one day of UTC today, so use dates relative to today)
     d0 = datetime.now(timezone.utc).date()
     d1 = d0 + timedelta(days=1)
     a = client.get("/api/v1/verses/today", params={"religion_id": 3, "language_id": 1, "client_date": d0.isoformat()}).json()["id"]
     assert a == client.get("/api/v1/verses/today", params={"religion_id": 3, "language_id": 1, "client_date": d0.isoformat()}).json()["id"]
     assert a != client.get("/api/v1/verses/today", params={"religion_id": 3, "language_id": 1, "client_date": d1.isoformat()}).json()["id"]
->>>>>>> settings_redesign
     # invalid combinations are rejected rather than leaking
     assert client.get("/api/v1/verses/random", params={"religion_id": 3, "scripture_id": 1, "language_id": 1}).status_code == 422
     assert client.get("/api/v1/verses/today", params={"client_date": "nope"}).status_code == 422
@@ -456,24 +440,6 @@ def test_missing_translation_falls_back_inside_the_tradition(client):
 
 # ── Wisdom Tree ───────────────────────────────────────────────────────────────────
 def test_wisdom_tree_growth_never_resets_and_is_idempotent(client):
-<<<<<<< HEAD
-    headers = register(client, "tree@example.com")
-    assert client.get("/api/v1/tree", headers=headers, params={"client_date": "2026-11-04"}).json()["total_days"] == 0
-    assert client.get("/api/v1/tree").status_code == 401
-    t = client.post("/api/v1/tree/read", headers=headers, params={"client_date": "2026-11-04"}, json={}).json()
-    assert t["total_days"] == 1 and t["stage"] == "sprout" and t["status"] == "Growing" and t["read_today"] is True
-    again = client.post("/api/v1/tree/read", headers=headers, params={"client_date": "2026-11-04"}, json={}).json()
-    assert again["total_days"] == 1  # repeated reads on one day count once
-    # offline history from the device is merged, future dates are ignored, bad dates rejected
-    merged = client.post("/api/v1/tree/read", headers=headers, params={"client_date": "2026-11-04"},
-                         json={"dates": ["2026-11-01", "2026-11-02", "2026-11-03", "2026-12-25"]}).json()
-    assert merged["total_days"] == 4 and merged["stage"] == "leaves" and merged["current_streak"] == 4
-    assert client.post("/api/v1/tree/read", headers=headers, json={"dates": ["bad"]}).status_code == 422
-    # a long break pauses growth but loses nothing
-    from datetime import date
-    from app.services.tree import tree_state
-    later = tree_state({date(2026, 11, d) for d in (1, 2, 3, 4)}, date(2026, 12, 20))
-=======
     from datetime import date, datetime, timedelta, timezone
     today = datetime.now(timezone.utc).date()
     today_s = today.isoformat()
@@ -494,7 +460,6 @@ def test_wisdom_tree_growth_never_resets_and_is_idempotent(client):
     from app.services.tree import tree_state
     four_days = {today - timedelta(days=d) for d in (0, 1, 2, 3)}
     later = tree_state(four_days, today + timedelta(days=30))
->>>>>>> settings_redesign
     assert later["total_days"] == 4 and later["stage"] == "leaves" and later["status"] == "Resting" and later["current_streak"] == 0 and later["longest_streak"] == 4
     # pure sync does not count today
     sync = client.post("/api/v1/tree/read", headers=headers, json={"dates": [], "mark_today": False}).json()
@@ -506,11 +471,6 @@ def test_wisdom_tree_growth_never_resets_and_is_idempotent(client):
 
 def test_tree_stage_thresholds_match_the_brief():
     from app.services.tree import stage_for
-<<<<<<< HEAD
-    expected = {1: "sprout", 3: "sprout", 4: "leaves", 7: "leaves", 8: "branches", 14: "branches", 15: "flowers", 21: "flowers", 22: "fruits", 30: "fruits", 80: "fruits"}
-    for days, stage in expected.items():
-        assert stage_for(days)[1] == stage, days
-=======
     expected = {
         1: "sprout", 3: "sprout", 4: "leaves", 7: "leaves", 8: "branches",
         14: "branches", 15: "flowers", 21: "flowers", 22: "fruits", 30: "fruits",
@@ -538,4 +498,3 @@ def test_tree_journey_has_five_30_reading_day_levels():
     assert completed["level"] == 5
     assert completed["journey_complete"]
     assert completed["days_to_journey_complete"] == 0
->>>>>>> settings_redesign

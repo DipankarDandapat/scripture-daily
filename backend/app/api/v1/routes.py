@@ -1,10 +1,6 @@
-<<<<<<< HEAD
-from datetime import date
-=======
-from datetime import date, datetime, timedelta, timezone
+﻿from datetime import date, datetime, timedelta, timezone
 import random
 from threading import Lock
->>>>>>> settings_redesign
 import jwt
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -13,12 +9,6 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_access_token, hash_password, verify_password
-<<<<<<< HEAD
-from app.models.entities import Religion, Language, Scripture, Verse, User, UserPreference, Favorite, Device, Feedback
-from app.schemas.api import AuthInput, TokenOut, UserOut, CatalogOut, ReligionOut, ScriptureItem, VerseOut, PreferenceInput, PreferenceOut, FavoriteInput, DeviceInput, VerseCreate, FeedbackInput, FeedbackOut
-
-router = APIRouter()
-=======
 from app.models.entities import Religion, Language, Scripture, Verse, User, UserPreference, ActiveVerseState, VerseSelectionHistory, Favorite, Device, Feedback
 from app.schemas.api import AuthInput, TokenOut, UserOut, CatalogOut, ReligionOut, ScriptureItem, VerseOut, PreferenceInput, PreferenceOut, FavoriteInput, DeviceInput, FcmTokenInput, VerseCreate, FeedbackInput, FeedbackOut
 from app.core.firebase import send_to_tokens, send_to_topic
@@ -37,7 +27,6 @@ def _active_verse_lock(user_id: str) -> Lock:
         return _ACTIVE_VERSE_LOCKS.setdefault(user_id, Lock())
 
 
->>>>>>> settings_redesign
 bearer = HTTPBearer()
 optional_bearer = HTTPBearer(auto_error=False)
 
@@ -55,12 +44,8 @@ def current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer), db
 
 
 def verse_out(v: Verse) -> dict:
-<<<<<<< HEAD
-    return {"id": v.id, "scripture": v.scripture.name, "religion": v.scripture.religion.name,
-=======
     return {"id": v.id, "scripture_id": v.scripture_id, "language_id": v.language_id,
             "scripture": v.scripture.name, "religion": v.scripture.religion.name,
->>>>>>> settings_redesign
             "book": v.book, "chapter": v.chapter, "verse_number": v.verse_number,
             "language": v.language.code, "text": v.text, "translation": v.translation,
             "source": v.source, "license": v.license, "is_demo": v.is_demo,
@@ -258,8 +243,6 @@ def chapter_verses(scripture_id: int, chapter: int, language_id: int | None = No
     return [verse_out(v) for v in db.scalars(query.order_by(Verse.verse_number)).all()]
 
 
-<<<<<<< HEAD
-=======
 def _frequency_hours(value: str) -> int:
     return {"1h": 1, "6h": 6, "12h": 12, "24h": 24, "daily": 24}.get(value, 24)
 
@@ -376,7 +359,6 @@ def refresh_active_verse_if_due(user: User = Depends(current_user), db: Session 
 
 
 
->>>>>>> settings_redesign
 @router.get("/verses/{verse_id}", response_model=VerseOut)
 def get_verse(verse_id: int, db: Session = Depends(get_db)):
     v = db.scalar(verse_query(db).where(Verse.id == verse_id))
@@ -401,23 +383,6 @@ def read_preferences(user: User = Depends(current_user), db: Session = Depends(g
 
 @router.put("/users/preferences", response_model=PreferenceOut)
 def save_preferences(data: PreferenceInput, user: User = Depends(current_user), db: Session = Depends(get_db)):
-<<<<<<< HEAD
-    if data.frequency not in {"daily", "6h", "1h"}: raise HTTPException(status_code=422, detail="frequency must be daily, 6h, or 1h")
-    ids = [int(x) for x in data.scripture_ids.split(",") if x.strip().isdigit()]
-    if not ids: raise HTTPException(status_code=422, detail="scripture_ids must contain at least one valid ID")
-    for sid in ids:
-        scripture = db.get(Scripture, sid)
-        if not scripture or scripture.religion_id != data.religion_id:
-            raise HTTPException(status_code=422, detail=f"Scripture {sid} must belong to the selected religion")
-    if not db.get(Language, data.language_id): raise HTTPException(status_code=422, detail="Unknown language")
-    if data.language_id not in _religion_language_ids(db, data.religion_id):
-        raise HTTPException(status_code=422, detail="That language is not available for the selected tradition")
-    prefs = get_or_create_preferences(user, db)
-    for key, value in data.model_dump().items(): setattr(prefs, key, value)
-    db.commit(); db.refresh(prefs)
-    return prefs
-
-=======
     with _active_verse_lock(user.id):
         db.execute(select(User.id).where(User.id == user.id).with_for_update()).first()
         if data.frequency not in {"daily", "1h", "6h", "12h", "24h"}: raise HTTPException(status_code=422, detail="frequency must be daily, 1h, 6h, 12h, or 24h")
@@ -445,7 +410,6 @@ def save_preferences(data: PreferenceInput, user: User = Depends(current_user), 
                 active.next_update_at = now + timedelta(hours=_frequency_hours(data.frequency))
         db.commit(); db.refresh(prefs)
         return prefs
->>>>>>> settings_redesign
 
 @router.get("/favorites", response_model=list[VerseOut])
 def list_favorites(user: User = Depends(current_user), db: Session = Depends(get_db)):
@@ -470,10 +434,6 @@ def remove_favorite(verse_id: int, user: User = Depends(current_user), db: Sessi
 @router.post("/devices", status_code=201)
 def register_device(data: DeviceInput, user: User = Depends(current_user), db: Session = Depends(get_db)):
     row = db.scalar(select(Device).where(Device.user_id == user.id, Device.device_token == data.device_token))
-<<<<<<< HEAD
-    if row is None: db.add(Device(user_id=user.id, **data.model_dump()))
-    else: row.platform, row.device_model = data.platform, data.device_model
-=======
     if row is None:
         row = Device(user_id=user.id, **data.model_dump())
         db.add(row)
@@ -482,13 +442,10 @@ def register_device(data: DeviceInput, user: User = Depends(current_user), db: S
         row.device_model = data.device_model
         if data.fcm_token:
             row.fcm_token = data.fcm_token
->>>>>>> settings_redesign
     db.commit()
     return {"ok": True}
 
 
-<<<<<<< HEAD
-=======
 @router.put("/devices/fcm-token", status_code=200)
 def update_fcm_token(data: FcmTokenInput, user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Update (or set for the first time) the FCM push token for all of this user's devices."""
@@ -540,7 +497,6 @@ def notify_all_users(
     return {"method": "multicast", "queued": len(tokens), **result}
 
 
->>>>>>> settings_redesign
 @router.post("/feedback", response_model=FeedbackOut, status_code=201)
 def submit_feedback(data: FeedbackInput, user: User = Depends(current_user), db: Session = Depends(get_db)):
     row = Feedback(user_id=user.id, rating=data.rating, comment=data.comment, consent=data.consent)

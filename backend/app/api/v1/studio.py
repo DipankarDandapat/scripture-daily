@@ -1,4 +1,4 @@
-"""Studio template catalogue and the Wisdom Tree reading history."""
+﻿"""Studio template catalogue and the Wisdom Tree reading history."""
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -9,14 +9,9 @@ from sqlalchemy.orm import Session
 from app.api.v1.routes import client_day, current_user, user_from_credentials
 from app.core.database import get_db
 from app.models.entities import Religion, ReadingDay, StudioTemplate, User, UserPreference
-<<<<<<< HEAD
-from app.schemas.api import TemplateOut, TreeOut, TreeReadInput
-from app.services.tree import tree_state
-=======
 from app.content.tree_activities import ACTIVITY_EVENTS
 from app.schemas.api import TemplateOut, TreeActivityEventInput, TreeOut, TreeReadInput, TreeSettingsInput
 from app.services.tree_activities import build_tree, get_setting, reading_days, record_event, set_enabled
->>>>>>> settings_redesign
 
 router = APIRouter()
 optional_bearer = HTTPBearer(auto_error=False)
@@ -53,15 +48,6 @@ def studio_templates(
 
 
 # ── Wisdom Tree ────────────────────────────────────────────────────────────
-<<<<<<< HEAD
-def _days(db: Session, user: User) -> set[date]:
-    return set(db.scalars(select(ReadingDay.day).where(ReadingDay.user_id == user.id)).all())
-
-
-@router.get("/tree", response_model=TreeOut)
-def get_tree(client_date: str | None = None, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    return tree_state(_days(db, user), client_day(client_date))
-=======
 @router.get("/tree", response_model=TreeOut)
 def get_tree(client_date: str | None = None, user: User = Depends(current_user), db: Session = Depends(get_db)):
     return build_tree(db, user, client_day(client_date))
@@ -85,21 +71,15 @@ def report_tree_activity(body: TreeActivityEventInput, client_date: str | None =
     if get_setting(db, user).enabled:
         record_event(db, user, event, today)
     return build_tree(db, user, today)
->>>>>>> settings_redesign
 
 
 @router.post("/tree/read", response_model=TreeOut)
 def record_reading(body: TreeReadInput | None = None, client_date: str | None = None, user: User = Depends(current_user), db: Session = Depends(get_db)):
     """Record today's completed reading (idempotent per day) and merge any dates this device recorded offline."""
     today = client_day(client_date)
-<<<<<<< HEAD
-    have = _days(db, user)
-    wanted = {today} if (body is None or body.mark_today) else set()
-=======
     setting = get_setting(db, user)
     have = set(db.scalars(select(ReadingDay.day).where(ReadingDay.user_id == user.id)).all())  # full history, even before a restart
     wanted = {today} if (body is None or (body.mark_today and setting.enabled)) else set()
->>>>>>> settings_redesign
     horizon = today - timedelta(days=800)
     for raw in (body.dates if body else []):
         try:
@@ -111,8 +91,4 @@ def record_reading(body: TreeReadInput | None = None, client_date: str | None = 
     for d in sorted(wanted - have):
         db.add(ReadingDay(user_id=user.id, day=d))
     db.commit()
-<<<<<<< HEAD
-    return tree_state(have | wanted, today)
-=======
     return build_tree(db, user, today)
->>>>>>> settings_redesign

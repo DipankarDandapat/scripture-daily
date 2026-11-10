@@ -1,4 +1,4 @@
-import secrets
+﻿import secrets
 import string
 from datetime import date, datetime
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
@@ -88,16 +88,11 @@ class UserPreference(Base):
     language_id: Mapped[int] = mapped_column(ForeignKey("languages.id"), default=1)
     scripture_ids: Mapped[str] = mapped_column(String(255), default="1")
     frequency: Mapped[str] = mapped_column(String(20), default="daily")
-<<<<<<< HEAD
-=======
     wallpaper_mode: Mapped[str] = mapped_column(String(40), default="verse_and_image")
->>>>>>> settings_redesign
     notifications_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     user: Mapped[User] = relationship(back_populates="preferences")
 
 
-<<<<<<< HEAD
-=======
 class ActiveVerseState(Base):
     """Single persisted active verse for an installation's authenticated app identity."""
     __tablename__ = "active_verse_states"
@@ -120,7 +115,6 @@ class VerseSelectionHistory(Base):
     selection_source: Mapped[str] = mapped_column(String(20), default="scheduled")
 
 
->>>>>>> settings_redesign
 class Favorite(Base):
     __tablename__ = "favorites"
     __table_args__ = (UniqueConstraint("user_id", "verse_id", name="uq_user_favorite"),)
@@ -139,10 +133,7 @@ class Device(Base):
     device_token: Mapped[str] = mapped_column(String(512))
     platform: Mapped[str] = mapped_column(String(30), default="android")
     device_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
-<<<<<<< HEAD
-=======
     fcm_token: Mapped[str | None] = mapped_column(String(512), nullable=True, index=True)
->>>>>>> settings_redesign
 
 
 class Feedback(Base):
@@ -361,8 +352,6 @@ class ReadingDay(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[str] = mapped_column(String(10), ForeignKey("users.id", ondelete="CASCADE"), index=True)
     day: Mapped[date] = mapped_column(Date)
-<<<<<<< HEAD
-=======
 
 
 # ── Journal Reflection ───────────────────────────────────────────────────────
@@ -449,4 +438,3 @@ class AppConfigEntry(Base):
     description: Mapped[str] = mapped_column(String(300), default="")
     is_public: Mapped[bool] = mapped_column(Boolean, default=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
->>>>>>> settings_redesign
