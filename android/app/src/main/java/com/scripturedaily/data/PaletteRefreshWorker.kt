@@ -2,6 +2,7 @@ package com.scripturedaily.data
 
 import android.content.Context
 import androidx.work.CoroutineWorker
+<<<<<<< HEAD
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -39,11 +40,20 @@ class PaletteRefreshWorker(context: Context, params: WorkerParameters) : Corouti
     } catch (_: Exception) {
         Result.retry()
     }
+=======
+import androidx.work.WorkManager
+import androidx.work.WorkerParameters
+
+/** Legacy worker retained only to cancel jobs created by older app versions. */
+class PaletteRefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result = Result.success()
+>>>>>>> settings_redesign
 
     companion object {
         private const val WORK_NAME = "scripture-daily-palette-boundary"
         private const val LEGACY_PERIODIC_WORK_NAME = "scripture-daily-palette-refresh"
 
+<<<<<<< HEAD
         /** Run once immediately, then chain refreshes at the next selected local-time boundary. */
         fun schedule(context: Context) {
             val manager = WorkManager.getInstance(context)
@@ -70,6 +80,15 @@ class PaletteRefreshWorker(context: Context, params: WorkerParameters) : Corouti
             WorkManager.getInstance(context).enqueueUniqueWork(
                 WORK_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, request
             )
+=======
+        /** The independent palette scheduler is retired; VerseSyncWorker owns the single cadence. */
+        fun schedule(context: Context) = cancel(context)
+
+        fun cancel(context: Context) {
+            val manager = WorkManager.getInstance(context)
+            manager.cancelUniqueWork(WORK_NAME)
+            manager.cancelUniqueWork(LEGACY_PERIODIC_WORK_NAME)
+>>>>>>> settings_redesign
         }
     }
 }

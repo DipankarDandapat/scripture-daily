@@ -1,5 +1,9 @@
 package com.scripturedaily.features.studio
 
+<<<<<<< HEAD
+=======
+import android.app.Activity
+>>>>>>> settings_redesign
 import android.app.WallpaperManager
 import android.graphics.Bitmap
 import android.net.Uri
@@ -60,6 +64,10 @@ import com.scripturedaily.ui.ErrorBox
 import com.scripturedaily.ui.OverlayScreen
 import com.scripturedaily.ui.Pill
 import com.scripturedaily.ui.W
+<<<<<<< HEAD
+=======
+import com.scripturedaily.ads.AdManager
+>>>>>>> settings_redesign
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -75,7 +83,11 @@ enum class StudioTab(val label: String) { SHARE("Share Studio"), VIDEO("Video St
  * share one set of tradition-aware templates, which refresh whenever the user's tradition changes.
  */
 @Composable
+<<<<<<< HEAD
 fun StudioScreen(verse: Verse, religionId: Int, religionCode: String?, initialTab: StudioTab, onBack: () -> Unit) {
+=======
+fun StudioScreen(verse: Verse, religionId: Int, religionCode: String?, initialTab: StudioTab, onBack: () -> Unit, onActivity: (String) -> Unit = {}) {
+>>>>>>> settings_redesign
     val context = LocalContext.current
     var tab by remember { mutableStateOf(initialTab) }
     var templates by remember(religionCode) { mutableStateOf(StudioTemplates.load(context, religionCode)) }
@@ -90,7 +102,11 @@ fun StudioScreen(verse: Verse, religionId: Int, religionCode: String?, initialTa
     }
     LaunchedEffect(style) { StudioPrefs.save(context, style) }
 
+<<<<<<< HEAD
     OverlayScreen("Studio", onBack) {
+=======
+    OverlayScreen(if (tab == StudioTab.SHARE) "Share Studio" else "Video Studio", onBack) {
+>>>>>>> settings_redesign
         TabRow(selectedTabIndex = tab.ordinal, containerColor = Color.Transparent, contentColor = W.Ink) {
             StudioTab.values().forEach { t ->
                 Tab(selected = tab == t, onClick = { tab = t }, text = { Text(t.label, fontWeight = FontWeight.SemiBold) },
@@ -98,7 +114,11 @@ fun StudioScreen(verse: Verse, religionId: Int, religionCode: String?, initialTa
             }
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+<<<<<<< HEAD
             if (tab == StudioTab.SHARE) ShareTab(verse, style, templates) { style = it }
+=======
+            if (tab == StudioTab.SHARE) ShareTab(verse, style, templates, onShared = onActivity) { style = it }
+>>>>>>> settings_redesign
             else VideoTab(verse, style, templates) { style = it }
             Spacer(Modifier.height(24.dp))
         }
@@ -197,6 +217,7 @@ private fun TextControls(style: CardStyle, full: Boolean, onChange: (CardStyle) 
 
 // ── Share Studio ───────────────────────────────────────────────────────────────
 @Composable
+<<<<<<< HEAD
 private fun ShareTab(verse: Verse, style: CardStyle, templates: List<StudioTemplate>, onChange: (CardStyle) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -205,6 +226,30 @@ private fun ShareTab(verse: Verse, style: CardStyle, templates: List<StudioTempl
     val caption = "“${verse.text}”\n\n— ${verse.citation()}\n\nvia WisdomOne"
     suspend fun renderFull(): Bitmap = withContext(Dispatchers.Default) { CardRenderer.render(context, CardContent.from(verse), style) }
 
+=======
+private fun ShareTab(verse: Verse, style: CardStyle, templates: List<StudioTemplate>, onShared: (String) -> Unit, onChange: (CardStyle) -> Unit) {
+    val context = LocalContext.current
+    val activity = context as Activity
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    val caption = "“${verse.text}”\n\n— ${verse.citation()}\n\nvia WisdomOne"
+    suspend fun renderFull(): Bitmap = withContext(Dispatchers.Default) { CardRenderer.render(context, CardContent.from(verse), style) }
+
+    /** Run [action] immediately if no rewarded ad is available, otherwise show the ad first then run it. */
+    fun withReward(placementId: String, action: suspend () -> Unit) {
+        if (!AdManager.canRequest() || AdManager.config.value.resolve(placementId) == null) {
+            scope.launch { action() }
+            return
+        }
+        AdManager.loadAndShowRewarded(
+            activity = activity,
+            placementId = placementId,
+            onReward = { scope.launch { action() } },
+            onUnavailable = { scope.launch { action() } }   // ad unavailable → still let the user proceed
+        )
+    }
+
+>>>>>>> settings_redesign
     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CardPreview(verse, style, Modifier.height(430.dp)) }
     Label("Template")
     TemplateRow(templates, style.template) { onChange(style.copy(template = it)) }
@@ -224,6 +269,7 @@ private fun ShareTab(verse: Verse, style: CardStyle, templates: List<StudioTempl
         Switch(checked = style.showMark, onCheckedChange = { onChange(style.copy(showMark = it)) }, colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = W.Gold))
     }
     Spacer(Modifier.height(4.dp))
+<<<<<<< HEAD
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
         Button(
             onClick = { scope.launch { busy = true; ShareActions.shareImage(context, renderFull(), caption); busy = false } },
@@ -260,10 +306,45 @@ private fun ShareTab(verse: Verse, style: CardStyle, templates: List<StudioTempl
         onClick = { wallpaperDialog = true }, enabled = !busy, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(14.dp),
         border = BorderStroke(1.5.dp, W.Gold.copy(alpha = 0.6f)), colors = ButtonDefaults.outlinedButtonColors(contentColor = W.Ink)
     ) { Icon(Icons.Outlined.Wallpaper, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Set as wallpaper", fontWeight = FontWeight.SemiBold) }
+=======
+    // Share Studio's two actions: Share (system share sheet) and WhatsApp Status (WhatsApp's status composer with the image).
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+        Button(
+            onClick = { withReward("studio_share_rewarded") { busy = true; ShareActions.shareImage(context, renderFull(), caption); busy = false; onShared("share") } },
+            enabled = !busy, modifier = Modifier.weight(1f).height(54.dp), shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = W.Purple, contentColor = W.OnPurple), contentPadding = PaddingValues(horizontal = 8.dp)
+        ) { Icon(Icons.Outlined.Share, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Share", fontWeight = FontWeight.Bold, fontSize = 15.sp) }
+        OutlinedButton(
+            onClick = {
+                withReward("studio_whatsapp_rewarded") {
+                    busy = true
+                    val uri = ShareActions.writeCacheImage(context, renderFull(), "wisdomone_status.png")
+                    val opened = ShareActions.shareToWhatsApp(context, uri, "image/png", caption); busy = false
+                    if (opened) onShared("share")
+                }
+            },
+            enabled = !busy, modifier = Modifier.weight(1.3f).height(54.dp), shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.5.dp, Color(0xFF25D366)), contentPadding = PaddingValues(horizontal = 8.dp),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = if (W.IsDark) Color(0xFF5BE38A) else Color(0xFF1B8F4A))
+        ) { Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_whatsapp), null, Modifier.size(20.dp), tint = Color.Unspecified); Spacer(Modifier.width(8.dp)); Text("WhatsApp Status", fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1) }
+    }
+    TextButton(
+        onClick = {
+            withReward("studio_save_image_rewarded") {
+                busy = true
+                val uri = ShareActions.saveImageToGallery(context, renderFull(), "WisdomOne_${verse.id}_${System.currentTimeMillis()}")
+                Toast.makeText(context, if (uri != null) "Saved to Pictures/WisdomOne" else "Saving needs Android 10+. Use Share instead.", Toast.LENGTH_SHORT).show()
+                busy = false
+            }
+        },
+        enabled = !busy, modifier = Modifier.fillMaxWidth()
+    ) { Icon(Icons.Outlined.Download, null, Modifier.size(18.dp), tint = W.InkMid); Spacer(Modifier.width(6.dp)); Text("Save image to gallery", fontWeight = FontWeight.SemiBold, color = W.InkMid) }
+>>>>>>> settings_redesign
     if (busy) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
         CircularProgressIndicator(color = W.Gold, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
         Spacer(Modifier.width(8.dp)); Text("Working…", fontSize = 12.sp, color = W.InkSoft)
     }
+<<<<<<< HEAD
     if (wallpaperDialog) {
         val metrics = context.resources.displayMetrics
         suspend fun apply(flag: Int, name: String) {
@@ -291,12 +372,18 @@ private fun ShareTab(verse: Verse, style: CardStyle, templates: List<StudioTempl
             dismissButton = { TextButton(onClick = { wallpaperDialog = false }) { Text("Cancel", color = W.InkSoft) } }
         )
     }
+=======
+>>>>>>> settings_redesign
 }
 
 // ── Video Studio ───────────────────────────────────────────────────────────────
 @Composable
 private fun VideoTab(verse: Verse, baseStyle: CardStyle, templates: List<StudioTemplate>, onChange: (CardStyle) -> Unit) {
     val context = LocalContext.current
+<<<<<<< HEAD
+=======
+    val activity = context as Activity
+>>>>>>> settings_redesign
     val scope = rememberCoroutineScope()
     val style = baseStyle.copy(format = CardFormat.STORY)
     var seconds by remember { mutableStateOf(12) }
@@ -364,6 +451,7 @@ private fun VideoTab(verse: Verse, baseStyle: CardStyle, templates: List<StudioT
             Button(
                 onClick = {
                     MusicPreview.stop(); listening = false
+<<<<<<< HEAD
                     error = null; running = true; progress = 0f
                     job = scope.launch {
                         try {
@@ -374,6 +462,30 @@ private fun VideoTab(verse: Verse, baseStyle: CardStyle, templates: List<StudioT
                         catch (e: Exception) { error = "Couldn't create the video on this device (${e.message ?: e.javaClass.simpleName}). Try a shorter length or no music." }
                         finally { running = false }
                     }
+=======
+                    error = null; progress = 0f
+                    // Show rewarded interstitial before generation; proceed whether or not reward is earned
+                    fun startGeneration() {
+                        running = true
+                        job = scope.launch {
+                            try {
+                                val out = File(context.cacheDir, "wisdomone_verse_${System.currentTimeMillis()}.mp4")
+                                VideoGenerator.generate(context, CardContent.from(verse), options, out) { progress = it }
+                                result = out
+                            } catch (e: CancellationException) { throw e }
+                            catch (e: Exception) { error = "Couldn't create the video on this device (${e.message ?: e.javaClass.simpleName}). Try a shorter length or no music." }
+                            finally { running = false }
+                        }
+                    }
+                    if (AdManager.canRequest() && AdManager.config.value.resolve("studio_generate_video_rewarded") != null) {
+                        AdManager.loadAndShowRewardedInterstitial(
+                            activity = activity,
+                            placementId = "studio_generate_video_rewarded",
+                            onReward = { startGeneration() },
+                            onUnavailable = { startGeneration() }
+                        )
+                    } else startGeneration()
+>>>>>>> settings_redesign
                 },
                 modifier = Modifier.fillMaxWidth().height(54.dp), shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = W.Ink)
             ) { Icon(Icons.Outlined.Movie, null, Modifier.size(18.dp)); Spacer(Modifier.width(8.dp)); Text("Generate video", fontWeight = FontWeight.SemiBold, fontSize = 15.sp) }
@@ -396,22 +508,68 @@ private fun VideoTab(verse: Verse, baseStyle: CardStyle, templates: List<StudioT
         }
         Text("Tap the video to pause or play.", fontSize = 11.sp, color = W.InkSoft)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+<<<<<<< HEAD
             Button(onClick = { ShareActions.shareVideo(context, ShareActions.videoUri(context, file), caption) }, modifier = Modifier.weight(1f).height(52.dp),
                 shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = W.Ink), contentPadding = PaddingValues(8.dp)) {
                 Icon(Icons.Outlined.Share, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Share / Reels", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
             }
             OutlinedButton(onClick = { ShareActions.shareToWhatsApp(context, ShareActions.videoUri(context, file), "video/mp4", caption) }, modifier = Modifier.weight(1f).height(52.dp),
+=======
+            Button(onClick = {
+                if (AdManager.canRequest() && AdManager.config.value.resolve("studio_share_video_rewarded") != null)
+                    AdManager.loadAndShowRewarded(activity, "studio_share_video_rewarded",
+                        onReward = { ShareActions.shareVideo(context, ShareActions.videoUri(context, file), caption) },
+                        onUnavailable = { ShareActions.shareVideo(context, ShareActions.videoUri(context, file), caption) })
+                else ShareActions.shareVideo(context, ShareActions.videoUri(context, file), caption)
+            }, modifier = Modifier.weight(1f).height(52.dp),
+                shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = W.Ink), contentPadding = PaddingValues(8.dp)) {
+                Icon(Icons.Outlined.Share, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Share / Reels", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+            }
+            OutlinedButton(onClick = {
+                if (AdManager.canRequest() && AdManager.config.value.resolve("studio_whatsapp_video_rewarded") != null)
+                    AdManager.loadAndShowRewarded(activity, "studio_whatsapp_video_rewarded",
+                        onReward = { ShareActions.shareToWhatsApp(context, ShareActions.videoUri(context, file), "video/mp4", caption) },
+                        onUnavailable = { ShareActions.shareToWhatsApp(context, ShareActions.videoUri(context, file), "video/mp4", caption) })
+                else ShareActions.shareToWhatsApp(context, ShareActions.videoUri(context, file), "video/mp4", caption)
+            }, modifier = Modifier.weight(1f).height(52.dp),
+>>>>>>> settings_redesign
                 shape = RoundedCornerShape(16.dp), border = BorderStroke(1.5.dp, Color(0xFF25D366).copy(alpha = 0.7f)), colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFF1FA855)),
                 contentPadding = PaddingValues(8.dp)) { Text("WhatsApp Status", fontWeight = FontWeight.SemiBold, fontSize = 13.sp) }
         }
         OutlinedButton(
             onClick = {
+<<<<<<< HEAD
                 val uri = ShareActions.saveVideoToGallery(context, file, "WisdomOne_${System.currentTimeMillis()}")
                 Toast.makeText(context, if (uri != null) "Saved to Movies/WisdomOne" else "Saving needs Android 10+. Use Share instead.", Toast.LENGTH_SHORT).show()
             },
             modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.5.dp, W.Gold.copy(alpha = 0.6f)), colors = ButtonDefaults.outlinedButtonColors(contentColor = W.Ink)
         ) { Icon(Icons.Outlined.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Save to gallery", fontWeight = FontWeight.SemiBold) }
         OutlinedButton(onClick = { result = null }, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(14.dp)) { Text("Make another") }
+=======
+                if (AdManager.canRequest() && AdManager.config.value.resolve("studio_save_video_rewarded") != null)
+                    AdManager.loadAndShowRewarded(activity, "studio_save_video_rewarded",
+                        onReward = {
+                            val uri = ShareActions.saveVideoToGallery(context, file, "WisdomOne_${System.currentTimeMillis()}")
+                            Toast.makeText(context, if (uri != null) "Saved to Movies/WisdomOne" else "Saving needs Android 10+. Use Share instead.", Toast.LENGTH_SHORT).show()
+                        },
+                        onUnavailable = {
+                            val uri = ShareActions.saveVideoToGallery(context, file, "WisdomOne_${System.currentTimeMillis()}")
+                            Toast.makeText(context, if (uri != null) "Saved to Movies/WisdomOne" else "Saving needs Android 10+. Use Share instead.", Toast.LENGTH_SHORT).show()
+                        })
+                else {
+                    val uri = ShareActions.saveVideoToGallery(context, file, "WisdomOne_${System.currentTimeMillis()}")
+                    Toast.makeText(context, if (uri != null) "Saved to Movies/WisdomOne" else "Saving needs Android 10+. Use Share instead.", Toast.LENGTH_SHORT).show()
+                }
+            },
+            modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.5.dp, W.Gold.copy(alpha = 0.6f)), colors = ButtonDefaults.outlinedButtonColors(contentColor = W.Ink)
+        ) { Icon(Icons.Outlined.Download, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Save to gallery", fontWeight = FontWeight.SemiBold) }
+        OutlinedButton(onClick = {
+            if (AdManager.canRequest() && AdManager.config.value.resolve("studio_make_another_interstitial") != null) {
+                AdManager.preloadInterstitial("studio_make_another_interstitial")
+                AdManager.showInterstitial(activity, "studio_make_another_interstitial") { result = null }
+            } else result = null
+        }, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(14.dp)) { Text("Make another") }
+>>>>>>> settings_redesign
     }
 }
 

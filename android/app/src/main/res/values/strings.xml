@@ -1,4 +1,12 @@
 <resources>
+<<<<<<< HEAD
+=======
+    <!-- Meta SDK credentials — fill in once you have them from the Meta Developer dashboard.
+         The App Secret must NEVER be placed here; only App ID and Client Token belong in the app. -->
+    <string name="facebook_app_id">1707550274227648</string>
+    <string name="facebook_client_token">04facc12fdf1631eed5e334e5928995a</string>
+
+>>>>>>> settings_redesign
     <string name="widget_description">Daily verse from WisdomOne</string>
     <string name="shortcut_today_short">Today&#8217;s Verse</string>
     <string name="shortcut_today_long">Read today&#8217;s verse</string>

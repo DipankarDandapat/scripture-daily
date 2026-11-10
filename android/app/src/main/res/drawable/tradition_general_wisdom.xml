@@ -1,5 +1,11 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+<<<<<<< HEAD
   <path android:fillColor="@android:color/transparent" android:strokeColor="#C8873D" android:strokeWidth="1.8" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M12,21V10"/>
   <path android:fillColor="@android:color/transparent" android:strokeColor="#C8873D" android:strokeWidth="1.8" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M12,14C5,14 3,9 3,5c6,0 9,4 9,9Z"/>
   <path android:fillColor="@android:color/transparent" android:strokeColor="#C8873D" android:strokeWidth="1.8" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M12,11c0,-5 4,-8 9,-8 0,6 -3,10 -9,10"/>
+=======
+  <path android:fillColor="@android:color/transparent" android:strokeColor="#000000" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M12,21V11"/>
+  <path android:fillColor="@android:color/transparent" android:strokeColor="#000000" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M12,14C6,14 4,10 4,6C9,6 12,9 12,14Z"/>
+  <path android:fillColor="@android:color/transparent" android:strokeColor="#000000" android:strokeWidth="1.7" android:strokeLineCap="round" android:strokeLineJoin="round" android:pathData="M12,11C12,7 14.5,4.5 19,4.5C19,8.5 16.5,11 12,11Z"/>
+>>>>>>> settings_redesign
 </vector>

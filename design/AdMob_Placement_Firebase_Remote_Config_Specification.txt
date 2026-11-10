@@ -1,0 +1,560 @@
+# WisdomOne – AdMob Placement & Firebase Remote Config Specification
+
+**Platform:** Android (Kotlin / Jetpack Compose)
+**Ad network:** Google AdMob
+**Configuration:** Firebase Remote Config
+**Objective:** Monetize WisdomOne while keeping scripture reading and daily reflection comfortable and uninterrupted.
+
+---
+
+## 1. Recommended ad placement inventory
+
+### A. Home screen
+
+| Placement ID | Location | Recommended format | Recommendation |
+|---|---|---|---|
+| `home_top_banner` | Below Home header/date section | Adaptive banner | Optional; avoid pushing the main content too far down |
+| `home_after_mood` | Below mood selection | Native advanced | Good alternative to a banner; enable only if the layout has room |
+| `home_after_daily_verse` | Below the daily verse card and its actions | Native advanced | Recommended |
+| `home_bottom_banner` | Bottom of Home content | Anchored adaptive banner | Recommended if it does not overlap navigation or content |
+| `home_inline_banner` | Between Home content sections | Inline adaptive | Optional; use only when there is enough scrollable content |
+
+**My recommendation:** Start with one Home ad placement, preferably `home_after_daily_verse`. Do not enable all Home placements simultaneously.
+
+### B. Saved Verses screen
+
+This is a priority monetization area because users may spend time browsing their saved content.
+
+| Placement ID | Location | Recommended format | Recommendation |
+|---|---|---|---|
+| `saved_first_verse_native` | Immediately after the first saved verse | Native advanced, rectangular card | Recommended |
+| `saved_every_two_banner` | After every two saved verses | Inline adaptive banner or native advanced | Recommended, configurable |
+| `saved_bottom_banner` | Bottom of saved-verse list | Adaptive banner | Optional |
+| `saved_empty_state_ad` | Empty saved-verses screen | Disabled by default | Do not show an ad when there is no saved content |
+
+#### Required saved-verse insertion behavior
+
+The requested behavior is:
+
+1. User saves the first verse.
+2. The saved verse appears normally.
+3. A rectangular native ad appears below that first verse.
+4. Additional saved verses are displayed normally.
+5. A banner/native ad appears after every two additional saved verses.
+6. Ads must not replace, hide, or interfere with saved verses.
+
+**Recommended insertion sequence:**
+
+| Saved verse count | Ad insertion |
+|---:|---|
+| 1 | First rectangular native ad |
+| 2 | No additional ad |
+| 3 | Next ad |
+| 4 | No additional ad |
+| 5 | Next ad |
+| 6 | No additional ad |
+| 7 | Next ad |
+
+This means the first ad appears after item 1, and subsequent ads appear after every 2 additional verses (items 3, 5, 7, etc.).
+
+The interval and first insertion position must be Firebase-configurable. For example, if the interval changes to 3, the app should use the new interval without requiring an app update.
+
+**Recommended initial configuration:**
+- First ad after: 1 saved verse.
+- Subsequent interval: 2 saved verses.
+- Maximum inline ads per screen: 3.
+- Maximum ad frequency should be configurable.
+- Do not show an ad if the ad request fails.
+- Do not insert duplicate ads when the list recomposes or the user scrolls.
+- Preserve saved-verse ordering and pagination.
+
+### C. Scripture / category listing
+
+| Placement ID | Location | Recommended format |
+|---|---|---|
+| `scripture_list_top` | Below the scripture/category header | Adaptive banner |
+| `scripture_list_inline` | Between scripture/category cards | Native advanced |
+| `scripture_list_bottom` | Bottom of the listing | Adaptive banner |
+| `scripture_detail_inline` | Below scripture description or content introduction | Native advanced |
+
+Do not place an ad between a verse and its meaning or translation.
+
+### D. Verse reading / verse detail
+
+| Placement ID | Location | Recommended format |
+|---|---|---|
+| `verse_detail_after_content` | Below verse, translation, and meaning | Native advanced |
+| `verse_detail_bottom` | Bottom of the reading screen | Adaptive banner |
+| `verse_detail_between_sections` | Between independent explanatory sections | Native advanced |
+
+Do not interrupt the actual scripture text with full-screen ads.
+
+### E. Discover / Explore
+
+| Placement ID | Location | Recommended format |
+|---|---|---|
+| `discover_top_banner` | Below Discover header | Adaptive banner |
+| `discover_inline_native` | Between discovery cards | Native advanced |
+| `discover_bottom_banner` | Bottom of Discover | Adaptive banner |
+
+### F. Wisdom Tree / reading journey
+
+| Placement ID | Location | Recommended format |
+|---|---|---|
+| `tree_screen_bottom` | Bottom of journey screen | Adaptive banner |
+| `tree_completion_interstitial` | After a level completion result | Interstitial, optional |
+| `tree_rewarded_bonus` | Optional user-selected bonus | Rewarded |
+
+Do not show an interstitial while the user is reading or progressing through a milestone. A level-completion interstitial should be disabled by default and tested carefully.
+
+### G. Reading history / activity
+
+| Placement ID | Location | Recommended format |
+|---|---|---|
+| `history_top_banner` | Below history header | Adaptive banner |
+| `history_inline_native` | Between history groups | Native advanced |
+| `history_bottom_banner` | Bottom of history | Adaptive banner |
+
+### H. Wallpaper gallery
+
+| Placement ID | Location | Recommended format |
+|---|---|---|
+| `wallpaper_gallery_banner` | Below gallery header | Adaptive banner |
+| `wallpaper_gallery_inline` | Between wallpaper rows | Native advanced |
+| `wallpaper_preview_bottom` | Below wallpaper preview | Adaptive banner |
+| `wallpaper_download_rewarded` | Before an optional premium-style download benefit | Rewarded |
+
+Rewarded ads should only be used when the user is told exactly what they receive. Do not make ordinary app functionality or access to scripture dependent on watching ads.
+
+### I. Settings
+
+| Placement ID | Location | Recommended format |
+|---|---|---|
+| `settings_bottom_banner` | Bottom of Settings | Adaptive banner |
+
+Keep Settings relatively clean. Do not place ads between settings controls or near destructive actions.
+
+### J. App launch / resume
+
+| Placement ID | Location | Recommended format |
+|---|---|---|
+| `app_open_ad` | App launch or eligible return from background | App open |
+
+App-open ads should be optional and disabled initially. Do not show one on every resume. Apply a cooldown and ensure the app is ready for the user before displaying it.
+
+---
+
+## 2. Ad format and size configuration
+
+Use these format options as configurable choices:
+
+| Format key | Format | Typical use |
+|---|---|---|
+| `BANNER_ADAPTIVE_ANCHORED` | Anchored adaptive banner | Fixed top/bottom placement |
+| `BANNER_ADAPTIVE_INLINE` | Inline adaptive banner | Scrollable content |
+| `BANNER_STANDARD_320_50` | 320×50 banner | Compact slot |
+| `BANNER_STANDARD_300_50` | 300×50 banner | Compact slot |
+| `BANNER_STANDARD_320_100` | 320×100 banner | Larger reserved slot |
+| `BANNER_MEDIUM_RECTANGLE` | 300×250 | Rectangular placement |
+| `BANNER_LARGE_ADAPTIVE` | Large anchored adaptive | Larger fixed slot |
+| `NATIVE_ADVANCED` | Native advanced | Content-integrated card |
+| `INTERSTITIAL` | Full-screen | Natural transition |
+| `REWARDED` | Rewarded video | Optional user benefit |
+| `REWARDED_INTERSTITIAL` | Rewarded full-screen | Optional reward at a natural break |
+| `APP_OPEN` | App open | Eligible launch/resume |
+
+The actual ad creative dimensions are controlled by AdMob. The app should calculate adaptive sizes from the available screen width instead of assuming one fixed pixel size.
+
+---
+
+## 3. Firebase Remote Config architecture
+
+Use Firebase Remote Config to control the following without publishing a new APK/AAB:
+
+- Enable or disable each placement.
+- Change the AdMob ad unit ID assigned to a placement.
+- Change the ad format used by a compatible placement.
+- Set the first ad insertion position.
+- Set the interval between inline ads.
+- Set maximum ads per screen.
+- Set interstitial frequency and cooldown.
+- Enable or disable app-open ads.
+- Enable or disable rewarded ads.
+- Configure country/user-segment-specific settings if needed.
+- Enable a global ad kill switch.
+
+**Important:** Remote Config controls ad unit IDs and app behavior. The AdMob App ID should still be configured in the Android manifest as required by the Google Mobile Ads SDK. Do not treat the App ID and an ad unit ID as interchangeable.
+
+### 3.1 Suggested Firebase parameter structure
+
+Use a versioned JSON parameter named:
+
+`ad_config_v1`
+
+Example:
+
+```json
+{
+  "ads_master_enabled": true,
+  "ads_test_mode": true,
+  "config_version": 1,
+  "global": {
+    "max_ads_per_screen": 3,
+    "min_seconds_between_fullscreen_ads": 180,
+    "min_seconds_between_app_open_ads": 14400,
+    "respect_user_navigation": true
+  },
+  "placements": {
+    "home_after_daily_verse": {
+      "enabled": true,
+      "format": "NATIVE_ADVANCED",
+      "ad_unit_id": "YOUR_HOME_NATIVE_AD_UNIT_ID"
+    },
+    "home_bottom_banner": {
+      "enabled": false,
+      "format": "BANNER_ADAPTIVE_ANCHORED",
+      "ad_unit_id": "YOUR_HOME_BANNER_AD_UNIT_ID"
+    },
+    "saved_first_verse_native": {
+      "enabled": true,
+      "format": "NATIVE_ADVANCED",
+      "ad_unit_id": "YOUR_SAVED_NATIVE_AD_UNIT_ID"
+    },
+    "saved_every_two_banner": {
+      "enabled": true,
+      "format": "BANNER_ADAPTIVE_INLINE",
+      "ad_unit_id": "YOUR_SAVED_INLINE_AD_UNIT_ID"
+    },
+    "saved_bottom_banner": {
+      "enabled": false,
+      "format": "BANNER_ADAPTIVE_ANCHORED",
+      "ad_unit_id": "YOUR_SAVED_BOTTOM_AD_UNIT_ID"
+    },
+    "discover_inline_native": {
+      "enabled": true,
+      "format": "NATIVE_ADVANCED",
+      "ad_unit_id": "YOUR_DISCOVER_NATIVE_AD_UNIT_ID"
+    },
+    "history_inline_native": {
+      "enabled": true,
+      "format": "NATIVE_ADVANCED",
+      "ad_unit_id": "YOUR_HISTORY_NATIVE_AD_UNIT_ID"
+    },
+    "wallpaper_download_rewarded": {
+      "enabled": false,
+      "format": "REWARDED",
+      "ad_unit_id": "YOUR_REWARDED_AD_UNIT_ID"
+    },
+    "tree_completion_interstitial": {
+      "enabled": false,
+      "format": "INTERSTITIAL",
+      "ad_unit_id": "YOUR_INTERSTITIAL_AD_UNIT_ID"
+    },
+    "app_open_ad": {
+      "enabled": false,
+      "format": "APP_OPEN",
+      "ad_unit_id": "YOUR_APP_OPEN_AD_UNIT_ID"
+    }
+  },
+  "saved_verses": {
+    "first_ad_after_items": 1,
+    "repeat_interval_items": 2,
+    "max_inline_ads": 3,
+    "repeat_format": "BANNER_ADAPTIVE_INLINE"
+  }
+}
+```
+
+Replace all placeholder IDs with the actual AdMob ad unit IDs. Keep the JSON valid when publishing changes in Firebase.
+
+### 3.2 Recommended individual Remote Config parameters
+
+If you prefer managing parameters separately rather than using one JSON object, use names such as:
+
+| Parameter | Example value |
+|---|---|
+| `ads_master_enabled` | `true` |
+| `ads_test_mode` | `true` |
+| `home_after_daily_verse_enabled` | `true` |
+| `home_after_daily_verse_format` | `NATIVE_ADVANCED` |
+| `home_after_daily_verse_id` | Ad unit ID |
+| `saved_first_verse_enabled` | `true` |
+| `saved_first_verse_id` | Ad unit ID |
+| `saved_first_ad_after_items` | `1` |
+| `saved_repeat_interval_items` | `2` |
+| `saved_repeat_max_ads` | `3` |
+| `saved_repeat_format` | `BANNER_ADAPTIVE_INLINE` |
+| `saved_repeat_ad_unit_id` | Ad unit ID |
+| `app_open_enabled` | `false` |
+| `app_open_cooldown_seconds` | `14400` |
+| `interstitial_enabled` | `false` |
+| `interstitial_cooldown_seconds` | `180` |
+| `rewarded_enabled` | `false` |
+
+The JSON approach is easier to version and validate as one coherent configuration. Individual parameters are easier to edit independently. Choose one primary approach rather than maintaining conflicting copies of the same settings.
+
+---
+
+## 4. Saved Verses: configurable insertion logic
+
+The implementation must calculate ad positions from the number of actual saved verses, not from the number of Compose list rows. An ad row must never count as a saved verse.
+
+Example pseudocode:
+
+```kotlin
+fun shouldInsertSavedVerseAd(
+    savedVerseIndex: Int,
+    firstAdAfterItems: Int,
+    repeatIntervalItems: Int
+): Boolean {
+    val itemCount = savedVerseIndex + 1
+
+    if (itemCount == firstAdAfterItems) return true
+
+    if (itemCount > firstAdAfterItems && repeatIntervalItems > 0) {
+        return (itemCount - firstAdAfterItems) % repeatIntervalItems == 0
+    }
+
+    return false
+}
+```
+
+For the recommended configuration:
+
+- `firstAdAfterItems = 1`
+- `repeatIntervalItems = 2`
+
+The resulting insertion positions are after saved verses 1, 3, 5, 7, and so on.
+
+The implementation should additionally:
+- Count only saved verse records.
+- Avoid duplicate ad requests during recomposition.
+- Preserve scroll position when ads load.
+- Keep stable list keys.
+- Avoid reserving large blank spaces when an ad fails to load.
+- Respect `max_inline_ads`.
+- Avoid showing ads to users who have an applicable ad-free entitlement, if such a feature is introduced later.
+
+---
+
+## 5. Ad frequency and user experience rules
+
+These are recommended starting values, not mandatory AdMob limits.
+
+| Rule | Recommended starting value |
+|---|---:|
+| Maximum inline ads per screen | 3 |
+| First saved-verse ad | After 1 item |
+| Repeat saved-verse ad | Every 2 additional items |
+| Interstitial cooldown | 3 minutes |
+| App-open cooldown | 4 hours |
+| Interstitial on ordinary verse reading | Disabled |
+| Interstitial on app back button | Disabled |
+| Interstitial on every navigation | Disabled |
+| Rewarded ad | User-initiated only |
+
+Never show an interstitial:
+- Immediately after the app opens before the user can use it.
+- While a verse is being read.
+- During a form submission or an important user action.
+- Repeatedly when the user navigates between tabs.
+- In a way that causes accidental clicks or blocks normal navigation.
+
+The ad should be clearly distinguishable from WisdomOne's own content. Native ads must include the required advertising attribution and comply with AdMob's native-ad asset requirements.
+
+---
+
+## 6. Recommended ad combinations
+
+### Combination A – Light monetization
+
+- Home: one native ad below the daily verse.
+- Saved Verses: first ad after one verse, then every two additional verses.
+- Discover: one native ad between content groups.
+- All full-screen formats disabled.
+
+**Best for:** Initial launch and protecting the reading experience.
+
+### Combination B – Balanced monetization
+
+- Home: native ad below daily verse.
+- Saved Verses: first native ad plus repeat inline ads.
+- Discover: inline native ad.
+- History: inline native ad.
+- Wallpaper gallery: adaptive banner.
+- Rewarded: optional wallpaper benefit.
+- App open: disabled initially.
+
+**Best for:** Recommended first production configuration.
+
+### Combination C – Higher monetization
+
+- Home: native ad plus bottom adaptive banner.
+- Saved Verses: first native ad plus repeat inline ads.
+- Discover: native ad plus bottom banner.
+- History: native ad.
+- Wallpaper gallery: native ad and banner.
+- App open: enabled with a cooldown.
+- Interstitial: enabled only at eligible natural transitions.
+- Rewarded: optional user-initiated benefit.
+
+**Best for:** A later experiment after measuring retention and user experience.
+
+Do not enable every placement just because it exists. Test one combination at a time and compare retention, session duration, ad revenue, and user feedback.
+
+---
+
+## 7. Android implementation requirements
+
+Implement a centralized ad module rather than writing separate ad-loading code inside every screen.
+
+Suggested structure:
+
+```text
+android/app/src/main/java/com/scripturedaily/
+    ads/
+        AdManager.kt
+        AdConfig.kt
+        AdConfigRepository.kt
+        AdPlacement.kt
+        AdFrequencyManager.kt
+        BannerAd.kt
+        NativeAdCard.kt
+        InterstitialAdManager.kt
+        RewardedAdManager.kt
+        AppOpenAdManager.kt
+        AdLifecycleObserver.kt
+```
+
+### Responsibilities
+
+**AdConfigRepository**
+- Fetch Firebase Remote Config.
+- Parse and validate configuration.
+- Provide safe local defaults.
+- Expose the latest active configuration.
+
+**AdManager**
+- Central entry point for ad requests.
+- Check global and placement-level enablement.
+- Resolve the correct ad unit ID and format.
+- Apply frequency and eligibility checks.
+
+**AdFrequencyManager**
+- Track full-screen ad cooldowns.
+- Enforce per-screen limits.
+- Prevent duplicate ad displays.
+
+**NativeAdCard**
+- Render a native ad using the app's visual system.
+- Show required ad attribution.
+- Handle loading, success, failure, and disposal.
+
+**BannerAd**
+- Support anchored adaptive and inline adaptive banner sizes.
+- Reuse the correct placement ID.
+- Avoid displaying an empty container after failure.
+
+**RewardedAdManager**
+- Load and display rewarded ads.
+- Grant a benefit only after the SDK confirms the reward.
+- Prevent duplicate reward grants.
+
+**AppOpenAdManager**
+- Manage eligible foreground transitions.
+- Apply the app-open cooldown.
+- Avoid displaying over an active full-screen flow.
+
+### Important implementation rules
+
+- Initialize the Mobile Ads SDK once.
+- Fetch Remote Config on startup and activate validated settings.
+- Keep a safe default configuration so the app still works when Firebase is unavailable.
+- Never use an empty or malformed ad unit ID.
+- Do not request live ads during development testing.
+- Destroy or release ad views and native ad objects appropriately.
+- Do not request a new ad on every Compose recomposition.
+- Keep the ad-loading state separate from the screen's business logic.
+
+---
+
+## 8. Firebase Remote Config loading and fallback
+
+Recommended startup sequence:
+
+1. Initialize Firebase.
+2. Set local default ad configuration.
+3. Initialize the Google Mobile Ads SDK.
+4. Fetch Remote Config.
+5. Validate the returned configuration.
+6. Activate valid configuration.
+7. Make the configuration available to ad placements.
+8. If Firebase fails, continue with the last valid configuration or safe local defaults.
+
+Do not block the Home screen while waiting for Remote Config or an ad response.
+
+Use a sensible minimum fetch interval in production. During development, use a shorter interval for testing. Do not rely on Remote Config as an instantaneous kill switch because a client may be offline or may not have fetched the latest values.
+
+---
+
+## 9. Testing checklist
+
+### Functional tests
+
+- [ ] Global ad switch disables all placements.
+- [ ] Individual placement switches work independently.
+- [ ] Each placement uses its configured ad unit ID.
+- [ ] Unsupported format/placement combinations fail safely.
+- [ ] Firebase failure does not crash the app.
+- [ ] Invalid JSON falls back safely.
+- [ ] Invalid ad unit IDs do not crash the app.
+- [ ] Ads do not load repeatedly on Compose recomposition.
+- [ ] Failed ad requests do not leave blank gaps.
+- [ ] App navigation and scrolling remain smooth.
+
+### Saved Verses tests
+
+- [ ] Zero saved verses: no ad.
+- [ ] One saved verse: first native ad appears below it.
+- [ ] Two saved verses: no repeat ad yet.
+- [ ] Three saved verses: next ad appears.
+- [ ] Five saved verses: next ad appears.
+- [ ] Maximum inline ad count is respected.
+- [ ] Removing a saved verse recalculates positions correctly.
+- [ ] Sorting or filtering does not duplicate ads.
+- [ ] Pagination and scrolling preserve correct positions.
+- [ ] Ads never appear as saved verse records.
+
+### Full-screen tests
+
+- [ ] Interstitial cooldown is respected.
+- [ ] No interstitial appears during scripture reading.
+- [ ] App-open ad is not shown on every resume.
+- [ ] Reward is granted only after a confirmed completed reward.
+- [ ] Back navigation is not blocked by an ad.
+
+### Release tests
+
+- [ ] Test ad units used during development.
+- [ ] Real production ad units configured before release.
+- [ ] AdMob App ID configured correctly in the manifest.
+- [ ] Consent and privacy requirements reviewed for target markets.
+- [ ] Google Play and AdMob policy requirements reviewed.
+- [ ] Test on multiple screen sizes and Android versions.
+
+---
+
+## 10. Recommended rollout plan
+
+| Phase | Implementation |
+|---|---|
+| Phase 1 | Firebase Remote Config, centralized AdManager, adaptive banners |
+| Phase 2 | Saved Verses native ad after first item and repeat interval |
+| Phase 3 | Home and Discover native ads |
+| Phase 4 | History and Wallpaper placements |
+| Phase 5 | Rewarded ads for optional benefits |
+| Phase 6 | Carefully controlled app-open and interstitial experiments |
+
+**Final recommendation:** Start with Combination B, but initially keep app-open and interstitial ads disabled. First verify the Saved Verses insertion behavior, Home placement, ad loading, and fallback handling. Once the app is stable, experiment with the other placements using Firebase Remote Config.
+
+The ad system should remain centrally controlled so that a placement can be switched off or its ad unit ID changed from Firebase without changing the Android screen implementation.

@@ -1,7 +1,11 @@
+<<<<<<< HEAD
 """WisdomOne v2 enhancements: studio templates, Wisdom Tree reading days, localised + universal challenges.
 
 Revision ID: 0004_wisdomone_v2_enhancements
 """
+=======
+"""Ensure WisdomOne v2 tables and columns exist without destructive recreation."""
+>>>>>>> settings_redesign
 import sqlalchemy as sa
 from alembic import op
 
@@ -12,6 +16,7 @@ depends_on = None
 
 
 def upgrade():
+<<<<<<< HEAD
     op.add_column("challenges", sa.Column("is_universal", sa.Boolean(), nullable=False, server_default=sa.false()))
     op.create_table(
         "challenge_translations", sa.Column("id", sa.Integer, primary_key=True),
@@ -52,3 +57,19 @@ def downgrade():
     for table in ("reading_days", "studio_templates", "challenge_day_translations", "challenge_translations"):
         op.drop_table(table)
     op.drop_column("challenges", "is_universal")
+=======
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if inspector.has_table("challenges"):
+        columns = {column["name"] for column in inspector.get_columns("challenges")}
+        if "is_universal" not in columns:
+            op.add_column("challenges", sa.Column("is_universal", sa.Boolean(), nullable=False, server_default=sa.false()))
+    from app.core.database import Base
+    from app import models  # noqa: F401
+    Base.metadata.create_all(bind=bind)
+
+
+def downgrade():
+    # The revision is an idempotent schema reconciliation step; preserve user data.
+    pass
+>>>>>>> settings_redesign

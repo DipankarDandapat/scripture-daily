@@ -172,7 +172,11 @@ fun UniversalTruthsScreen(languageId: Int, preferredReligionCode: String?, onBac
 private fun TruthColumn(card: TruthCard, modifier: Modifier) {
     val accent = traditionColor(card.religionCode)
     Column(
+<<<<<<< HEAD
         modifier.clip(RoundedCornerShape(20.dp)).background(MaterialColors.surface).border(1.5.dp, accent.copy(alpha = 0.5f), RoundedCornerShape(20.dp)).padding(14.dp),
+=======
+        modifier.clip(RoundedCornerShape(20.dp)).background(W.Surface).border(1.5.dp, accent.copy(alpha = 0.5f), RoundedCornerShape(20.dp)).padding(14.dp),
+>>>>>>> settings_redesign
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Box(Modifier.clip(RoundedCornerShape(50)).background(accent.copy(alpha = 0.15f)).padding(horizontal = 10.dp, vertical = 4.dp)) {
@@ -186,7 +190,10 @@ private fun TruthColumn(card: TruthCard, modifier: Modifier) {
     }
 }
 
+<<<<<<< HEAD
 private object MaterialColors { val surface = Color.White }
+=======
+>>>>>>> settings_redesign
 
 /** A shareable 4:5 image with two verses side by side. */
 private object ComparisonCard {

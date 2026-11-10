@@ -5,11 +5,20 @@
         <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
     </queries>
     <uses-permission android:name="android.permission.INTERNET" />
+<<<<<<< HEAD
+=======
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+>>>>>>> settings_redesign
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+<<<<<<< HEAD
     <application android:theme="@style/Theme.WisdomOne" android:label="WisdomOne" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:usesCleartextTraffic="true" android:supportsRtl="true">
+=======
+    <application android:name=".WisdomOneApplication" android:theme="@style/Theme.WisdomOne" android:label="WisdomOne" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:usesCleartextTraffic="true" android:supportsRtl="true">
+        <activity android:name="com.scripturedaily.lockscreen.LockScreenVerseActivity" android:exported="false" android:showOnLockScreen="true" android:screenOrientation="portrait" android:theme="@style/Theme.WisdomOne" />
+>>>>>>> settings_redesign
         <activity android:name="com.scripturedaily.MainActivity" android:exported="true" android:screenOrientation="portrait">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
             <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
@@ -37,6 +46,43 @@
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
         </receiver>
+<<<<<<< HEAD
+=======
+        <!-- FCM: receives push messages and token refreshes -->
+        <service
+            android:name="com.scripturedaily.notification.WisdomOneMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
+        <!-- FCM: default notification channel shown when app is in background -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="wisdomone_fcm_v1" />
+
+        <!-- Meta SDK — credentials reference string resources so the actual values stay out of the manifest.
+             AutoInitEnabled and AutoLogAppEventsEnabled are both true; the feature is gated at runtime
+             by the `meta_ads_enabled` remote-config flag in MetaAnalytics.kt. -->
+        <meta-data
+            android:name="com.facebook.sdk.ApplicationId"
+            android:value="@string/facebook_app_id" />
+        <meta-data
+            android:name="com.facebook.sdk.ClientToken"
+            android:value="@string/facebook_client_token" />
+        <meta-data
+            android:name="com.facebook.sdk.AutoInitEnabled"
+            android:value="true" />
+        <meta-data
+            android:name="com.facebook.sdk.AutoLogAppEventsEnabled"
+            android:value="true" />
+
+        <!-- AdMob application ID (ad UNIT ids come from the backend config; debug builds only ever use Google test units). -->
+        <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-7872455938809561~3577314080" />
+        <meta-data android:name="com.google.android.gms.ads.DELAY_APP_MEASUREMENT_INIT" android:value="true" />
+
+>>>>>>> settings_redesign
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

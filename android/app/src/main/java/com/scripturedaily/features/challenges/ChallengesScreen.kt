@@ -67,7 +67,11 @@ import kotlinx.coroutines.withContext
 import retrofit2.Response
 import java.time.LocalDate
 
+<<<<<<< HEAD
 private fun parseColor(hex: String, fallback: Color = W.Gold): Color = runCatching { Color(android.graphics.Color.parseColor(hex)) }.getOrDefault(fallback)
+=======
+private fun parseColor(hex: String, fallback: Color): Color = runCatching { Color(android.graphics.Color.parseColor(hex)) }.getOrDefault(fallback)
+>>>>>>> settings_redesign
 
 private fun <T> Response<T>.problem(default: String): String {
     val detail = runCatching { JsonParser.parseString(errorBody()?.string() ?: "").asJsonObject.get("detail").asString }.getOrNull()
@@ -106,7 +110,11 @@ fun ChallengesScreen(languageId: Int, religionId: Int, onBack: () -> Unit) {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(badges) { b ->
                         Column(
+<<<<<<< HEAD
                             Modifier.clip(RoundedCornerShape(18.dp)).background(parseColor(b.color).copy(alpha = 0.15f)).border(1.dp, parseColor(b.color).copy(alpha = 0.5f), RoundedCornerShape(18.dp)).padding(horizontal = 16.dp, vertical = 12.dp),
+=======
+                            Modifier.clip(RoundedCornerShape(18.dp)).background(parseColor(b.color, W.Gold).copy(alpha = 0.15f)).border(1.dp, parseColor(b.color, W.Gold).copy(alpha = 0.5f), RoundedCornerShape(18.dp)).padding(horizontal = 16.dp, vertical = 12.dp),
+>>>>>>> settings_redesign
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) { Text(b.badgeIcon, fontSize = 30.sp); Text(b.badgeName, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = W.Ink) }
                     }
@@ -125,7 +133,11 @@ fun ChallengesScreen(languageId: Int, religionId: Int, onBack: () -> Unit) {
 
 @Composable
 private fun ChallengeCard(c: Challenge, onClick: () -> Unit) {
+<<<<<<< HEAD
     val color = parseColor(c.color)
+=======
+    val color = parseColor(c.color, W.Gold)
+>>>>>>> settings_redesign
     val done = c.progress.completedDays.size
     SurfaceCard(onClick = onClick) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -182,7 +194,11 @@ private fun ChallengeDetailScreen(id: Int, languageId: Int, religionId: Int, onB
                 error != null -> ErrorBox(error!!, { attempt++ })
                 d == null -> LoadingBox()
                 else -> {
+<<<<<<< HEAD
                     val color = parseColor(d.color)
+=======
+                    val color = parseColor(d.color, W.Gold)
+>>>>>>> settings_redesign
                     val done = d.progress.completedDays.size
                     SurfaceCard {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -246,7 +262,11 @@ private fun ChallengeDetailScreen(id: Int, languageId: Int, religionId: Int, onB
             confirmButton = { TextButton(onClick = { badge = null }) { Text("Wonderful", color = W.Gold, fontWeight = FontWeight.Bold) } }
         )
     }
+<<<<<<< HEAD
     explainFor?.let { ExplainSheet(it) { explainFor = null } }
+=======
+    explainFor?.let { ExplainSheet(it, onDismiss = { explainFor = null }) }
+>>>>>>> settings_redesign
 }
 
 @Composable
@@ -254,7 +274,11 @@ private fun DayRow(day: ChallengeDay, color: Color, expanded: Boolean, working: 
     val locked = day.status == "locked"
     val done = day.status == "completed"
     Column(
+<<<<<<< HEAD
         Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(Color.White)
+=======
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(W.Surface)
+>>>>>>> settings_redesign
             .border(BorderStroke(if (day.status == "available") 1.5.dp else 1.dp, if (day.status == "available") color else W.Gold.copy(alpha = 0.18f)), RoundedCornerShape(18.dp))
     ) {
         Row(Modifier.fillMaxWidth().clickable(enabled = !locked, onClick = onToggle).padding(14.dp), verticalAlignment = Alignment.CenterVertically) {

@@ -1,4 +1,10 @@
+<<<<<<< HEAD
 from datetime import date
+=======
+from datetime import date, datetime, timedelta, timezone
+import random
+from threading import Lock
+>>>>>>> settings_redesign
 import jwt
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -7,10 +13,31 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_access_token, hash_password, verify_password
+<<<<<<< HEAD
 from app.models.entities import Religion, Language, Scripture, Verse, User, UserPreference, Favorite, Device, Feedback
 from app.schemas.api import AuthInput, TokenOut, UserOut, CatalogOut, ReligionOut, ScriptureItem, VerseOut, PreferenceInput, PreferenceOut, FavoriteInput, DeviceInput, VerseCreate, FeedbackInput, FeedbackOut
 
 router = APIRouter()
+=======
+from app.models.entities import Religion, Language, Scripture, Verse, User, UserPreference, ActiveVerseState, VerseSelectionHistory, Favorite, Device, Feedback
+from app.schemas.api import AuthInput, TokenOut, UserOut, CatalogOut, ReligionOut, ScriptureItem, VerseOut, PreferenceInput, PreferenceOut, FavoriteInput, DeviceInput, FcmTokenInput, VerseCreate, FeedbackInput, FeedbackOut
+from app.core.firebase import send_to_tokens, send_to_topic
+
+router = APIRouter()
+# Lock-screen wallpaper behaviour. verse_and_image = "Change Verse and Image Together" (default); keep_image = "Keep Same Image";
+# colors = both options off, so the verse is drawn on the multi-theme colour backgrounds. Legacy values are mapped, not rejected.
+WALLPAPER_MODES = {"verse_and_image", "keep_image", "colors"}
+WALLPAPER_MODE_ALIASES = {"change_verse": "verse_and_image", "keep_same_verse": "verse_and_image"}
+_ACTIVE_VERSE_LOCKS: dict[str, Lock] = {}
+_ACTIVE_VERSE_LOCKS_GUARD = Lock()
+
+
+def _active_verse_lock(user_id: str) -> Lock:
+    with _ACTIVE_VERSE_LOCKS_GUARD:
+        return _ACTIVE_VERSE_LOCKS.setdefault(user_id, Lock())
+
+
+>>>>>>> settings_redesign
 bearer = HTTPBearer()
 optional_bearer = HTTPBearer(auto_error=False)
 
@@ -28,7 +55,12 @@ def current_user(credentials: HTTPAuthorizationCredentials = Depends(bearer), db
 
 
 def verse_out(v: Verse) -> dict:
+<<<<<<< HEAD
     return {"id": v.id, "scripture": v.scripture.name, "religion": v.scripture.religion.name,
+=======
+    return {"id": v.id, "scripture_id": v.scripture_id, "language_id": v.language_id,
+            "scripture": v.scripture.name, "religion": v.scripture.religion.name,
+>>>>>>> settings_redesign
             "book": v.book, "chapter": v.chapter, "verse_number": v.verse_number,
             "language": v.language.code, "text": v.text, "translation": v.translation,
             "source": v.source, "license": v.license, "is_demo": v.is_demo,
@@ -226,6 +258,125 @@ def chapter_verses(scripture_id: int, chapter: int, language_id: int | None = No
     return [verse_out(v) for v in db.scalars(query.order_by(Verse.verse_number)).all()]
 
 
+<<<<<<< HEAD
+=======
+def _frequency_hours(value: str) -> int:
+    return {"1h": 1, "6h": 6, "12h": 12, "24h": 24, "daily": 24}.get(value, 24)
+
+
+def _aware(value: datetime) -> datetime:
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+
+
+def _active_payload(state: ActiveVerseState, verse: Verse) -> dict:
+    return {
+        "success": True,
+        "data": {
+            "verse_id": verse.id,
+            "scripture_id": verse.scripture_id,
+            "tradition_id": state.religion_id,
+            "language_id": state.language_id,
+            "book": verse.book,
+            "chapter": verse.chapter,
+            "verse_number": verse.verse_number,
+            "text": verse.text,
+            "translation": verse.translation,
+            "selected_at": _aware(state.selected_at).isoformat(),
+            "next_update_at": _aware(state.next_update_at).isoformat(),
+            "selection_mode": state.selection_source,
+            "verse": verse_out(verse),
+        },
+    }
+
+
+def _select_active_verse(user: User, prefs: UserPreference, db: Session, source: str, exclude_id: int | None = None) -> dict:
+    scripture_ids = [int(x) for x in prefs.scripture_ids.split(",") if x.strip().isdigit()]
+    candidates = pool_for(db, religion_id=prefs.religion_id, language_id=prefs.language_id, scripture_ids=scripture_ids or None)
+    if not candidates:
+        raise HTTPException(status_code=404, detail="No published verses match these preferences")
+    eligible = [item for item in candidates if item.id != exclude_id]
+    chosen = random.choice(eligible or candidates)
+    now = datetime.now(timezone.utc)
+    state = db.get(ActiveVerseState, user.id)
+    if state is None:
+        state = ActiveVerseState(user_id=user.id, verse_id=chosen.id, religion_id=prefs.religion_id,
+            language_id=prefs.language_id, selected_at=now,
+            next_update_at=now + timedelta(hours=_frequency_hours(prefs.frequency)), selection_source=source)
+        db.add(state)
+    else:
+        state.verse_id = chosen.id
+        state.religion_id = prefs.religion_id
+        state.language_id = prefs.language_id
+        state.selected_at = now
+        state.next_update_at = now + timedelta(hours=_frequency_hours(prefs.frequency))
+        state.selection_source = source
+    db.add(VerseSelectionHistory(user_id=user.id, verse_id=chosen.id, selected_at=now, selection_source=source))
+    db.commit()
+    db.refresh(state)
+    return _active_payload(state, chosen)
+
+
+@router.get("/verses/active")
+def get_active_verse(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Return the persisted active verse; rotate only when its scheduled deadline has passed."""
+    with _active_verse_lock(user.id):
+        # PostgreSQL locks this stable user row across API workers; the process lock also serialises SQLite requests.
+        db.execute(select(User.id).where(User.id == user.id).with_for_update()).first()
+        prefs = get_or_create_preferences(user, db)
+        state = db.get(ActiveVerseState, user.id)
+        now = datetime.now(timezone.utc)
+        if state is not None:
+            state_next = _aware(state.next_update_at)
+            same_preferences = state.religion_id == prefs.religion_id and state.language_id == prefs.language_id
+            active = db.get(Verse, state.verse_id)
+            if same_preferences and active is not None and state_next > now:
+                return _active_payload(state, active)
+            previous_id = state.verse_id
+        else:
+            previous_id = None
+        return _select_active_verse(user, prefs, db, "scheduled", previous_id)
+
+
+@router.get("/verses/active/current")
+def get_current_active_verse(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Return the user's current verse without rotating it, regardless of its scheduled deadline.
+
+    If the user has no active selection yet (or preferences changed), select the initial matching verse.
+    Pull-to-refresh uses this endpoint so a UI refresh never advances a valid active verse.
+    """
+    with _active_verse_lock(user.id):
+        db.execute(select(User.id).where(User.id == user.id).with_for_update()).first()
+        prefs = get_or_create_preferences(user, db)
+        state = db.get(ActiveVerseState, user.id)
+        if state is not None:
+            same_preferences = state.religion_id == prefs.religion_id and state.language_id == prefs.language_id
+            active = db.get(Verse, state.verse_id)
+            if same_preferences and active is not None:
+                return _active_payload(state, active)
+            previous_id = state.verse_id
+        else:
+            previous_id = None
+        return _select_active_verse(user, prefs, db, "initial", previous_id)
+
+
+@router.post("/verses/discover")
+def discover_active_verse(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Explicit user action: select and persist one new verse, avoiding immediate repetition."""
+    with _active_verse_lock(user.id):
+        db.execute(select(User.id).where(User.id == user.id).with_for_update()).first()
+        prefs = get_or_create_preferences(user, db)
+        current = db.get(ActiveVerseState, user.id)
+        return _select_active_verse(user, prefs, db, "manual", current.verse_id if current else None)
+
+
+@router.post("/verses/active/refresh")
+def refresh_active_verse_if_due(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Scheduler-safe operation: keep the active verse unless the configured deadline has passed."""
+    return get_active_verse(user, db)
+
+
+
+>>>>>>> settings_redesign
 @router.get("/verses/{verse_id}", response_model=VerseOut)
 def get_verse(verse_id: int, db: Session = Depends(get_db)):
     v = db.scalar(verse_query(db).where(Verse.id == verse_id))
@@ -250,6 +401,7 @@ def read_preferences(user: User = Depends(current_user), db: Session = Depends(g
 
 @router.put("/users/preferences", response_model=PreferenceOut)
 def save_preferences(data: PreferenceInput, user: User = Depends(current_user), db: Session = Depends(get_db)):
+<<<<<<< HEAD
     if data.frequency not in {"daily", "6h", "1h"}: raise HTTPException(status_code=422, detail="frequency must be daily, 6h, or 1h")
     ids = [int(x) for x in data.scripture_ids.split(",") if x.strip().isdigit()]
     if not ids: raise HTTPException(status_code=422, detail="scripture_ids must contain at least one valid ID")
@@ -265,6 +417,35 @@ def save_preferences(data: PreferenceInput, user: User = Depends(current_user), 
     db.commit(); db.refresh(prefs)
     return prefs
 
+=======
+    with _active_verse_lock(user.id):
+        db.execute(select(User.id).where(User.id == user.id).with_for_update()).first()
+        if data.frequency not in {"daily", "1h", "6h", "12h", "24h"}: raise HTTPException(status_code=422, detail="frequency must be daily, 1h, 6h, 12h, or 24h")
+        mode = WALLPAPER_MODE_ALIASES.get(data.wallpaper_mode, data.wallpaper_mode)
+        if mode not in WALLPAPER_MODES: raise HTTPException(status_code=422, detail="wallpaper_mode must be verse_and_image, keep_image or colors")
+        data.wallpaper_mode = mode
+        ids = [int(x) for x in data.scripture_ids.split(",") if x.strip().isdigit()]
+        if not ids: raise HTTPException(status_code=422, detail="scripture_ids must contain at least one valid ID")
+        for sid in ids:
+            scripture = db.get(Scripture, sid)
+            if not scripture or scripture.religion_id != data.religion_id:
+                raise HTTPException(status_code=422, detail=f"Scripture {sid} must belong to the selected religion")
+        if not db.get(Language, data.language_id): raise HTTPException(status_code=422, detail="Unknown language")
+        if data.language_id not in _religion_language_ids(db, data.religion_id):
+            raise HTTPException(status_code=422, detail="That language is not available for the selected tradition")
+        prefs = get_or_create_preferences(user, db)
+        old_religion, old_language, old_frequency = prefs.religion_id, prefs.language_id, prefs.frequency
+        for key, value in data.model_dump().items(): setattr(prefs, key, value)
+        active = db.get(ActiveVerseState, user.id)
+        if active is not None:
+            if old_religion != data.religion_id or old_language != data.language_id:
+                db.delete(active)
+            elif old_frequency != data.frequency:
+                now = datetime.now(timezone.utc)
+                active.next_update_at = now + timedelta(hours=_frequency_hours(data.frequency))
+        db.commit(); db.refresh(prefs)
+        return prefs
+>>>>>>> settings_redesign
 
 @router.get("/favorites", response_model=list[VerseOut])
 def list_favorites(user: User = Depends(current_user), db: Session = Depends(get_db)):
@@ -289,12 +470,77 @@ def remove_favorite(verse_id: int, user: User = Depends(current_user), db: Sessi
 @router.post("/devices", status_code=201)
 def register_device(data: DeviceInput, user: User = Depends(current_user), db: Session = Depends(get_db)):
     row = db.scalar(select(Device).where(Device.user_id == user.id, Device.device_token == data.device_token))
+<<<<<<< HEAD
     if row is None: db.add(Device(user_id=user.id, **data.model_dump()))
     else: row.platform, row.device_model = data.platform, data.device_model
+=======
+    if row is None:
+        row = Device(user_id=user.id, **data.model_dump())
+        db.add(row)
+    else:
+        row.platform = data.platform
+        row.device_model = data.device_model
+        if data.fcm_token:
+            row.fcm_token = data.fcm_token
+>>>>>>> settings_redesign
     db.commit()
     return {"ok": True}
 
 
+<<<<<<< HEAD
+=======
+@router.put("/devices/fcm-token", status_code=200)
+def update_fcm_token(data: FcmTokenInput, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Update (or set for the first time) the FCM push token for all of this user's devices."""
+    rows = db.scalars(select(Device).where(Device.user_id == user.id)).all()
+    if not rows:
+        # No device row yet — create a placeholder so the token is not lost
+        db.add(Device(user_id=user.id, device_token=f"fcm_{user.id}", platform="android", fcm_token=data.fcm_token))
+    else:
+        for row in rows:
+            row.fcm_token = data.fcm_token
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/notify/all", status_code=202)
+def notify_all_users(
+    title: str,
+    body: str,
+    verse_id: int | None = None,
+    topic: str | None = None,
+    x_admin_token: str | None = Header(default=None),
+    db: Session = Depends(get_db)
+):
+    """Send a push notification to all users.
+
+    - If `topic` is provided (e.g. 'all_users'), sends via Firebase topic broadcast (no token list needed).
+    - Otherwise sends to every FCM token stored in the devices table.
+    Requires X-Admin-Token header.
+    """
+    if not settings.admin_token or x_admin_token != settings.admin_token:
+        raise HTTPException(status_code=403, detail="Invalid admin token")
+
+    data = {"verse_id": str(verse_id)} if verse_id else {}
+
+    if topic:
+        message_id = send_to_topic(topic, title, body, data)
+        return {"method": "topic", "topic": topic, "message_id": message_id}
+
+    tokens = list(db.scalars(
+        select(Device.fcm_token)
+        .where(Device.fcm_token.isnot(None))
+        .distinct()
+    ).all())
+
+    if not tokens:
+        return {"method": "multicast", "queued": 0, "success": 0, "failure": 0, "detail": "No FCM tokens stored yet"}
+
+    result = send_to_tokens(tokens, title, body, data)
+    return {"method": "multicast", "queued": len(tokens), **result}
+
+
+>>>>>>> settings_redesign
 @router.post("/feedback", response_model=FeedbackOut, status_code=201)
 def submit_feedback(data: FeedbackInput, user: User = Depends(current_user), db: Session = Depends(get_db)):
     row = Feedback(user_id=user.id, rating=data.rating, comment=data.comment, consent=data.consent)

@@ -11,3 +11,7 @@ pytest>=8,<9
 httpx>=0.27,<1
 pymysql
 a2wsgi
+<<<<<<< HEAD
+=======
+firebase-admin>=6.5,<7
+>>>>>>> settings_redesign

@@ -30,8 +30,14 @@ object VerseNotifier {
         reference: String
     ): Boolean {
         val prefs = context.getSharedPreferences("reader", Context.MODE_PRIVATE)
+<<<<<<< HEAD
         val showOnLockScreen = prefs.getBoolean("lock_screen", false)
         val remindersEnabled = prefs.getBoolean("reminders", false)
+=======
+        val updatesEnabled = prefs.getBoolean("notify_verse_updates", false)
+        val showOnLockScreen = prefs.getBoolean("lock_screen", false) && updatesEnabled
+        val remindersEnabled = prefs.getBoolean("reminders", false) || updatesEnabled
+>>>>>>> settings_redesign
         if (!showOnLockScreen && !remindersEnabled) {
             cancel(context)
             return false
@@ -133,6 +139,37 @@ object VerseNotifier {
         }
     }
 
+<<<<<<< HEAD
+=======
+
+    fun showWallpaperUpdated(context: Context) {
+        val prefs = context.getSharedPreferences("reader", Context.MODE_PRIVATE)
+        if (!prefs.getBoolean("notify_wallpaper_updates", false)) return
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channelId = "wisdomone_wallpaper_updates"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            manager.createNotificationChannel(NotificationChannel(channelId, "Wallpaper updates", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "Optional notices when your verse wallpaper artwork changes"
+                lockscreenVisibility = Notification.VISIBILITY_PRIVATE
+                setShowBadge(false)
+            })
+        }
+        val openApp = Intent(context, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP }
+        val contentIntent = PendingIntent.getActivity(context, 2, openApp, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val notification = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(android.R.drawable.ic_menu_gallery)
+            .setContentTitle("Your WisdomOne wallpaper is refreshed")
+            .setContentText("A fresh background is ready with your current verse.")
+            .setContentIntent(contentIntent)
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
+        runCatching { NotificationManagerCompat.from(context).notify(1003, notification) }
+    }
+
+>>>>>>> settings_redesign
     fun cancelLockScreen(context: Context) {
         NotificationManagerCompat.from(context).cancel(LOCK_NOTIFICATION_ID)
     }

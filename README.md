@@ -306,3 +306,15 @@ Built on the original *Scripture Daily* starter by **Dipankar Dandapat**. Wisdom
 Sacred texts belong to humanity: the Sanskrit, Pali, Arabic, Hebrew, Greek, Chinese and Tamil originals are public domain, and the King James Version is public domain. Please keep the `source` and `license` metadata accurate when adding content.
 
 <div align="center"><sub>Take a breath. Carry the thought with you. 🪷</sub></div>
+<<<<<<< HEAD
+=======
+
+## Approved Settings redesign
+
+See [SETTINGS_REDESIGN_IMPLEMENTATION.md](SETTINGS_REDESIGN_IMPLEMENTATION.md) and [Feature.txt](Feature.txt) for the redesigned Settings flow, tradition-aware wallpaper categories, centralized frequency, active-verse APIs, SQLite migrations and verification status.
+
+
+## Final implementation and verification status
+
+See [FINAL_IMPLEMENTATION_STATUS.md](FINAL_IMPLEMENTATION_STATUS.md) for what is implemented, the actual test results, Android build limitations, and the remaining 80 tradition-specific wallpaper assets. The 20-image Hindu pack preview is in `design/hindu_20_wallpaper_asset_preview.jpg`.
+>>>>>>> settings_redesign

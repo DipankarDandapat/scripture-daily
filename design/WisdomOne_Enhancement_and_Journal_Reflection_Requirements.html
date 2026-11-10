@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WisdomOne – App Enhancement & Journal Reflection Implementation Requirements</title>
+<style>
+  :root {
+    --ink: #202638;
+    --muted: #5f6878;
+    --brand: #5146a5;
+    --brand-soft: #efedff;
+    --line: #e2e5ec;
+    --surface: #f7f8fb;
+    --white: #ffffff;
+    --warning: #fff5df;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--surface);
+    color: var(--ink);
+    font: 15px/1.65 Arial, Helvetica, sans-serif;
+  }
+  .page {
+    max-width: 980px;
+    margin: 32px auto;
+    padding: 52px 64px;
+    background: var(--white);
+    box-shadow: 0 8px 32px rgba(24, 32, 56, .08);
+  }
+  header {
+    padding-bottom: 28px;
+    margin-bottom: 34px;
+    border-bottom: 3px solid var(--brand);
+  }
+  .eyebrow {
+    color: var(--brand);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+  h1 { font-size: 30px; line-height: 1.2; margin: 10px 0 12px; }
+  .subtitle { color: var(--muted); font-size: 16px; margin: 0; }
+  h2 {
+    font-size: 21px;
+    line-height: 1.3;
+    margin: 38px 0 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+    color: #272d45;
+  }
+  h3 { font-size: 16px; margin: 23px 0 8px; color: var(--brand); }
+  p { margin: 8px 0 12px; }
+  ul, ol { padding-left: 24px; margin: 8px 0 16px; }
+  li { margin: 4px 0; }
+  code {
+    font-family: Consolas, Monaco, monospace;
+    font-size: .92em;
+    background: #f0f1f5;
+    padding: 2px 5px;
+    border-radius: 4px;
+    overflow-wrap: anywhere;
+  }
+  .callout {
+    background: var(--brand-soft);
+    border-left: 4px solid var(--brand);
+    padding: 13px 16px;
+    margin: 16px 0;
+    border-radius: 4px;
+  }
+  .warning {
+    background: var(--warning);
+    border-left: 4px solid #d69b2d;
+    padding: 13px 16px;
+    margin: 16px 0;
+    border-radius: 4px;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 20px; font-size: 13px; }
+  th, td { text-align: left; vertical-align: top; border: 1px solid var(--line); padding: 9px 10px; }
+  th { background: #f1f2f8; font-weight: 700; }
+  .small { color: var(--muted); font-size: 13px; }
+  .section-note { color: var(--muted); }
+  footer {
+    margin-top: 44px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+    font-size: 12px;
+  }
+  @media print {
+    body { background: #fff; }
+    .page { max-width: none; margin: 0; padding: 18mm 17mm; box-shadow: none; }
+    h2 { break-after: avoid; }
+    h3 { break-after: avoid; }
+    table, .callout, .warning { break-inside: avoid; }
+    a { color: inherit; text-decoration: none; }
+  }
+  @media (max-width: 700px) {
+    .page { margin: 0; padding: 28px 20px; }
+    h1 { font-size: 25px; }
+    h2 { font-size: 19px; }
+    table { display: block; overflow-x: auto; }
+  }
+</style>
+</head>
+<body>
+<main class="page">
+<header>
+  <div class="eyebrow">Product & Engineering Specification</div>
+  <h1>WisdomOne – App Enhancement & Journal Reflection</h1>
+  <p class="subtitle">Consolidated UI/UX improvements, wallpaper and notification enhancements, Wisdom Tree, AdMob, centralized configuration, Journal Reflection, backend integration, and end-to-end testing requirements.</p>
+</header>
+
+<h2>Project Objective</h2>
+<p>Implement the enhancements described in this document across the WisdomOne application. Use the design references in the project’s <code>design</code> folder, preserve existing functionality, and ensure that the frontend, backend APIs, database, and Android device integrations work together reliably.</p>
+<div class="callout"><strong>Implementation approach:</strong> Review the existing project structure, database schema, APIs, and design assets before making changes. Reuse existing components and conventions where appropriate. Do not replace working functionality unnecessarily. Back up the project and database before making significant schema or data changes.</div>
+
+<h2>1. Homepage – Verse Sharing & Share Studio</h2>
+<ul>
+  <li>Below the verse display box, the homepage currently displays Save, Share, and WhatsApp Status actions.</li>
+  <li>Keep the Save action, and remove the separate Share and WhatsApp Status buttons from the homepage.</li>
+  <li>Replace them with one primary button. Suggested labels are <strong>Spread the Light</strong>, <strong>Spread His Word</strong>, or <strong>Share with the World</strong>. Select the label that best fits the application’s tone and design.</li>
+  <li>When the user taps this button, open Share Studio.</li>
+  <li>Inside Share Studio, provide two actions: <strong>Share</strong> and <strong>WhatsApp Status</strong>.</li>
+  <li>When WhatsApp Status is selected, launch the WhatsApp Status sharing flow with the generated content so the user can review and publish it.</li>
+  <li>Remove or temporarily hide the Set as Wallpaper action from Share Studio.</li>
+  <li>Remove the separate Studio button from the homepage because Share Studio will be accessible through the new primary sharing button.</li>
+</ul>
+
+<h2>2. Homepage – Wisdom Tree Activities & Milestones</h2>
+<p>Update the Wisdom Tree journey to support five distinct monthly levels across a 150-day activity journey.</p>
+<table>
+  <thead><tr><th>Level</th><th>Activity period</th><th>Duration</th></tr></thead>
+  <tbody>
+    <tr><td>Level 1</td><td>Days 1–30</td><td>1 month</td></tr>
+    <tr><td>Level 2</td><td>Days 31–60</td><td>2nd month</td></tr>
+    <tr><td>Level 3</td><td>Days 61–90</td><td>3rd month</td></tr>
+    <tr><td>Level 4</td><td>Days 91–120</td><td>4th month</td></tr>
+    <tr><td>Level 5</td><td>Days 121–150</td><td>5th month</td></tr>
+  </tbody>
+</table>
+<ul>
+  <li>Each level must contain its own unique activities. Avoid repeating activities across levels.</li>
+  <li>Ensure the tree’s appearance and growth progression reflect the user’s current milestone.</li>
+  <li>When all activities in a level are completed and no pending activities remain, automatically hide that level’s activity box from the active UI.</li>
+  <li>Add an enable/disable control for Wisdom Tree in Settings.</li>
+  <li>When enabled, make the Wisdom Tree activities available to the user.</li>
+  <li>If the user disables Wisdom Tree and later enables it again, restart the activity journey from the first activity, as requested. Confirm and implement the intended reset behaviour consistently in the backend and UI.</li>
+</ul>
+
+<h2>3. Settings Page – UI/UX Redesign</h2>
+<ul>
+  <li>Review all <code>approved_settings_ui_reference.jpg</code> and <code>WisdomOne Lock Screen UI Showcase-1.png</code> and <code>WisdomOne Settings and Wallpaper Suite.png</code> and <code>WisdomOne_ Daily Verse Wallpapers.png</code> design references in the project’s <code>design</code> folder.</li>
+  <li>Implement the Settings page to match the supplied designs as closely as possible.</li>
+  <li>Pay attention to layout, spacing, typography, colours, component sizes, iconography, alignment, and navigation behaviour.</li>
+  <li>Ensure the page is responsive and visually consistent with the rest of the application.</li>
+  <li>Do not rely on the current implementation if it differs from the supplied design references; use the reference assets as the source of truth.</li>
+</ul>
+
+<h2>4. Lock Screen & Wallpaper – High Priority</h2>
+<p>The Lock Screen & Wallpaper feature is a core feature of the application and requires careful implementation and thorough device testing.</p>
+
+<h3>4.1 Existing behaviour and enhancement</h3>
+<p>Previously, users could enable Verse Wallpaper and Notifications from the homepage or Settings. The lock screen displayed the verse, and the background colour changed approximately every four to five hours. The enhanced experience should support tradition-based artwork as wallpaper backgrounds instead of relying only on changing background colours.</p>
+
+<h3>4.2 Tradition-based wallpaper gallery</h3>
+<ul>
+  <li>Provide 20 popular, high-quality images for each supported tradition, such as Hinduism, Islam, Christianity, Buddhism, and other supported traditions.</li>
+  <li>Each tradition must have its own relevant image collection. Display images belonging to the user’s selected tradition.</li>
+  <li>Remove the separate Wallpaper Category section. The 20 images should be presented directly in the Gallery.</li>
+  <li>Allow horizontal scrolling through the gallery, displaying four images together in each visible group.</li>
+  <li>Ensure images are high quality, appropriately licensed, culturally relevant, and optimized for mobile performance.</li>
+</ul>
+
+<h3>4.3 Wallpaper behaviour options</h3>
+<p>Provide the following two mutually exclusive toggle options, using the specified labels and descriptions.</p>
+<div class="callout">
+  <strong>Option 1: Change Verse and Image Together</strong><br>
+  Default: ON<br>
+  Description: “Automatically rotate through your selected artwork with every new verse.”<br>
+  When enabled, update the verse and rotate the wallpaper image together whenever a new verse is displayed. Select images from the user’s chosen tradition.
+</div>
+<div class="callout">
+  <strong>Option 2: Keep Same Image</strong><br>
+  Default: OFF<br>
+  Description: “Update the verse while keeping your current wallpaper.”<br>
+  When enabled, allow the user to select an image from the 20 available images. When the verse changes, update only the verse text and keep the selected wallpaper image unchanged.
+</div>
+<ul>
+  <li>The two options must be mutually exclusive. Enabling one must automatically disable the other.</li>
+  <li>Both options may be OFF. In that case, display the verse using the existing multi-theme background colour functionality rather than an image.</li>
+  <li>Persist the selected mode and image so the behaviour remains consistent after the app is closed or restarted.</li>
+</ul>
+
+<h3>4.4 Lock screen preview</h3>
+<ul>
+  <li>Improve the preview shown below the wallpaper behaviour toggles.</li>
+  <li>Show a realistic representation of how the verse and selected artwork will appear on the user’s device lock screen.</li>
+  <li>Include appropriate lock screen elements and ensure the verse remains readable against the selected image.</li>
+  <li>Update the preview immediately when the user changes the image, toggle selection, or wallpaper configuration.</li>
+</ul>
+
+<h3>4.5 Homepage integration</h3>
+<ul>
+  <li>When the user enables the Verse Wallpaper & Notification toggle from the homepage, show the verse with artwork from the user’s selected tradition on the lock screen.</li>
+  <li>Initially use the first selected image from that tradition’s gallery.</li>
+  <li>Respect the wallpaper behaviour configured in Settings.</li>
+  <li>Keep wallpaper and notification permissions, platform restrictions, and actual device capabilities in mind. Do not indicate that a wallpaper has been applied unless the platform confirms the action.</li>
+</ul>
+
+<h3>4.6 Save & Apply Wallpaper</h3>
+<p>When the user taps <strong>Save & Apply Wallpaper</strong>, open a bottom sheet with these three choices:</p>
+<ol>
+  <li>Set as Home Screen.</li>
+  <li>Set as Lock Screen.</li>
+  <li>Set as Home Screen & Lock Screen.</li>
+</ol>
+<p>Apply the wallpaper according to the user’s selection and handle device-specific permissions or unsupported operations gracefully.</p>
+
+<h3>4.7 Wallpaper test scenarios</h3>
+<ul>
+  <li>Enable and disable Verse Wallpaper.</li>
+  <li>Enable and disable Notifications.</li>
+  <li>Switch between Change Verse and Image Together and Keep Same Image.</li>
+  <li>Keep both wallpaper behaviour options OFF and verify multi-theme colour backgrounds.</li>
+  <li>Select different images from the gallery.</li>
+  <li>Change traditions and verify that only the relevant images are displayed.</li>
+  <li>Verify automatic verse and image rotation.</li>
+  <li>Verify that the same image is retained while verse text changes.</li>
+  <li>Apply wallpaper to the Home Screen, Lock Screen, and both screens.</li>
+  <li>Verify preview updates, permission handling, failure states, and compatibility across Android versions and device manufacturers.</li>
+</ul>
+
+<h2>5. Application-wide UI/UX, Icons & Visual Consistency</h2>
+<ul>
+  <li>Review the complete application, including screens, layouts, buttons, typography, colours, spacing, and icons.</li>
+  <li>Ensure that icons used during tradition onboarding follow a consistent visual style.</li>
+  <li>Use a consistent icon design language on the Settings page while ensuring each icon is appropriate for its function.</li>
+  <li>Review icons and visual treatments across all other application sections.</li>
+  <li>Avoid inconsistent icon styles, sizes, stroke weights, colours, or visual treatments.</li>
+  <li>Ensure the application looks professional, modern, accessible, and consistent throughout.</li>
+</ul>
+
+<h2>6. Dark Mode – Visibility & Contrast Fixes</h2>
+<p>Several UI elements become difficult or impossible to read when Dark Mode is enabled from Settings.</p>
+<ul>
+  <li>Review the entire application in Dark Mode.</li>
+  <li>Fix text and background contrast issues across all screens.</li>
+  <li>Ensure body text, secondary text, bottom navigation labels, logo text, icons, buttons, and other UI elements remain clearly visible.</li>
+  <li>Verify that switching between Light Mode and Dark Mode updates the entire application consistently.</li>
+  <li>Check dialogs, bottom sheets, forms, empty states, and error messages in both themes.</li>
+</ul>
+
+<h2>7. AdMob Integration – Revenue Generation</h2>
+<p>Review the complete implementation specification before starting:</p>
+<p><code>design/AdMob_Placement_Firebase_Remote_Config_Specification.txt</code></p>
+<p>Implement AdMob across appropriate locations while protecting the user experience, especially during scripture reading, reflection, and other important interactions.</p>
+
+<h3>7.1 Centralized API-based configuration</h3>
+<p>Use a centralized backend API for advertisement configuration. The preferred approach is API-based configuration rather than Firebase Remote Config.</p>
+<p>The API should provide the configuration required by the application, including:</p>
+<ul>
+  <li>AdMob App ID and Ad Unit IDs.</li>
+  <li>Advertisement format and placement identifiers.</li>
+  <li>Global and per-placement enable/disable status.</li>
+  <li>Banner size and layout configuration.</li>
+  <li>Advertisement frequency and display rules.</li>
+  <li>Any additional variables required to manage advertisements dynamically.</li>
+</ul>
+
+<h3>7.2 Advertisement formats</h3>
+<table>
+  <thead><tr><th>Format</th><th>Google test Ad Unit ID</th></tr></thead>
+  <tbody>
+    <tr><td>App Open</td><td><code>ca-app-pub-3940256099942544/9257395921</code></td></tr>
+    <tr><td>Anchored Adaptive Banner</td><td><code>ca-app-pub-3940256099942544/9214589741</code></td></tr>
+    <tr><td>Inline Adaptive Banner</td><td><code>ca-app-pub-3940256099942544/9214589741</code></td></tr>
+    <tr><td>Fixed Size Banner</td><td><code>ca-app-pub-3940256099942544/6300978111</code></td></tr>
+    <tr><td>Interstitial</td><td><code>ca-app-pub-3940256099942544/1033173712</code></td></tr>
+    <tr><td>Rewarded</td><td><code>ca-app-pub-3940256099942544/5224354917</code></td></tr>
+    <tr><td>Rewarded Interstitial</td><td><code>ca-app-pub-3940256099942544/5354046379</code></td></tr>
+    <tr><td>Native</td><td><code>ca-app-pub-3940256099942544/2247696110</code></td></tr>
+    <tr><td>Native Video</td><td><code>ca-app-pub-3940256099942544/1044960115</code></td></tr>
+  </tbody>
+</table>
+<p><strong>AdMob App ID:</strong> <code>ca-app-pub-7872455938809561~3577314080</code></p>
+
+<h3>7.3 Advertisement placement strategy</h3>
+<ul>
+  <li>Review the complete application and identify suitable advertisement placements.</li>
+  <li>Use formats appropriate to each screen and interaction.</li>
+  <li>Avoid intrusive placements that interrupt scripture reading, verse explanations, Journal Reflection, navigation, or critical user actions.</li>
+  <li>Avoid excessive advertisement frequency and accidental clicks.</li>
+  <li>Consider the needs of a global audience, different screen sizes, and varied device configurations.</li>
+  <li>Recommend additional placements where useful and exclude placements that could harm usability or trust.</li>
+  <li>Follow applicable AdMob policies, consent requirements, privacy requirements, and age-appropriate advertising rules.</li>
+</ul>
+
+<h3>7.4 Dynamic configuration and global switch</h3>
+<p>All advertisement settings should be manageable from the backend without requiring a new application release, wherever supported by the SDK and platform.</p>
+<ul>
+  <li>Enable or disable individual advertisement formats.</li>
+  <li>Enable or disable advertisements on specific screens.</li>
+  <li>Change supported banner sizes.</li>
+  <li>Adjust advertisement frequency and placement rules.</li>
+  <li>Update Ad Unit IDs.</li>
+  <li>Enable or disable individual placements.</li>
+</ul>
+<div class="warning"><strong>Global switch:</strong> Implement <code>ads_enabled = true/false</code>. When set to <code>false</code>, no advertisements should be requested or displayed anywhere in the application, regardless of individual placement settings. When set to <code>true</code>, apply the individual configuration for each placement.</div>
+
+<h3>7.5 AdMob testing requirements</h3>
+<ul>
+  <li>Use only official Google test Ad Unit IDs during development and testing.</li>
+  <li>Verify that all supported formats load and render correctly.</li>
+  <li>Test different screen sizes, network failures, loading errors, and empty ad responses.</li>
+  <li>Test the global enable/disable switch and individual placement settings.</li>
+  <li>Verify that backend configuration changes are applied without requiring an app update.</li>
+  <li>Keep test IDs separate from production IDs and prevent accidental use of live ads during development.</li>
+  <li>Provide a controlled process for replacing test IDs with production IDs before release.</li>
+</ul>
+
+<h2>8. Centralized Configuration API – Startup & Foreground Refresh</h2>
+<p>Some application configuration is currently retrieved through Firebase. Move the new configuration management requirements to the centralized API-based configuration system.</p>
+<ul>
+  <li>Implement a centralized key-value configuration API.</li>
+  <li>Retrieve required application configuration before navigating to the homepage on app launch.</li>
+  <li>Refresh the configuration whenever the app returns from the background to the foreground.</li>
+  <li>Apply updated configuration values dynamically, including advertisement settings.</li>
+  <li>Handle API failures, timeouts, and network connectivity issues gracefully.</li>
+  <li>Retain the last successfully fetched configuration as a fallback when the API is temporarily unavailable.</li>
+  <li>Use appropriate caching and refresh logic to avoid unnecessary API calls.</li>
+  <li>Design the API so additional application-level settings can be managed centrally in the future.</li>
+</ul>
+<div class="callout"><strong>Startup behaviour:</strong> The app should not enter the homepage until the initial configuration request has completed or a defined fallback configuration has been applied. Avoid leaving users on an indefinite loading screen when the API is unavailable.</div>
+
+<h2>9. Journal Reflection – User Flow from Explain Verse</h2>
+<p>Refer to <code>design/WisdomOne Reflection Flow.png</code> for the intended UI/UX and user journey for creating a Journal Reflection.</p>
+<ol>
+  <li>On the homepage, the user taps <strong>Explain this to me like I’m 5</strong>.</li>
+  <li>The existing Explain Verse bottom sheet opens.</li>
+  <li>Add a new button named <strong>Today’s Reflection</strong> at the bottom of the Explain Verse bottom sheet.</li>
+  <li>When the user taps Today’s Reflection, open a new Reflection bottom sheet.</li>
+  <li>Display a reflection question based on the meaning and message of that day’s verse.</li>
+  <li>Allow the user to write their thoughts, feelings, or answer in a text area.</li>
+  <li>Provide a <strong>Save Reflection</strong> button to save the response.</li>
+</ol>
+<ul>
+  <li>The question should encourage users to consider how the verse relates to their daily life, experiences, decisions, and personal growth.</li>
+  <li>Provide a clean, distraction-free writing experience.</li>
+  <li>Validate submissions appropriately and handle empty responses.</li>
+  <li>Provide clear feedback after a reflection has been saved successfully.</li>
+  <li>Avoid generic or unrelated questions when a verse-specific question is available.</li>
+</ul>
+
+<h2>10. Discovery – Journal Mode UI/UX Integration</h2>
+<p>Refer to <code>design/Journal Reflection.png</code> for the intended Journal Reflection design. Integrate this design into the existing <strong>Discovery → Journal</strong> section.</p>
+<ul>
+  <li>Display all previously saved reflections in the Journal section.</li>
+  <li>Organize entries chronologically by reflection date.</li>
+  <li>Each entry should display the reflection date, related verse or scripture reference, reflection question, and the user’s saved answer.</li>
+  <li>Allow users to open and view individual reflections.</li>
+  <li>Provide an Edit action so users can modify their saved answers.</li>
+  <li>Provide a Delete action so users can permanently delete a reflection.</li>
+  <li>Display a confirmation dialog before deleting a reflection.</li>
+  <li>Ensure edits and deletions are persisted to the backend and reflected in the UI.</li>
+  <li>When no reflections exist, show a meaningful empty state with an option or prompt to create the first reflection.</li>
+</ul>
+
+<h2>11. Reflection Question Management – Verse-based Questions</h2>
+<p>The proposed approach is to associate a reflection question with each verse.</p>
+<ul>
+  <li>Each verse should have a relevant reflection question.</li>
+  <li>When a verse is selected as the Verse of the Day, retrieve and display its associated reflection question.</li>
+  <li>Generate or curate questions based on the verse’s meaning, message, and practical teachings.</li>
+  <li>Questions should encourage personal reflection, self-improvement, gratitude, positive action, and real-life application.</li>
+  <li>Avoid repeating the same generic question across different verses.</li>
+  <li>Ensure the question matches the user’s selected tradition and language.</li>
+  <li>When the daily verse changes, display the question associated with the new verse.</li>
+  <li>If a verse does not have a question, provide a suitable fallback mechanism rather than showing a blank section.</li>
+  <li>Previously saved reflections must remain linked to their original verse and question even after the daily verse changes.</li>
+</ul>
+<h3>Example</h3>
+<div class="callout">
+  <strong>Verse theme:</strong> A verse that teaches patience and controlling anger.<br><br>
+  <strong>Reflection question:</strong> “Think about a recent situation where you felt angry. How could you have responded differently by practising patience?”<br><br>
+  <strong>User response:</strong> The user writes their personal thoughts and saves them.
+</div>
+
+<h2>12. Journal Reflection – Backend & Database Integration</h2>
+<p>Review the existing backend architecture, database schema, authentication, and models before introducing new tables or columns. Reuse existing entities and conventions where possible.</p>
+
+<h3>12.1 Verse reflection questions</h3>
+<p>Store a reflection question associated with each verse and language.</p>
+<table>
+  <thead><tr><th>Suggested field</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><code>id</code></td><td>Unique question identifier.</td></tr>
+    <tr><td><code>verse_id</code></td><td>Associated verse identifier.</td></tr>
+    <tr><td><code>scripture_id</code></td><td>Associated scripture or tradition identifier, if needed by the existing schema.</td></tr>
+    <tr><td><code>language_id</code></td><td>Language of the question.</td></tr>
+    <tr><td><code>reflection_question</code></td><td>Question displayed to the user.</td></tr>
+    <tr><td><code>is_active</code></td><td>Whether the question is available.</td></tr>
+    <tr><td><code>created_at</code>, <code>updated_at</code></td><td>Creation and modification timestamps.</td></tr>
+  </tbody>
+</table>
+
+<h3>12.2 User journal reflections</h3>
+<p>Store each user’s saved response and its relationship to the original verse and question.</p>
+<table>
+  <thead><tr><th>Suggested field</th><th>Purpose</th></tr></thead>
+  <tbody>
+    <tr><td><code>id</code></td><td>Unique reflection identifier.</td></tr>
+    <tr><td><code>user_id</code></td><td>User identifier, or the appropriate existing device/user identifier.</td></tr>
+    <tr><td><code>verse_id</code></td><td>Original verse identifier.</td></tr>
+    <tr><td><code>reflection_question_id</code></td><td>Associated question identifier.</td></tr>
+    <tr><td><code>reflection_date</code></td><td>Date associated with the reflection.</td></tr>
+    <tr><td><code>reflection_answer</code></td><td>User’s saved response.</td></tr>
+    <tr><td><code>created_at</code>, <code>updated_at</code></td><td>Creation and modification timestamps.</td></tr>
+  </tbody>
+</table>
+<p>Consider storing a snapshot of the question text, and the relevant verse text or reference, with each journal entry. This preserves the historical entry if the original verse or question is edited later. Use appropriate foreign keys, indexes, constraints, and deletion rules based on the existing database architecture.</p>
+
+<h3>12.3 Required API capabilities</h3>
+<table>
+  <thead><tr><th>API capability</th><th>Expected behaviour</th></tr></thead>
+  <tbody>
+    <tr><td>Get Today’s Reflection Question</td><td>Return the question associated with the current day’s verse in the user’s selected language and tradition.</td></tr>
+    <tr><td>Save Reflection</td><td>Save the answer and associate it with the correct user, verse, question, and reflection date.</td></tr>
+    <tr><td>Get User Journal Reflections</td><td>Return the user’s saved reflections in chronological order, with pagination where needed.</td></tr>
+    <tr><td>Get Reflection Details</td><td>Return an individual reflection with its original verse, question, and saved answer.</td></tr>
+    <tr><td>Update Reflection</td><td>Allow the user to edit their answer and update the modification timestamp.</td></tr>
+    <tr><td>Delete Reflection</td><td>Delete the selected user-owned reflection correctly.</td></tr>
+  </tbody>
+</table>
+
+<h3>12.4 Backend considerations</h3>
+<ul>
+  <li>Follow the existing FastAPI architecture and coding conventions.</li>
+  <li>Reuse existing authentication and database models wherever possible.</li>
+  <li>Ensure users can access and modify only their own reflections.</li>
+  <li>Prevent unintended duplicate reflection records and define the intended behaviour if a user saves more than one reflection for the same verse and date.</li>
+  <li>Validate API requests and handle errors consistently.</li>
+  <li>Integrate schema changes with the existing SQLite database and migration or table-creation process.</li>
+  <li>Maintain backward compatibility with existing application functionality.</li>
+</ul>
+
+<h2>13. Complete Application – End-to-End Testing & Backend Validation</h2>
+<p>After implementation, perform comprehensive end-to-end and regression testing across the complete application.</p>
+
+<h3>13.1 Feature testing</h3>
+<ul>
+  <li>Test the complete onboarding journey for every supported tradition and language.</li>
+  <li>Test all homepage features, verse actions, Share Studio, and WhatsApp sharing.</li>
+  <li>Test Wisdom Tree activity progression, level completion, visibility, and enable/disable behaviour.</li>
+  <li>Test all Settings page functionality and design states.</li>
+  <li>Test Lock Screen & Wallpaper behaviour, image selection, preview, and apply options.</li>
+  <li>Test Light Mode and Dark Mode on all relevant screens.</li>
+  <li>Test Journal Reflection creation, saving, listing, viewing, editing, and deletion.</li>
+  <li>Test verse-based questions across supported traditions and languages.</li>
+  <li>Test all AdMob formats, placement rules, global configuration, and failure scenarios.</li>
+  <li>Test configuration retrieval on app startup and refresh when returning to the foreground.</li>
+</ul>
+
+<h3>13.2 Backend and API validation</h3>
+<ul>
+  <li>Review all existing backend APIs and fix identified errors.</li>
+  <li>Verify request and response structures and data consistency.</li>
+  <li>Verify authentication and authorization wherever applicable.</li>
+  <li>Check database operations, relationships, indexes, and constraints.</li>
+  <li>Test error handling, timeouts, and network failure scenarios.</li>
+  <li>Ensure newly introduced database tables and columns are correctly integrated with the existing SQLite database.</li>
+  <li>Verify that existing functionality is not broken by the new implementation.</li>
+</ul>
+
+<h3>13.3 Final quality expectations</h3>
+<ul>
+  <li>Perform regression testing after all changes are implemented.</li>
+  <li>Fix identified UI, functional, API, and backend issues.</li>
+  <li>Test across supported traditions, languages, Android versions, and device sizes.</li>
+  <li>Confirm that all new features work as expected before considering implementation complete.</li>
+</ul>
+
+ <h2>14. WisdomOne – Poster Design Requirements and store in under design folder </h2>
+
+<h2>14.1. Poster Export Sizes</h2>
+<table>
+<tr><th>Format</th><th>Dimensions</th><th>Ratio</th></tr>
+<tr><td>Primary Poster</td><td>1080 × 1350 px</td><td>4:5</td></tr>
+<tr><td>Instagram/Facebook Square</td><td>1080 × 1080 px</td><td>1:1</td></tr>
+<tr><td>Instagram/Facebook Stories</td><td>1080 × 1920 px</td><td>9:16</td></tr>
+<tr><td>Google Ads Landscape</td><td>1200 × 628 px</td><td>1.91:1</td></tr>
+</table>
+
+<h2>14.2. Poster Concepts</h2>
+<table>
+<tr>
+<th>#</th>
+<th>Poster Title</th>
+<th>What Must Be Displayed</th>
+</tr>
+<tr><td>1</td><td>Bhagavad Gita – Daily Wisdom</td><td>Krishna artwork, verified verse, reference, logo</td></tr>
+<tr><td>2</td><td>Bhagavad Gita – Life Lessons</td><td>Gita verse, Hindi/English meaning, app screenshot</td></tr>
+<tr><td>3</td><td>Ramayana – Values for Life</td><td>Rama artwork, verified teaching, source reference</td></tr>
+<tr><td>4</td><td>Mahabharata – Timeless Lessons</td><td>Krishna/Arjuna artwork, life lesson, logo</td></tr>
+<tr><td>5</td><td>Bible – Daily Inspiration</td><td>Open Bible, verified verse, chapter reference</td></tr>
+<tr><td>6</td><td>Bible – Hope & Strength</td><td>Bible verse, translation, WisdomOne screenshot</td></tr>
+<tr><td>7</td><td>Quran – Daily Guidance</td><td>Quran visual, Arabic ayah, translation, surah reference</td></tr>
+<tr><td>8</td><td>Quran – Daily Reflection</td><td>Gratitude/patience theme, verified ayah, logo</td></tr>
+<tr><td>9</td><td>Dhammapada – Inner Peace</td><td>Buddha-inspired visual, teaching, reference</td></tr>
+<tr><td>10</td><td>WisdomOne – One App, Multiple Traditions</td><td>App icon, phone mockup, supported traditions, Play Store CTA</td></tr>
+</table>
+
+<h2>14.3. General Design Guidelines</h2>
+<ul>
+<li>Maintain consistent WisdomOne branding.</li>
+<li>Use culturally appropriate, high-quality artwork.</li>
+<li>Verify all religious verses and references.</li>
+<li>Ensure readability on mobile devices.</li>
+<li>Keep the logo clearly visible.</li>
+<li>Adapt layouts without stretching artwork.</li>
+<li>Include a Google Play Store CTA where applicable.</li>
+</ul>
+
+<h2>15. Final Delivery Expectations</h2>
+<p>Complete the implementation of all requirements in this document. Use the supplied design references as the visual source of truth, integrate the required backend and database changes, and verify the complete user journeys.</p>
+<div class="callout">
+  <strong>Definition of completion</strong>
+  <ul>
+    <li>All specified UI/UX changes are implemented and match the supplied designs.</li>
+    <li>All new features are connected to their required backend APIs and database functionality.</li>
+    <li>Configuration and advertisement behaviour can be controlled centrally.</li>
+    <li>Journal Reflection works end to end and preserves historical entries.</li>
+    <li>Existing features continue to work without regressions.</li>
+    <li>Testing is completed, and identified issues are fixed or clearly documented.</li>
+  </ul>
+</div>
+
+
+</main>
+</body>
+</html>

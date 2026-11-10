@@ -29,6 +29,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+<<<<<<< HEAD
+=======
+import com.scripturedaily.ads.AdSlot
+>>>>>>> settings_redesign
 import com.scripturedaily.data.ApiClient
 import com.scripturedaily.data.StorySummary
 import com.scripturedaily.features.story.StoryScreen
@@ -48,7 +52,11 @@ enum class DiscoverItem(val emoji: String, val title: String, val subtitle: Stri
     STORIES("📖", "Stories for Children", "Illustrated stories behind the verses. Read or listen together.", Color(0xFF5E9E6E)),
     STUDIO("🎨", "Studio", "Create verse images, wallpapers and calm videos — with templates for your tradition.", Color(0xFF8A5CC8)),
     WIDGETS("🧩", "Widget Studio", "Compact, large-text and calm-colour widgets with tap-to-refresh.", Color(0xFFB06A7E)),
+<<<<<<< HEAD
     JOURNAL("🙂", "Mood Journal", "Look back at how you've been feeling and what helped.", Color(0xFF7A62A8))
+=======
+    JOURNAL("🙂", "Journal", "Your personal space for mood tracking and daily reflections.", Color(0xFF7A62A8))
+>>>>>>> settings_redesign
 }
 
 @Composable
@@ -56,7 +64,13 @@ fun DiscoverScreen(onOpen: (DiscoverItem) -> Unit) {
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("Discover", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = W.Ink)
         Text("Go deeper with your daily verse.", fontSize = 13.sp, color = W.InkSoft)
+<<<<<<< HEAD
         DiscoverItem.values().forEach { item ->
+=======
+        AdSlot("discover_top_banner")
+        DiscoverItem.values().forEachIndexed { index, item ->
+            if (index == 3) AdSlot("discover_inline_native")
+>>>>>>> settings_redesign
             SurfaceCard(onClick = { onOpen(item) }) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(54.dp).clip(RoundedCornerShape(18.dp)).background(item.tint.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) { Text(item.emoji, fontSize = 27.sp) }
@@ -68,6 +82,10 @@ fun DiscoverScreen(onOpen: (DiscoverItem) -> Unit) {
                 }
             }
         }
+<<<<<<< HEAD
+=======
+        AdSlot("discover_bottom_banner")
+>>>>>>> settings_redesign
         Spacer(Modifier.height(12.dp))
     }
 }

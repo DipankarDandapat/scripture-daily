@@ -1,0 +1,14 @@
+{
+  "schema_version": 2,
+  "images_per_tradition": 20,
+  "total_images": 100,
+  "location": "android/app/src/main/assets/wallpapers/<slug>/NN.webp",
+  "traditions": {
+    "Hinduism":       {"slug": "hinduism",     "count": 20, "dimensions": [600, 900], "source": "Illustrated devotional/nature set shipped with the project (moved from res/drawable-nodpi)"},
+    "Christianity":   {"slug": "christianity", "count": 20, "dimensions": [720, 1280], "source": "Original procedural artwork - tools/generate_wallpapers.py (symbols, architecture, landscapes; no depiction of persons)", "license": "Project-owned, no third-party content"},
+    "Islam":          {"slug": "islam",        "count": 20, "dimensions": [720, 1280], "source": "Original procedural artwork - tools/generate_wallpapers.py (mosques, geometric patterns, arches, lanterns, crescent)", "license": "Project-owned, no third-party content"},
+    "Buddhism":       {"slug": "buddhism",     "count": 20, "dimensions": [720, 1280], "source": "Original procedural artwork - tools/generate_wallpapers.py (meditating silhouette, dharma wheel, lotus, stupa, pagoda)", "license": "Project-owned, no third-party content"},
+    "General Wisdom": {"slug": "general",      "count": 20, "dimensions": [720, 1280], "source": "Original procedural artwork - tools/generate_wallpapers.py (religion-neutral landscapes)", "license": "Project-owned, no third-party content"}
+  },
+  "notes": "Regenerate with: python tools/generate_wallpapers.py --out android/app/src/main/assets/wallpapers. Photographic/illustrated packs can replace any slug folder (keep NN.webp names, 20 files) without code changes."
+}

@@ -19,7 +19,11 @@ class BootReceiver : BroadcastReceiver() {
         ) return
         val pending = goAsync()
         val app = context.applicationContext
+<<<<<<< HEAD
         PaletteRefreshWorker.schedule(app)
+=======
+        PaletteRefreshWorker.cancel(app)
+>>>>>>> settings_redesign
         if (action != Intent.ACTION_BOOT_COMPLETED) {
             pending.finish()
             return
