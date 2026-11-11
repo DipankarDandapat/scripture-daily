@@ -69,7 +69,8 @@
             android:name="com.google.firebase.messaging.default_notification_channel_id"
             android:value="wisdomone_fcm_v1" />
 
-        <!-- Meta SDK -->
+        <!-- Meta SDK. Auto-init and automatic event logging are OFF: MetaAnalytics.init turns them on only when the backend
+             flag meta_ads_enabled is true, so nothing (not even install / activation events) reaches Meta otherwise. -->
         <meta-data
             android:name="com.facebook.sdk.ApplicationId"
             android:value="@string/facebook_app_id" />
@@ -78,10 +79,10 @@
             android:value="@string/facebook_client_token" />
         <meta-data
             android:name="com.facebook.sdk.AutoInitEnabled"
-            android:value="true" />
+            android:value="false" />
         <meta-data
             android:name="com.facebook.sdk.AutoLogAppEventsEnabled"
-            android:value="true" />
+            android:value="false" />
 
         <!-- AdMob -->
         <meta-data android:name="com.google.android.gms.ads.APPLICATION_ID" android:value="ca-app-pub-7872455938809561~3577314080" />
