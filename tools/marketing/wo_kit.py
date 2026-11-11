@@ -194,7 +194,11 @@ def width_for_height(height: int, screen_ratio: float = 2400 / 1080) -> int:
 # ── Lock screen composite (real app wallpaper + system-style clock) ──────────
 def lockscreen(render: str, time_text="9:41", date_text="Wednesday, November 11", notification: tuple | None = None) -> Image.Image:
     """`render` is a 1080x2400 wallpaper drawn by the app's LockScreenVerse renderer. Adds the Android lock clock UI."""
-    im = src(render).copy().convert("RGBA")
+    return lockscreen_from(src(render), time_text, date_text, notification)
+
+
+def lockscreen_from(wallpaper: Image.Image, time_text="9:41", date_text="Wednesday, November 11", notification: tuple | None = None) -> Image.Image:
+    im = wallpaper.copy().convert("RGBA").resize((1080, 2400), Image.LANCZOS)
     w, h = im.size
     d = ImageDraw.Draw(im)
     # status bar

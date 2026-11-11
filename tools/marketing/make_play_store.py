@@ -32,7 +32,7 @@ def lock(render, notification=False):
 
 # ── Layout engine ────────────────────────────────────────────────────────────
 def layout(W, H, *, bg, headline, sub, phones, eyebrow=None, chips=(), pal="dawn", headline_family=("serif", "bolditalic"),
-           cta=True, text_align=None, bleed=0.10, phone_scale=1.0, lockup=True):
+           cta=True, text_align=None, bleed=0.10, phone_scale=1.0, lockup=True, top_frac=None, cta_text="Get it on Google Play", force_cta=False):
     """phones: list of dicts {img, w (relative width), x (offset as fraction of phone-area width), y (fraction of main height), tilt, z}."""
     top, bottom, accent, tc, sc = K.PALETTES[pal]
     canvas = bg.convert("RGBA")
@@ -40,10 +40,10 @@ def layout(W, H, *, bg, headline, sub, phones, eyebrow=None, chips=(), pal="dawn
     m = int(W * 0.075)
     # ── text ──
     if wide:
-        tx, ty, tw = m, int(H * 0.12), int(W * 0.44)
+        tx, ty, tw = m, int(H * 0.12), int(W * 0.415)
         align = text_align or "left"
     else:
-        tx, ty, tw = m, int(H * (0.065 if H / W > 1.5 else 0.06)), W - 2 * m
+        tx, ty, tw = m, int(H * (top_frac if top_frac is not None else (0.065 if H / W > 1.5 else 0.06))), W - 2 * m
         align = text_align or "center"
     y = ty
     if lockup:
@@ -86,12 +86,15 @@ def layout(W, H, *, bg, headline, sub, phones, eyebrow=None, chips=(), pal="dawn
                 cx = b[2] + fs * 0.5
             y += int(fs * 2.15)
     text_bottom = y
+    if force_cta and not wide:
+        b = K.play_cta(canvas, (W // 2 if align == "center" else tx, y + int(H * 0.012)), height=int(W * 0.07), dark=sum(tc) <= 600, anchor="mt" if align == "center" else "lt", text=cta_text)
+        y = text_bottom = b[3]
     if cta and wide:
         light_text = sum(tc) > 600   # light headline = dark background → white CTA
-        K.play_cta(canvas, (tx, min(H - m - int(W * 0.075), text_bottom + int(H * 0.04))), height=int(W * 0.075), dark=not light_text)
+        K.play_cta(canvas, (tx, min(H - m - int(W * 0.075), text_bottom + int(H * 0.04))), height=int(W * 0.075), dark=not light_text, text=cta_text)
     # ── phones ──
     if wide:
-        area = (int(W * 0.50), int(H * 0.06), W - int(W * 0.50) - int(m * 0.4), int(H * 0.94))
+        area = (int(W * 0.52), int(H * 0.06), W - int(W * 0.52) - int(m * 0.4), int(H * 0.94))
     else:
         area = (0, text_bottom + int(H * 0.035), W, H - text_bottom - int(H * 0.035))
     ax, ay, aw, ah = area
@@ -112,6 +115,8 @@ def layout(W, H, *, bg, headline, sub, phones, eyebrow=None, chips=(), pal="dawn
             q[1] += shift
     for ph_img, x, y0, pw in placed:
         K.paste(canvas, ph_img, (x, y0), shadow_blur=int(pw * 0.06), shadow_opacity=0.42, shadow_offset=(0, int(pw * 0.05)))
+    canvas.info["text_bottom"] = text_bottom
+    canvas.info["phones_top"] = ay
     return canvas
 
 
