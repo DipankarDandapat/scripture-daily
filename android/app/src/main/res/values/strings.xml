@@ -16,4 +16,6 @@
     <string name="widget_desc_compact">Slim verse strip with a tap-to-refresh button</string>
     <string name="widget_desc_large">Large, easy-to-read verse with tap-to-refresh</string>
     <string name="widget_desc_reference">Verse reference first, with tap-to-refresh</string>
+    <string name="live_wallpaper_name">WisdomOne Verse</string>
+    <string name="live_wallpaper_description">Today&#8217;s verse on a calm, slowly moving sky that follows the time of day.</string>
 </resources>

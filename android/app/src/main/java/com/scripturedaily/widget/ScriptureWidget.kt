@@ -223,6 +223,8 @@ class ScriptureWidget : WisdomWidget(WidgetLayout.STANDARD) {
                 .putString("widget_reference", verse.reference())
                 .putLong("widget_saved_at", verse.savedAt)
                 .commit()
+            // Same verse everywhere: refresh the one-line ambient / always-on notification when it is enabled.
+            com.scripturedaily.ambient.AmbientNotification.update(context)
         }
 
         val ALL: List<Pair<WisdomWidget, Class<out GlanceAppWidgetReceiver>>> by lazy {

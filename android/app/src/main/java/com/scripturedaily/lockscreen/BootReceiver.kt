@@ -24,6 +24,9 @@ class BootReceiver : BroadcastReceiver() {
             pending.finish()
             return
         }
+        // Ambient Wisdom: activity-transition registrations and notifications do not survive a reboot.
+        com.scripturedaily.ambient.ActivityWisdomTracker.restoreIfEnabled(app)
+        com.scripturedaily.ambient.AmbientNotification.update(app)
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val prefs = app.getSharedPreferences("reader", Context.MODE_PRIVATE)

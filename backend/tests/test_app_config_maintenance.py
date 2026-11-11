@@ -109,3 +109,11 @@ def test_maintenance_preview_renders_configured_texts(client):
     r = client.get("/api/v1/admin/maintenance/preview", headers=ADMIN, params={"theme": "dark", "tz": "Asia/Kolkata"})
     assert r.status_code == 200 and "text/html" in r.headers["content-type"]
     assert "Back &lt;soon&gt;" in r.text and "12:00" in r.text and "Check Again" in r.text and "Close App" in r.text
+
+
+def test_ambient_wisdom_kill_switches_are_validated(client):
+    assert client.patch("/api/v1/admin/config/ambient_wisdom", headers=ADMIN, json={"value": {"live_wallpaper_available": "no"}}).status_code == 422
+    assert client.patch("/api/v1/admin/config/ambient_wisdom", headers=ADMIN, json={"value": {"live_wallpaper_available": False}}).status_code == 200
+    cfg = client.get("/api/v1/app/config").json()["config"]["ambient_wisdom"]
+    assert cfg["live_wallpaper_available"] is False and cfg["activity_aware_available"] is True   # merged, not replaced
+    client.patch("/api/v1/admin/config/ambient_wisdom", headers=ADMIN, json={"value": {"live_wallpaper_available": True}})

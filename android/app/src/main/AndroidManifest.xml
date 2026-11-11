@@ -10,6 +10,10 @@
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <!-- Ambient Wisdom: optional activity-aware verses (requested only when the user picks "Activity detection") -->
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <uses-permission android:name="com.google.android.gms.permission.ACTIVITY_RECOGNITION" android:maxSdkVersion="28" />
+    <uses-feature android:name="android.software.live_wallpaper" android:required="false" />
     <application android:name=".WisdomOneApplication" android:theme="@style/Theme.WisdomOne" android:label="WisdomOne" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round" android:usesCleartextTraffic="true" android:supportsRtl="true">
         <activity android:name="com.scripturedaily.lockscreen.LockScreenVerseActivity" android:exported="false" android:showOnLockScreen="true" android:screenOrientation="portrait" android:theme="@style/Theme.WisdomOne" />
         <activity android:name="com.scripturedaily.MainActivity" android:exported="true" android:screenOrientation="portrait">
@@ -39,6 +43,18 @@
                 <action android:name="android.intent.action.TIMEZONE_CHANGED" />
             </intent-filter>
         </receiver>
+        <!-- Ambient Wisdom: live wallpaper -->
+        <service
+            android:name="com.scripturedaily.ambient.VerseLiveWallpaperService"
+            android:label="@string/live_wallpaper_name"
+            android:permission="android.permission.BIND_WALLPAPER"
+            android:exported="true">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/verse_live_wallpaper" />
+        </service>
+        <!-- Ambient Wisdom: activity transitions (Google Play services Activity Recognition) -->
+        <receiver android:name="com.scripturedaily.ambient.ActivityTransitionReceiver" android:exported="false" />
+
         <!-- FCM: receives push messages and token refreshes -->
         <service
             android:name="com.scripturedaily.notification.WisdomOneMessagingService"

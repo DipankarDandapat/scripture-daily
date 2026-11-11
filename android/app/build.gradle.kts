@@ -97,6 +97,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-process:2.8.7")
     implementation("com.google.android.gms:play-services-ads:23.6.0")
     implementation("com.google.android.ump:user-messaging-platform:3.1.0")
+    // Ambient Wisdom: Activity Recognition Transition API (event-driven, battery-friendly)
+    implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("com.google.android.play:review-ktx:2.0.2")
     // Force newer fragment version to resolve play:review-ktx transitive dependency on fragment:1.1.0
     implementation("androidx.fragment:fragment-ktx:1.8.6")

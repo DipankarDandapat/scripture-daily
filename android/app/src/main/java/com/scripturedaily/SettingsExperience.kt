@@ -157,17 +157,18 @@ fun SettingsExperienceScreen(
                 val entries = listOf(
                     SettingEntry("Tradition & Language", "$selectedTradition \u00b7 ${availableLanguages.firstOrNull { it.id == language }?.name ?: "Language"}", Icons.Outlined.Spa, "tradition", painterRes = traditionIcon(selectedTraditionItem?.code ?: "")),
                     SettingEntry("Verse Frequency", frequencyLabel(frequency), Icons.Outlined.Schedule, "frequency"),
+                    SettingEntry("Ambient Wisdom", "Lock screen, live wallpaper, always-on", Icons.Outlined.AutoAwesome, "ambient"),
                     SettingEntry("Lock Screen & Wallpaper", "Design, style & colour themes", Icons.Outlined.Image, "wallpaper"),
                     SettingEntry("Widget Studio", "Create and customise widgets", Icons.Outlined.Widgets, "widget"),
                     SettingEntry("Reading Preferences", "Font size, verse display & style", Icons.Outlined.TextFields, "reading"),
-                    SettingEntry("App Theme", "Light Â· Dark Â· System", Icons.Outlined.DarkMode, "theme"),
+                    SettingEntry("App Theme", "Light · Dark · System", Icons.Outlined.DarkMode, "theme"),
                     SettingEntry("Notifications", "Verse alerts & reminders", Icons.Outlined.Notifications, "notifications"),
                     SettingEntry("Battery & Performance", "Optimise background updates", Icons.Outlined.FlashOn, "battery"),
                     SettingEntry("Help & Support", "FAQs, contact us", Icons.AutoMirrored.Outlined.HelpOutline, "help"),
                     SettingEntry("Rate WisdomOne", "Share your feedback & support", Icons.Outlined.StarOutline, "rate")
                 )
                 entries.forEach { entry ->
-                    SettingMenuCard(entry, highlighted = entry.route == "wallpaper") {
+                    SettingMenuCard(entry, highlighted = entry.route == "ambient") {
                         when (entry.route) { "widget" -> onWidgetStudio(); "rate" -> onRate(); else -> route = entry.route }
                     }
                 }
@@ -267,7 +268,7 @@ fun SettingsExperienceScreen(
                         }
                         if (wallpaperMode == WallpaperMode.COLORS) InfoCard("Both options are off, so your verse appears on the colour themes below instead of artwork.")
 
-                        SectionTitle("WALLPAPER GALLERY Â· ${selectedTradition.uppercase()}")
+                        SectionTitle("WALLPAPER GALLERY · ${selectedTradition.uppercase()}")
                         WallpaperGallery(context, selectedReligion, wallpaperImageIndex, enabled = wallpaperMode != WallpaperMode.COLORS) { wallpaperImageIndex = it }
                         Text(
                             when (wallpaperMode) {
@@ -325,6 +326,14 @@ fun SettingsExperienceScreen(
                             Icon(Icons.Outlined.Visibility, null, tint = W.PurpleDark, modifier = Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Preview full screen", color = W.PurpleDark, fontWeight = FontWeight.Bold)
                         }
                     }
+                    "ambient" -> com.scripturedaily.ambient.AmbientWisdomSettings(
+                        religion = selectedReligion,
+                        lockScreen = autoWallpaper,
+                        onLockScreen = { autoWallpaper = it; onLockScreen(it) },
+                        frequency = selectedFrequency,
+                        onFrequency = { selectedFrequency = it; onSavePreferences(selectedReligion, selectedLanguage, it, selectedReminders, wallpaperMode) },
+                        onOpenWallpaperDesign = { route = "wallpaper" }
+                    )
                     "reading" -> {
                         SettingCard {
                             Text("Verse font size", fontWeight = FontWeight.Bold, color = W.Ink)
@@ -400,7 +409,7 @@ fun SettingsExperienceScreen(
         }
     }
 
-    // Save & Apply Wallpaper â†’ choose where it goes.
+    // Save & Apply Wallpaper → choose where it goes.
     if (applySheet) {
         @OptIn(ExperimentalMaterial3Api::class)
         ModalBottomSheet(onDismissRequest = { applySheet = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = W.Parchment) {
@@ -486,7 +495,7 @@ fun SettingsExperienceScreen(
     }
 }
 
-// â”€â”€ Shared building blocks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Shared building blocks ────────────────────────────────────────────────────────────────
 
 @Composable private fun rememberVector(v: ImageVector): ImageVector = v
 
@@ -629,7 +638,7 @@ fun SettingsExperienceScreen(
 @Composable private fun PrimaryAction(text: String, icon: ImageVector? = null, onClick: () -> Unit) { Button(onClick = onClick, modifier = Modifier.fillMaxWidth().height(54.dp), shape = RoundedCornerShape(16.dp), colors = ButtonDefaults.buttonColors(containerColor = W.Purple, contentColor = W.OnPurple)) { if (icon != null) { Icon(icon, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)) }; Text(text, fontWeight = FontWeight.Bold) } }
 @Composable private fun SecondaryAction(text: String, onClick: () -> Unit) { OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), border = BorderStroke(1.dp, W.Gold)) { Text(text, color = W.Ink, fontWeight = FontWeight.SemiBold) } }
 
-// â”€â”€ Wallpaper gallery: 20 images, 4 per visible group, swipe horizontally â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Wallpaper gallery: 20 images, 4 per visible group, swipe horizontally ─────────────────
 
 @Composable private fun WallpaperGallery(context: Context, religionId: Int, selected: Int, enabled: Boolean, onSelect: (Int) -> Unit) {
     val pages = WallpaperPacks.COUNT / 4
@@ -662,7 +671,7 @@ fun SettingsExperienceScreen(
     }
 }
 
-// â”€â”€ Realistic lock-screen preview â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Realistic lock-screen preview ──────────────────────────────────────────────────────────
 
 @Composable
 private fun LockScreenPreview(
@@ -680,7 +689,7 @@ private fun LockScreenPreview(
         val active = cached?.takeIf { it.religion.equals(tradition, ignoreCase = true) && it.languageId == languageId }
         val scripture = active?.scripture ?: tradition
         val verseText = active?.text ?: "Let wisdom guide your thoughts and bring peace to your day."
-        val reference = active?.reference() ?: "Daily inspiration Â· WisdomOne"
+        val reference = active?.reference() ?: "Daily inspiration · WisdomOne"
         val rendered = withContext(Dispatchers.IO) {
             LockScreenVerse.previewBitmap(context, scripture, verseText, reference, theme, null, textSize, textPosition, imageIndex, religionId, mode, showVerse, showReference, 360, 780)
         }
@@ -711,10 +720,11 @@ private fun LockScreenPreview(
     }
 }
 
-private fun routeTitle(route: String) = when (route) { "tradition" -> "Tradition & Language"; "frequency" -> "Verse Frequency"; "wallpaper" -> "Lock Screen & Wallpaper"; "reading" -> "Reading Preferences"; "theme" -> "App Theme"; "notifications" -> "Notifications"; "battery" -> "Battery & Performance"; "help" -> "Help & Support"; else -> "Settings" }
+private fun routeTitle(route: String) = when (route) { "ambient" -> "Ambient Wisdom"; "tradition" -> "Tradition & Language"; "frequency" -> "Verse Frequency"; "wallpaper" -> "Lock Screen & Wallpaper"; "reading" -> "Reading Preferences"; "theme" -> "App Theme"; "notifications" -> "Notifications"; "battery" -> "Battery & Performance"; "help" -> "Help & Support"; else -> "Settings" }
 private fun routeSubtitle(route: String) = when (route) {
     "tradition" -> "Choose your tradition and preferred language for daily verses."
     "frequency" -> "Set how often WisdomOne refreshes your inspiration."
+    "ambient" -> "Bring your verse to the lock screen, home screen and always-on display."
     "wallpaper" -> "Design your lock screen experience."
     "reading" -> "Make verses comfortable and clear to read."
     "theme" -> "Choose how WisdomOne looks on your device."
