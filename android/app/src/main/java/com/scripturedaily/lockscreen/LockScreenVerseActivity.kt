@@ -39,6 +39,13 @@ private val CardGold = androidx.compose.ui.graphics.Color(0xFFD4A574)
 class LockScreenVerseActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.scripturedaily.config.AppConfigManager.init(this)
+        if (com.scripturedaily.gate.GateState.isBlockingNow()) {
+            // Update required or maintenance: route through MainActivity, which shows the gate screen instead of app content.
+            startActivity(android.content.Intent(this, com.scripturedaily.MainActivity::class.java)
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TOP))
+            finish(); return
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)

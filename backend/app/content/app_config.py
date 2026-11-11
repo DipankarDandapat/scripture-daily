@@ -87,7 +87,49 @@ PLACEMENTS = {
 # Screens where an ad must never appear however the placements are configured (scripture reading + reflection writing).
 BLOCKED_SCREENS = ["reflection_editor", "explain_sheet"]
 
+PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=com.scripturedaily"
+
+# Replaces the Firebase Remote Config key ``latestAppVersion``. Evaluated on the device (see app.services.app_config.evaluate_gate):
+#   installed < minimum_supported_version        -> mandatory update (cannot be skipped)
+#   installed < latest_version and force_update  -> mandatory update
+#   installed < latest_version                   -> optional update ("Update now" / "Later")
+#   otherwise                                    -> continue normally
+APP_UPDATE = {
+    "enabled": True,
+    "latest_version": "1.4.2",
+    "minimum_supported_version": "1.0.0",
+    "force_update": False,
+    "title": "A new version is available",
+    "message": "Update WisdomOne to get the latest improvements and fixes.",
+    "mandatory_title": "Update required",
+    "mandatory_message": "This version of WisdomOne is no longer supported. Please update to continue.",
+    "play_store_url": PLAY_STORE_URL,
+    "optional_reminder_hours": 24,
+}
+
+# Full-screen maintenance page. Checked after a mandatory update and before anything else in the app.
+MAINTENANCE_MODE = {
+    "enabled": False,
+    "title": "We'll Be Back Soon!",
+    "message": "We're currently upgrading WisdomOne to bring you a better experience. "
+               "Our team is working to restore the service as quickly as possible.",
+    "estimated_end_time": None,      # ISO-8601 with offset, e.g. "2026-11-12T06:30:00Z"; shown in the user's local time
+    "allow_retry": True,             # show the "Check again" button
+    "enforce_cached_for_hours": 12,  # how long a cached "enabled" may block the app while the config API is unreachable
+}
+
+# Ambient Wisdom Layer (lock screen, live wallpaper, activity-aware suggestions). Server-side kill switches only — the user's own
+# choices stay on the device.
+AMBIENT_WISDOM = {
+    "live_wallpaper_available": True,
+    "activity_aware_available": True,
+    "ambient_notification_available": True,
+}
+
 DEFAULTS: dict[str, tuple[object, str]] = {
+    "app_update": (APP_UPDATE, "App update prompt: latest/minimum supported version, force flag, texts and Play Store URL."),
+    "maintenance_mode": (MAINTENANCE_MODE, "Full-screen maintenance page. enabled=true blocks the whole app until it is turned off."),
+    "ambient_wisdom": (AMBIENT_WISDOM, "Server kill switches for the Ambient Wisdom Layer features."),
     "config_schema_version": (1, "Bump when the shape of a config value changes in a way old apps cannot read."),
     "config_refresh_min_interval_seconds": (300, "Minimum seconds between two config fetches while the app stays in the foreground."),
     "ads_enabled": (True, "GLOBAL SWITCH. false = no ad is requested or shown anywhere, whatever the placements say."),

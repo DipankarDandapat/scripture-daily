@@ -270,3 +270,9 @@ After a config change the app will pick it up automatically on the next foregrou
 ---
 
 *Last updated: see `updated_at` field in `GET /api/v1/admin/config`*
+
+---
+
+## App update prompt & maintenance mode
+
+See [APP_CONFIG_AND_MAINTENANCE.md](APP_CONFIG_AND_MAINTENANCE.md) for `app_update`, `maintenance_mode`, `GET /api/v1/app/config` and the `/admin/app-update` and `/admin/maintenance/*` shortcuts.

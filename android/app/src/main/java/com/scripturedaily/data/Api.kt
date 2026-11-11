@@ -330,7 +330,8 @@ interface ScriptureApi {
     @DELETE("reflections/{id}") suspend fun deleteReflection(@Path("id") id: Int): Response<Unit>
 
     // ── Centralised configuration (ads, intervals, flags) ──
-    @GET("config") suspend fun config(@retrofit2.http.Header("If-None-Match") etag: String? = null): Response<AppConfigResponse>
+    /** Single app configuration document (update prompt, maintenance mode, ads, feature flags). Replaces Firebase Remote Config. */
+    @GET("app/config") suspend fun appConfig(@retrofit2.http.Header("If-None-Match") etag: String? = null): Response<AppConfigResponse>
 
     @POST("tree/read")
     suspend fun recordReading(@Query("client_date") clientDate: String? = null, @Body body: TreeReadBody = TreeReadBody()): TreeDto

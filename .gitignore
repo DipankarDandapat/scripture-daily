@@ -15,8 +15,6 @@ android/.kotlin/
 *.keystore
 android/keystore/
 google-services.json
-<<<<<<< HEAD
-=======
 
 *.p12
 key.properties
@@ -25,5 +23,3 @@ key.properties
 backend/firebase-service-account.json
 backend/*-service-account.json
 
-backend/firebase-service-account.json
->>>>>>> settings_redesign

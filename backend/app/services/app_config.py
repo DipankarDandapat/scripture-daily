@@ -27,7 +27,31 @@ def ensure_app_config(db: Session) -> int:
         db.commit()
     _merge_new_placements(db)
     _remove_blocked_screen(db, "share_studio")
+    for key in _NESTED_DEFAULT_KEYS:
+        _add_missing_subkeys(db, key)
     return added
+
+
+# Object-valued keys whose new sub-keys are added to existing rows (values already edited by an admin are kept).
+_NESTED_DEFAULT_KEYS = ("app_update", "maintenance_mode", "ambient_wisdom")
+
+
+def _add_missing_subkeys(db: Session, key: str) -> None:
+    row = db.get(AppConfigEntry, key)
+    if row is None:
+        return
+    try:
+        current = json.loads(row.value)
+    except Exception:
+        return
+    default = DEFAULTS[key][0]
+    if not isinstance(current, dict) or not isinstance(default, dict):
+        return
+    missing = {k: v for k, v in default.items() if k not in current}
+    if missing:
+        row.value = json.dumps({**current, **missing}, sort_keys=True)
+        row.updated_at = datetime.now(timezone.utc)
+        db.commit()
 
 
 # Placements added after the initial DB seed — merged into the existing ads_placements row.
@@ -101,8 +125,109 @@ def _check_unit_map(name: str, value: object, allow_blank: bool) -> None:
             _bad(f"{name}.{fmt}: invalid ad unit id")
 
 
+_VERSION_RE = re.compile(r"^\d{1,4}(\.\d{1,4}){0,3}$")
+_HTTP_RE = re.compile(r"^(https://|market://)\S+$")
+
+
+def parse_version(value: str) -> tuple[int, ...]:
+    """"1.4.2" -> (1, 4, 2). Missing segments compare as 0, so "1.4" == "1.4.0"."""
+    parts = [int(p) for p in str(value).strip().split(".") if p.isdigit()]
+    while parts and parts[-1] == 0:
+        parts.pop()
+    return tuple(parts)
+
+
+def is_older(installed: str, other: str) -> bool:
+    return parse_version(installed) < parse_version(other)
+
+
+def evaluate_gate(config: dict, installed_version: str) -> dict:
+    """The decision the Android app makes on startup, mirrored here for admin previews and tests.
+
+    Priority (documented in docs/APP_CONFIG_AND_MAINTENANCE.md): mandatory update > maintenance > optional update > normal.
+    """
+    update = config.get("app_update") or {}
+    maintenance = config.get("maintenance_mode") or {}
+    status = "up_to_date"
+    if update.get("enabled", True):
+        latest = str(update.get("latest_version") or installed_version)
+        minimum = str(update.get("minimum_supported_version") or "0")
+        if is_older(installed_version, minimum) or (update.get("force_update") and is_older(installed_version, latest)):
+            status = "mandatory"
+        elif is_older(installed_version, latest):
+            status = "optional"
+    else:
+        status = "disabled"
+    if status == "mandatory":
+        screen = "mandatory_update"
+    elif maintenance.get("enabled"):
+        screen = "maintenance"
+    elif status == "optional":
+        screen = "optional_update"
+    else:
+        screen = "app"
+    return {"installed_version": installed_version, "update_status": status, "screen": screen}
+
+
+def _check_text(key: str, obj: dict, name: str, max_len: int, required: bool = False) -> None:
+    if name not in obj:
+        if required:
+            _bad(f"{key}.{name} is required")
+        return
+    v = obj[name]
+    if not isinstance(v, str) or (required and not v.strip()) or len(v) > max_len:
+        _bad(f"{key}.{name} must be text of at most {max_len} characters")
+
+
+def _validate_app_update(value: object) -> None:
+    if not isinstance(value, dict):
+        _bad("app_update must be an object")
+    for name in ("enabled", "force_update"):
+        if name in value and not isinstance(value[name], bool):
+            _bad(f"app_update.{name} must be true or false")
+    for name in ("latest_version", "minimum_supported_version"):
+        if name in value and not (isinstance(value[name], str) and _VERSION_RE.match(value[name])):
+            _bad(f"app_update.{name} must look like 1.4.2")
+    if "latest_version" in value and "minimum_supported_version" in value and \
+            is_older(value["latest_version"], value["minimum_supported_version"]):
+        _bad("app_update.minimum_supported_version cannot be newer than latest_version")
+    for name, n in (("title", 80), ("mandatory_title", 80), ("message", 400), ("mandatory_message", 400)):
+        _check_text("app_update", value, name, n)
+    if "play_store_url" in value and not (isinstance(value["play_store_url"], str) and _HTTP_RE.match(value["play_store_url"])):
+        _bad("app_update.play_store_url must start with https:// or market://")
+    if "optional_reminder_hours" in value and not (isinstance(value["optional_reminder_hours"], int) and 0 <= value["optional_reminder_hours"] <= 720):
+        _bad("app_update.optional_reminder_hours must be an integer between 0 and 720")
+
+
+def _validate_maintenance(value: object) -> None:
+    if not isinstance(value, dict):
+        _bad("maintenance_mode must be an object")
+    for name in ("enabled", "allow_retry"):
+        if name in value and not isinstance(value[name], bool):
+            _bad(f"maintenance_mode.{name} must be true or false")
+    _check_text("maintenance_mode", value, "title", 80)
+    _check_text("maintenance_mode", value, "message", 600)
+    end = value.get("estimated_end_time")
+    if end is not None:
+        try:
+            parsed = datetime.fromisoformat(str(end).replace("Z", "+00:00"))
+        except ValueError:
+            parsed = None
+        if parsed is None or parsed.tzinfo is None:
+            _bad("maintenance_mode.estimated_end_time must be ISO-8601 with a timezone, e.g. 2026-11-12T06:30:00Z, or null")
+    if "enforce_cached_for_hours" in value and not (isinstance(value["enforce_cached_for_hours"], int) and 0 <= value["enforce_cached_for_hours"] <= 168):
+        _bad("maintenance_mode.enforce_cached_for_hours must be an integer between 0 and 168")
+
+
 def validate_config_value(key: str, value: object) -> None:
-    """Reject malformed advertising configuration so a bad edit can never crash apps in the field."""
+    """Reject malformed configuration so a bad edit can never crash apps in the field."""
+    if key == "app_update":
+        _validate_app_update(value)
+    if key == "maintenance_mode":
+        _validate_maintenance(value)
+    if key == "ambient_wisdom":
+        if not isinstance(value, dict) or any(not isinstance(v, bool) for v in value.values()):
+            _bad("ambient_wisdom must be an object of true/false switches")
     if key in {"ads_enabled", "ads_use_test_ids", "wisdom_tree_default_enabled", "meta_ads_enabled"} and not isinstance(value, bool):
         _bad(f"{key} must be true or false")
     if key == "ads_app_id" and not (isinstance(value, str) and re.match(r"^ca-app-pub-\d{16}~\d{10}$", value)):

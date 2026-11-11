@@ -99,6 +99,7 @@ import android.text.TextUtils
 import androidx.core.content.FileProvider
 import android.net.Uri
 import com.scripturedaily.config.AppConfigManager
+import com.scripturedaily.gate.AppGateHost
 import com.scripturedaily.data.ApiClient
 import com.scripturedaily.data.AuthInput
 import com.scripturedaily.data.CachedCatalogItem
@@ -219,56 +220,6 @@ fun AppToastHost(hostState: SnackbarHostState) {
         }
     }
 }
-// ── Force-update screen ──────────────────────────────────────────────────────
-@Composable
-private fun ForceUpdateScreen() {
-    val context = LocalContext.current
-    Box(
-        Modifier.fillMaxSize().background(Parchment),
-        contentAlignment = Alignment.Center
-    ) {
-        Box(Modifier.size(320.dp).clip(CircleShape).background(Brush.radialGradient(listOf(Amber.copy(alpha = 0.15f), Color.Transparent))))
-        Column(
-            Modifier.padding(horizontal = 36.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(0.dp)
-        ) {
-            Box(
-                Modifier.size(88.dp).clip(CircleShape)
-                    .background(Amber.copy(alpha = 0.12f))
-                    .border(BorderStroke(1.5.dp, Amber.copy(alpha = 0.3f)), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Text("↑", fontSize = 38.sp, color = Amber, fontWeight = FontWeight.Bold)
-            }
-            Spacer(Modifier.height(28.dp))
-            Text(
-                "Update Required",
-                fontSize = 26.sp, fontWeight = FontWeight.Bold,
-                color = Ink, textAlign = TextAlign.Center
-            )
-            Spacer(Modifier.height(12.dp))
-            Text(
-                "A new version of WisdomOne is available. Please update to continue.",
-                fontSize = 15.sp, color = InkSoft,
-                textAlign = TextAlign.Center, lineHeight = 23.sp
-            )
-            Spacer(Modifier.height(36.dp))
-            Button(
-                onClick = {
-                    val uri = Uri.parse("https://play.google.com/store/apps/details?id=${context.packageName}")
-                    context.startActivity(Intent(Intent.ACTION_VIEW, uri))
-                },
-                modifier = Modifier.fillMaxWidth().height(56.dp),
-                shape = RoundedCornerShape(18.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = W.InkButton)
-            ) {
-                Text("Update Now", fontWeight = FontWeight.SemiBold, fontSize = 16.sp)
-            }
-        }
-    }
-
-}
 private sealed class HealthState {
     object Checking : HealthState()
     data class Retrying(val attempt: Int) : HealthState()
@@ -325,7 +276,13 @@ class MainActivity : ComponentActivity() {
                     navigationBarStyle = if (dark) SystemBarStyle.dark(transparent) else SystemBarStyle.light(transparent, transparent)
                 )
             }
-            WisdomOneTheme(dark) { ScriptureApp(deepLinkVerseId, shortcutTab) }
+            WisdomOneTheme(dark) {
+                // Mandatory update > maintenance > optional update > app. While blocked, pending deep links and
+                // notification targets are dropped so they cannot open app screens behind the gate.
+                AppGateHost(onBlocked = { deepLinkVerseId.value = null; shortcutTab.value = null }) {
+                    ScriptureApp(deepLinkVerseId, shortcutTab)
+                }
+            }
         }
     }
 
@@ -422,18 +379,7 @@ private fun ScriptureApp(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // ── Force-update check ───────────────────────────────────────────────────
-    var forceUpdate by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        val latest = ForceUpdateManager.fetchLatestVersion()
-        forceUpdate = ForceUpdateManager.isUpdateRequired(BuildConfig.VERSION_NAME, latest)
-    }
-
-    if (forceUpdate) {
-        ForceUpdateScreen()
-        return
-    }
+    // Update prompts and maintenance mode are handled before this screen is ever composed (gate/AppGateScreens.kt).
 
     // ── Health check ──────────────────────────────────────────────────────────
     var apiOffline by remember { mutableStateOf(false) }
