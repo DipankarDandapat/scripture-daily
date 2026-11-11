@@ -151,9 +151,7 @@ fun SettingsExperienceScreen(
     Column(Modifier.fillMaxSize().background(W.Parchment)) {
         if (route == "home") {
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                Text("Settings", fontSize = 30.sp, fontWeight = FontWeight.Bold, color = W.Ink)
-                Text("Personalise your experience", color = W.InkMid, fontSize = 13.sp)
-                Spacer(Modifier.height(4.dp))
+                SettingsHeroHeader()
                 val entries = listOf(
                     SettingEntry("Tradition & Language", "$selectedTradition \u00b7 ${availableLanguages.firstOrNull { it.id == language }?.name ?: "Language"}", Icons.Outlined.Spa, "tradition", painterRes = traditionIcon(selectedTraditionItem?.code ?: "")),
                     SettingEntry("Verse Frequency", frequencyLabel(frequency), Icons.Outlined.Schedule, "frequency"),
@@ -176,6 +174,7 @@ fun SettingsExperienceScreen(
                 OutlinedButton(onClick = onFeedback, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(17.dp), border = BorderStroke(1.dp, W.Gold.copy(alpha = .7f))) {
                     Text("Leave us a feedback", color = W.Ink, fontWeight = FontWeight.SemiBold)
                 }
+                MakeItYoursCard()
                 AdSlot("settings_bottom_banner")
                 Spacer(Modifier.height(16.dp))
             }
@@ -578,6 +577,49 @@ fun SettingsExperienceScreen(
     Row(verticalAlignment = Alignment.CenterVertically) { Icon(icon, null, tint = W.Gold, modifier = Modifier.size(26.dp)); Spacer(Modifier.width(12.dp)); Text(text, color = W.Ink, fontSize = 13.sp, lineHeight = 18.sp) }
 }
 
+/** Settings top: title on the left, the sunrise landscape (design/settings_header_landscape.jpg) fading in from the right. */
+@Composable private fun SettingsHeroHeader() {
+    Box(
+        Modifier.fillMaxWidth()
+            .layout { measurable, constraints ->   // bleed to the screen edges past the 18 dp column padding
+                val extra = 36.dp.roundToPx()
+                val placeable = measurable.measure(constraints.copy(maxWidth = constraints.maxWidth + extra, minWidth = constraints.maxWidth + extra))
+                layout(constraints.maxWidth, placeable.height) { placeable.place(-extra / 2, 0) }
+            }
+            .height(150.dp)
+    ) {
+        Image(
+            painter = painterResource(R.drawable.settings_header_landscape), contentDescription = null,
+            contentScale = ContentScale.Crop, alignment = Alignment.CenterEnd,
+            modifier = Modifier.fillMaxHeight().fillMaxWidth(0.72f).align(Alignment.CenterEnd)
+        )
+        // Soft veils so the art melts into the page (left edge, top and bottom) and the title stays readable.
+        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to W.Parchment, 0.38f to W.Parchment, 0.62f to W.Parchment.copy(alpha = 0.35f), 1f to Color.Transparent)))
+        Box(Modifier.fillMaxWidth().height(44.dp).align(Alignment.TopCenter).background(Brush.verticalGradient(listOf(W.Parchment, Color.Transparent))))
+        Box(Modifier.fillMaxWidth().height(36.dp).align(Alignment.BottomCenter).background(Brush.verticalGradient(listOf(Color.Transparent, W.Parchment))))
+        Column(Modifier.align(Alignment.CenterStart).padding(start = 18.dp).fillMaxWidth(0.66f)) {
+            Text("Settings", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = W.Ink)
+            Spacer(Modifier.height(4.dp))
+            Text("Personalise your experience and daily inspiration", color = W.InkMid, fontSize = 14.sp, lineHeight = 19.sp)
+        }
+    }
+}
+
+/** Settings bottom: the "Make it Yours" card from the approved design (design/settings_make_it_yours_banner.jpg). */
+@Composable private fun MakeItYoursCard() {
+    Spacer(Modifier.height(6.dp))
+    Image(
+        painter = painterResource(R.drawable.settings_make_it_yours), contentScale = ContentScale.Crop,
+        contentDescription = "Make it Yours. Customise your widget, lock screen and reading experience.",
+        modifier = Modifier.fillMaxWidth().aspectRatio(964f / 296f).clip(RoundedCornerShape(22.dp))
+            .border(1.dp, W.Gold.copy(alpha = .22f), RoundedCornerShape(22.dp))
+    )
+}
+
+/**
+ * Tradition & Language: a full, crisp banner of the selected tradition's artwork in a rounded card. A parchment veil on the
+ * left carries the tradition name and scriptures; switching tradition cross-fades to the new art.
+ */
 @Composable private fun TraditionBanner(religion: ReligionItem?) {
     val code = religion?.code?.lowercase() ?: ""
     val bannerRes = when {
@@ -585,32 +627,29 @@ fun SettingsExperienceScreen(
         code.contains("christian") -> R.drawable.banner_christianity
         code.contains("islam")     -> R.drawable.banner_islam
         code.contains("buddh")     -> R.drawable.banner_buddhism
-        else                              -> R.drawable.banner_general_wisdom
+        else                       -> R.drawable.banner_general_wisdom
     }
-    Box(
-        Modifier.fillMaxWidth()
-            .layout { measurable, constraints ->
-                val extra = 36.dp.roundToPx()
-                val placeable = measurable.measure(constraints.copy(maxWidth = constraints.maxWidth + extra))
-                layout(placeable.width, placeable.height) { placeable.place(-extra / 2, 0) }
+    val title = religion?.name ?: "General Wisdom"
+    val scriptures = religion?.scriptures?.joinToString(" · ") { it.name }.orEmpty()
+    androidx.compose.animation.Crossfade(targetState = Triple(bannerRes, title, scriptures), animationSpec = androidx.compose.animation.core.tween(450), label = "traditionBanner") { (res, name, books) ->
+        Box(
+            Modifier.fillMaxWidth().height(168.dp).clip(RoundedCornerShape(24.dp))
+                .border(1.dp, W.Gold.copy(alpha = .28f), RoundedCornerShape(24.dp))
+                .semantics { contentDescription = "$name banner" }
+        ) {
+            // Crop removes the rounded corners baked into the source art; the landmark sits on the right of every image.
+            // General Wisdom's lotus is centred in its art, so show the left part of that image to keep the lotus on the right.
+            Image(painterResource(res), null, contentScale = ContentScale.Crop,
+                alignment = if (res == R.drawable.banner_general_wisdom) Alignment.CenterStart else Alignment.CenterEnd, modifier = Modifier.fillMaxSize())
+            Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to W.Parchment.copy(alpha = .95f), 0.38f to W.Parchment.copy(alpha = .84f), 0.66f to Color.Transparent)))
+            Box(Modifier.fillMaxWidth().height(40.dp).align(Alignment.BottomCenter).background(Brush.verticalGradient(listOf(Color.Transparent, W.Purple.copy(alpha = .10f)))))
+            Column(Modifier.align(Alignment.CenterStart).padding(start = 18.dp, end = 12.dp).fillMaxWidth(0.62f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("YOUR TRADITION", color = W.Gold, fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.2.sp)
+                Text(name, color = W.PurpleDark, fontSize = 25.sp, lineHeight = 29.sp, fontWeight = FontWeight.Bold,
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic, fontFamily = androidx.compose.ui.text.font.FontFamily.Serif)
+                if (books.isNotBlank()) Text(books, color = W.InkMid, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 2)
             }
-            .height(160.dp)
-    ) {
-        Image(
-            painter = painterResource(bannerRes),
-            contentDescription = null,
-            modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.FillWidth
-        )
-        // Top fade - tall enough to fully cover any image edge colour
-        Box(Modifier.fillMaxWidth().height(80.dp).align(Alignment.TopCenter)
-            .background(Brush.verticalGradient(listOf(W.Parchment, W.Parchment.copy(alpha = 0.85f), Color.Transparent))))
-        // Bottom fade
-        Box(Modifier.fillMaxWidth().height(70.dp).align(Alignment.BottomCenter)
-            .background(Brush.verticalGradient(listOf(Color.Transparent, W.Parchment.copy(alpha = 0.9f), W.Parchment))))
-        // Right fade
-        Box(Modifier.width(64.dp).fillMaxHeight().align(Alignment.CenterEnd)
-            .background(Brush.horizontalGradient(listOf(Color.Transparent, W.Parchment.copy(alpha = 0.85f), W.Parchment))))
+        }
     }
 }
 

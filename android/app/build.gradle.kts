@@ -18,6 +18,7 @@ android {
         targetSdk = 36
         versionCode = 22
         versionName = "1.4.2"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         val apiBase = providers.gradleProperty("SD_API_BASE_URL").get()
         buildConfigField("String", "API_BASE_URL", "\"$apiBase\"")

@@ -1887,13 +1887,13 @@ private fun HomeScreen(
                     }
                     // One primary sharing action: opens Share Studio (Share + WhatsApp Status live inside it).
                     Button(
-                        onClick = onSpread, modifier = Modifier.weight(1.5f).height(52.dp), shape = RoundedCornerShape(16.dp),
+                        onClick = onSpread, modifier = Modifier.weight(1.9f).height(52.dp), shape = RoundedCornerShape(16.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Purple, contentColor = W.OnPurple),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp)
                     ) {
                         Icon(Icons.Outlined.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Share with the World", fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1)
+                        Spacer(Modifier.width(6.dp))
+                        Text("Share with the World", fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1, softWrap = false)
                     }
                 }
                 actionsSlot()
