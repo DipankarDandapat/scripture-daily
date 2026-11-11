@@ -18,6 +18,7 @@ android {
         targetSdk = 36
         versionCode = 22
         versionName = "1.4.2"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         val apiBase = providers.gradleProperty("SD_API_BASE_URL").get()
         buildConfigField("String", "API_BASE_URL", "\"$apiBase\"")
@@ -97,13 +98,14 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-process:2.8.7")
     implementation("com.google.android.gms:play-services-ads:23.6.0")
     implementation("com.google.android.ump:user-messaging-platform:3.1.0")
+    // Ambient Wisdom: Activity Recognition Transition API (event-driven, battery-friendly)
+    implementation("com.google.android.gms:play-services-location:21.3.0")
     implementation("com.google.android.play:review-ktx:2.0.2")
     // Force newer fragment version to resolve play:review-ktx transitive dependency on fragment:1.1.0
     implementation("androidx.fragment:fragment-ktx:1.8.6")
 
     implementation(platform("com.google.firebase:firebase-bom:34.19.0"))
     implementation("com.google.firebase:firebase-analytics")
-    implementation("com.google.firebase:firebase-config")
     implementation("com.google.firebase:firebase-crashlytics")
     implementation("com.google.firebase:firebase-messaging")
 

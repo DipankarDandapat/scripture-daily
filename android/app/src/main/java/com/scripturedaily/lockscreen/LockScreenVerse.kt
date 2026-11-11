@@ -229,7 +229,11 @@ object LockScreenVerse {
         val mode = WallpaperMode.normalize(modeOverride ?: prefs.getString("wallpaper_mode", WallpaperMode.VERSE_AND_IMAGE))
         // colors: no artwork (multi-theme backgrounds). keep_image: always the selected image. verse_and_image: walk through the pack,
         // starting at the selected image, once per applied refresh (the preview shows the selected image itself).
-        val imageIndex = if (mode == WallpaperMode.VERSE_AND_IMAGE && !previewSelected) WallpaperPacks.rotatedIndex(selectedImageIndex, rotation) else WallpaperPacks.clampIndex(selectedImageIndex)
+        // The user's rotation preference (in order / shuffle) decides the next image; both show every image once before repeating.
+        val imageIndex = if (mode == WallpaperMode.VERSE_AND_IMAGE && !previewSelected) com.scripturedaily.ambient.AmbientWisdom.imageFor(
+            com.scripturedaily.ambient.AmbientWisdom.ImageOrder.of(prefs.getString(com.scripturedaily.ambient.AmbientWisdom.KEY_IMAGE_ORDER, null)),
+            selectedImageIndex, rotation, WallpaperPacks.COUNT, shuffleSeed(prefs)
+        ) else WallpaperPacks.clampIndex(selectedImageIndex)
         val sourceImage = if (mode == WallpaperMode.COLORS) null else WallpaperPacks.load(context, tradition, imageIndex)
         val imageResource = if (sourceImage != null) 1 else 0
         val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -445,6 +449,10 @@ object LockScreenVerse {
             }
         }
     }
+
+    private fun shuffleSeed(prefs: android.content.SharedPreferences): Long =
+        prefs.getLong("wallpaper_shuffle_seed", 0L).takeIf { it != 0L }
+            ?: (System.nanoTime() or 1L).also { prefs.edit().putLong("wallpaper_shuffle_seed", it).apply() }
 
     private fun layout(text: String, paint: TextPaint, textSizePx: Float, width: Int, maxLines: Int): StaticLayout {
         paint.textSize = textSizePx

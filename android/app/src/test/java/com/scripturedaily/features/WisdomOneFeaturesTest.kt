@@ -51,24 +51,17 @@ class TreeLogicTest {
         assertEquals(TreeStage.BRANCHES, TreeLogic.stageFor(8)); assertEquals(TreeStage.BRANCHES, TreeLogic.stageFor(14))
         assertEquals(TreeStage.FLOWERS, TreeLogic.stageFor(15)); assertEquals(TreeStage.FLOWERS, TreeLogic.stageFor(21))
         assertEquals(TreeStage.FRUITS, TreeLogic.stageFor(22)); assertEquals(TreeStage.FRUITS, TreeLogic.stageFor(30))
-<<<<<<< HEAD
-        assertEquals(TreeStage.FRUITS, TreeLogic.stageFor(90))
-=======
         assertEquals(TreeStage.SPROUT, TreeLogic.stageFor(31))
         assertEquals(TreeStage.FRUITS, TreeLogic.stageFor(60))
         assertEquals(TreeStage.SPROUT, TreeLogic.stageFor(61))
         assertEquals(TreeStage.FRUITS, TreeLogic.stageFor(150))
->>>>>>> settings_redesign
     }
 
     @Test fun `a missed day pauses growth but never removes progress`() {
         val grown = (10..20).map { today.minusDays(it.toLong()) }.toSet()   // 11 days read, then a long break
         val s = TreeLogic.state(grown, today)
         assertEquals(11, s.totalDays); assertEquals(TreeStage.BRANCHES, s.stage); assertEquals("Resting", s.status)
-<<<<<<< HEAD
-=======
         assertEquals(1, s.level); assertEquals(11, s.journeyDay); assertFalse(s.journeyComplete)
->>>>>>> settings_redesign
         assertEquals(0, s.currentStreak); assertEquals(11, s.longestStreak)
         assertTrue(s.unlocked(TreeStage.LEAVES) && s.unlocked(TreeStage.BRANCHES) && !s.unlocked(TreeStage.FLOWERS))
         val back = TreeLogic.state(grown + today, today)
@@ -89,8 +82,6 @@ class TreeLogicTest {
         assertTrue(TreeLogic.message(resting).contains("keeps everything"))
     }
 
-<<<<<<< HEAD
-=======
     @Test fun `each 30 reading days starts the next level on the following reading day`() {
         val levelOneComplete = TreeLogic.state((1..30).map { today.minusDays(it.toLong()) }.toSet(), today)
         assertEquals(1, levelOneComplete.level)
@@ -113,7 +104,6 @@ class TreeLogicTest {
         assertEquals(155, TreeLogic.state((1..155).map { today.minusDays(it.toLong()) }.toSet(), today).totalDays)
     }
 
->>>>>>> settings_redesign
     @Test fun `same day counted once because progress is a set of dates`() {
         assertEquals(1, (setOf(today) + today).size)
     }

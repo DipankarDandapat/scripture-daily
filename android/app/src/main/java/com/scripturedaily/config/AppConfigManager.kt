@@ -31,7 +31,8 @@ data class ConfigSnapshot(val version: String, val values: JsonObject, val sourc
 }
 
 /**
- * Centralised key-value configuration (GET /config).
+ * Centralised key-value configuration (GET /api/v1/app/config) — the only remote configuration source of the app
+ * (Firebase Remote Config was removed). The startup gate (com.scripturedaily.gate) reads update / maintenance values from here.
  *
  *  - Startup: [awaitStartup] runs before Home is shown, but never longer than [STARTUP_TIMEOUT_MS]; if the API is slow or down the
  *    last good copy (or the safe built-in defaults) is applied so the user is never stuck on a loading screen.
@@ -51,6 +52,9 @@ object AppConfigManager {
 
     private val _state = MutableStateFlow(ConfigSnapshot("defaults", SAFE_DEFAULTS, ConfigSource.DEFAULTS, 0L))
     val state: StateFlow<ConfigSnapshot> = _state.asStateFlow()
+    private val _lastFetchOk = MutableStateFlow<Boolean?>(null)
+    /** Result of the most recent attempt to reach the server: true (200/304), false (network/server error), null (not tried). */
+    val lastFetchOk: StateFlow<Boolean?> = _lastFetchOk.asStateFlow()
     private val _startupDone = MutableStateFlow(false)
     val startupDone: StateFlow<Boolean> = _startupDone.asStateFlow()
 
@@ -93,9 +97,9 @@ object AppConfigManager {
         val minMs = current.int("config_refresh_min_interval_seconds", DEFAULT_MIN_INTERVAL_SECONDS) * 1000L
         if (!force && now - lastAttemptMs < minMs) return true
         lastAttemptMs = now
-        runCatching {
+        val ok = runCatching {
             ApiClient.ensureInit(app)
-            val response = withContext(Dispatchers.IO) { ApiClient.api.config(etag) }
+            val response = withContext(Dispatchers.IO) { ApiClient.api.appConfig(etag) }
             when {
                 response.code() == 304 -> { _state.value = _state.value.copy(fetchedAtMs = now); true }
                 response.isSuccessful -> {
@@ -109,11 +113,14 @@ object AppConfigManager {
                 else -> false
             }
         }.getOrDefault(false)
+        _lastFetchOk.value = ok
+        ok
     }
 
     /** Called once before Home appears. Returns whether fresh data was obtained; either way a usable config is in place afterwards. */
     suspend fun awaitStartup(): Boolean {
         val fresh = withTimeoutOrNull(STARTUP_TIMEOUT_MS) { refresh(force = true) } ?: false
+        if (!fresh) _lastFetchOk.value = false   // a timeout counts as "could not verify"
         _startupDone.value = true
         return fresh
     }

@@ -215,6 +215,7 @@ object AppOpenAdManager {
         val activity = AdManager.currentActivity() ?: return
         val cfg = AdManager.config.value
         if (cfg.resolve(PLACEMENT, AdFormat.APP_OPEN) == null || !AdManager.canRequest()) return
+        if (com.scripturedaily.gate.GateState.blocking) return   // never over the update / maintenance screens
         val loaded = ad
         if (loaded == null) { preload(activity); return }
         if (showing || !AdManager.appOpenCooldownPassed() || !AdManager.fullScreenCooldownPassed()) return
