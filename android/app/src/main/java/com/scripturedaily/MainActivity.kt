@@ -700,7 +700,7 @@ private fun ScriptureApp(
             else ApiClient.api.removeFavorite(v.id)
         } catch (_: Exception) {}
         snackbarHostState.showSnackbar(if (nowFavorite) "Saved verse" else "Removed from saved verses")
-        if (nowFavorite) MetaAnalytics.track(context, MetaAnalytics.Event.VERSE_SAVED, MetaAnalytics.params("scripture" to v.scripture))
+        if (nowFavorite) MetaAnalytics.track(context, MetaAnalytics.Event.VERSE_SAVED)
         // Trigger in-app review at 3rd, 10th, 25th save
         if (nowFavorite) {
             val newCount = savedVerses.size + 1
@@ -729,7 +729,7 @@ private fun ScriptureApp(
                 store.edit().putString("mood_done_date", java.time.LocalDate.now().toString()).apply()  // survives restarts
                 scope.launch { kotlinx.coroutines.delay(1800); moodCardHidden = true }                   // let the confirmation show, then animate away
                 runCatching { withContext(Dispatchers.IO) { ApiClient.api.recordMood(MoodCheckinInput(code, remote.id)) } }
-                MetaAnalytics.track(context, MetaAnalytics.Event.MOOD_CHECKED_IN, MetaAnalytics.params("mood" to code))
+                MetaAnalytics.track(context, MetaAnalytics.Event.MOOD_CHECKED_IN)
             }
         } catch (_: Exception) {
             moodError = "Couldn't reach the server. Check your connection and try again."
@@ -888,6 +888,10 @@ private fun ScriptureApp(
         todayDate = java.time.LocalDate.now()
     }
 
+    // Meta first_verse_read: the first time a verse is on screen on Home on this install (fires at most once per install).
+    LaunchedEffect(verse?.id, page, configured, setupGuidePending, overlay) {
+        if (configured && !setupGuidePending && page == "Home" && verse != null && overlay == null) MetaAnalytics.trackFirstVerseRead(context)
+    }
     // Reading counts once the daily verse has been on screen for a few seconds.
     LaunchedEffect(verse?.id, page, todayDate, configured, setupGuidePending) {
         if (configured && !setupGuidePending && page == "Home" && verse != null && overlay == null) {
@@ -984,7 +988,7 @@ private fun ScriptureApp(
                                         configured = true
                         setupGuidePending = true
                         homeLoadKey++
-                        MetaAnalytics.track(context, MetaAnalytics.Event.ONBOARDING_COMPLETED, MetaAnalytics.params("tradition" to (religions.firstOrNull { it.id == religion }?.name ?: ""), "language_id" to language.toString()))
+                        MetaAnalytics.track(context, MetaAnalytics.Event.ONBOARDING_COMPLETED, MetaAnalytics.params("language_id" to language.toString()))
                     } else error = "Connect to the internet to load the selected scripture catalog."
                 }
             }
@@ -1144,10 +1148,10 @@ private fun ScriptureApp(
                         verse?.let { v ->
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 OutlinedButton(
-                                    onClick = { explainFor = v; markReading(); reportTreeActivity("explain"); MetaAnalytics.track(context, MetaAnalytics.Event.EXPLAIN_OPENED, MetaAnalytics.params("scripture" to v.scripture)) }, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(16.dp),
+                                    onClick = { explainFor = v; markReading(); reportTreeActivity("explain"); MetaAnalytics.track(context, MetaAnalytics.Event.EXPLAIN_OPENED) }, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(16.dp),
                                     border = BorderStroke(1.5.dp, Amber.copy(alpha = 0.5f)), colors = ButtonDefaults.outlinedButtonColors(contentColor = Ink)
                                 ) { Text("🧒  Explain this to me like I'm 5", fontWeight = FontWeight.SemiBold, fontSize = 14.sp) }
-                                if (storyAvailable) OutlinedButton(onClick = { overlay = Overlay.StoryForVerse(v.id); markReading(); reportTreeActivity("story"); MetaAnalytics.track(context, MetaAnalytics.Event.STORY_OPENED, MetaAnalytics.params("scripture" to v.scripture)) }, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(16.dp),
+                                if (storyAvailable) OutlinedButton(onClick = { overlay = Overlay.StoryForVerse(v.id); markReading(); reportTreeActivity("story"); MetaAnalytics.track(context, MetaAnalytics.Event.STORY_OPENED) }, modifier = Modifier.fillMaxWidth().height(48.dp), shape = RoundedCornerShape(16.dp),
                                     border = BorderStroke(1.5.dp, Amber.copy(alpha = 0.5f)), colors = ButtonDefaults.outlinedButtonColors(contentColor = Ink),
                                     contentPadding = PaddingValues(horizontal = 6.dp)) { Text("📖 Story", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1) }
                             }
@@ -1160,7 +1164,7 @@ private fun ScriptureApp(
                         scope.launch { loadToday(true) }
                     },
                     onFavorite = { verse?.let { v -> markReading(); scope.launch { toggleFavorite(v) } } },
-                    onSpread = { verse?.let { v -> markReading(); overlay = Overlay.Studio(v); MetaAnalytics.track(context, MetaAnalytics.Event.SHARE_STUDIO_OPENED, MetaAnalytics.params("scripture" to v.scripture)) } },
+                    onSpread = { verse?.let { v -> markReading(); overlay = Overlay.Studio(v); MetaAnalytics.track(context, MetaAnalytics.Event.SHARE_STUDIO_OPENED) } },
                     onShowLockScreen = { enableLockScreen() },
                     onHideLockScreen = { disableLockScreen() },
                     onHistory = {
