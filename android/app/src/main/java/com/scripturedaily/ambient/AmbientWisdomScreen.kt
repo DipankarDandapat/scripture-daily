@@ -197,7 +197,7 @@ fun AmbientWisdomSettings(
 // ── Activity-aware section ──────────────────────────────────────────────────
 
 @Composable
-private fun ActivityAwareSection(religion: Int) {
+internal fun ActivityAwareSection(religion: Int) {
     val context = LocalContext.current
     val prefs = remember { AmbientWisdom.prefs(context) }
     val scope = rememberCoroutineScope()

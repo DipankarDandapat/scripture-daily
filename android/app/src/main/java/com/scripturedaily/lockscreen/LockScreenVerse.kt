@@ -291,10 +291,29 @@ object LockScreenVerse {
         val contentWidth = (width * 0.84f).toInt()
         val showVerse = showVerseOverride ?: prefs.getBoolean("wallpaper_show_verse", true)
         val showReference = showReferenceOverride ?: prefs.getBoolean("wallpaper_show_reference", true)
-        val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.accent; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD); if (scripture.all { it.code < 128 }) letterSpacing = 0.08f }
-        val bodyPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.primaryText; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD) }
-        val metaPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.secondaryText; typeface = Typeface.DEFAULT }
-        val footerPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = palette.accent; typeface = Typeface.DEFAULT; textAlign = Paint.Align.CENTER; textSize = width * .028f }
+        // Dynamic text colour: sample the image in the text region and pick black or white for contrast.
+        val textColor = if (imageResource == 0) palette.primaryText
+            else contrastTextColor(bitmap, width, height, textPositionOverride ?: prefs.getString("wallpaper_text_position", "Bottom"))
+        val accentColor = if (imageResource == 0) palette.accent
+            else if (Color.luminance(textColor) > 0.5f) Color.argb(220, 30, 20, 10) else Color.argb(220, 255, 230, 160)
+        val shadowColor = if (Color.luminance(textColor) > 0.5f) Color.argb(180, 255, 255, 255) else Color.argb(200, 0, 0, 0)
+        val titlePaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = accentColor; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            if (scripture.all { it.code < 128 }) letterSpacing = 0.08f
+            setShadowLayer(width * .012f, 0f, width * .004f, shadowColor)
+        }
+        val bodyPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = textColor; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            setShadowLayer(width * .016f, 0f, width * .005f, shadowColor)
+        }
+        val metaPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = textColor; alpha = 210; typeface = Typeface.DEFAULT
+            setShadowLayer(width * .012f, 0f, width * .004f, shadowColor)
+        }
+        val footerPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = accentColor; typeface = Typeface.DEFAULT; textAlign = Paint.Align.CENTER; textSize = width * .028f
+            setShadowLayer(width * .010f, 0f, width * .003f, shadowColor)
+        }
         val title = layout(if (prefs.getBoolean("reading_scripture", true)) scripture.uppercase() else "", titlePaint, width * .034f, contentWidth, 2)
         val referenceLayout = layout(if (showReference && prefs.getBoolean("reading_reference", true)) reference else "", metaPaint, width * .032f, contentWidth, 3)
         val preferredSize = when (textSizeOverride ?: prefs.getString("wallpaper_text_size", "Medium")) {
@@ -321,14 +340,6 @@ object LockScreenVerse {
             "Middle" -> (height * .50f - blockHeight / 2f).coerceAtLeast(height * .25f)
             else -> (height * .72f - blockHeight).coerceAtLeast(height * .52f)
         }
-        val panelPadding = width * .045f
-        val panelTop = blockTop - panelPadding
-        val panelBottom = blockTop + blockHeight + panelPadding
-        val panelPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.argb(if (imageResource != 0) 132 else 82, 12, 8, 25)
-        }
-        val panelRect = RectF(width * .055f, panelTop, width * .945f, panelBottom)
-        canvas.drawRoundRect(panelRect, width * .045f, width * .045f, panelPaint)
         var y = blockTop
         canvas.save(); canvas.translate((width - contentWidth) / 2f, y)
         if (title.height > 0) title.draw(canvas)
@@ -448,6 +459,42 @@ object LockScreenVerse {
                 } else canvas.drawCircle(cx, cy, width * .12f, accent)
             }
         }
+    }
+
+    /**
+     * Samples a horizontal band of the bitmap in the text region and returns Color.WHITE or Color.BLACK
+     * depending on which gives better contrast against the average luminance of that area.
+     */
+    private fun contrastTextColor(bitmap: Bitmap, width: Int, height: Int, position: String?): Int {
+        val bandTop = when (position) {
+            "Top" -> (height * 0.22f).toInt()
+            "Middle" -> (height * 0.38f).toInt()
+            else -> (height * 0.58f).toInt()   // Bottom (default)
+        }
+        val bandBottom = (bandTop + height * 0.32f).toInt().coerceAtMost(height - 1)
+        val sampleLeft = (width * 0.08f).toInt()
+        val sampleRight = (width * 0.92f).toInt()
+        val stepX = maxOf(1, (sampleRight - sampleLeft) / 20)
+        val stepY = maxOf(1, (bandBottom - bandTop) / 10)
+        var totalLum = 0.0
+        var count = 0
+        var y = bandTop
+        while (y < bandBottom) {
+            var x = sampleLeft
+            while (x < sampleRight) {
+                val px = bitmap.getPixel(x.coerceIn(0, bitmap.width - 1), y.coerceIn(0, bitmap.height - 1))
+                val r = Color.red(px) / 255.0
+                val g = Color.green(px) / 255.0
+                val b = Color.blue(px) / 255.0
+                // Relative luminance (WCAG formula)
+                totalLum += 0.2126 * r + 0.7152 * g + 0.0722 * b
+                count++
+                x += stepX
+            }
+            y += stepY
+        }
+        val avgLum = if (count > 0) totalLum / count else 0.5
+        return if (avgLum > 0.45) Color.BLACK else Color.WHITE
     }
 
     private fun shuffleSeed(prefs: android.content.SharedPreferences): Long =

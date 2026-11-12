@@ -24,25 +24,50 @@ object Motifs {
     /** Draws [motif] for a card of w×h. Unknown motifs draw nothing (a plain card). */
     fun draw(canvas: Canvas, motif: String, accent: Int, w: Int, h: Int) {
         when (motif) {
-            "om" -> om(canvas, accent, w, h)
-            "lotus" -> lotus(canvas, accent, w, h)
-            "diya" -> diya(canvas, accent, w, h)
-            "peacock" -> peacock(canvas, accent, w, h)
-            "trident" -> trident(canvas, accent, w, h)
-            "cross" -> cross(canvas, accent, w, h)
-            "dove" -> dove(canvas, accent, w, h)
-            "olive" -> olive(canvas, accent, w, h)
-            "stained" -> stained(canvas, accent, w, h)
-            "geometry" -> geometry(canvas, accent, w, h)
-            "crescent" -> crescent(canvas, accent, w, h)
-            "mosque" -> mosque(canvas, accent, w, h)
-            "arabesque" -> arabesque(canvas, accent, w, h)
-            "dharma" -> dharma(canvas, accent, w, h)
-            "bodhi" -> bodhi(canvas, accent, w, h)
-            "halo" -> halo(canvas, accent, w, h)
-            "mountains" -> mountains(canvas, accent, w, h)
-            "sunrise" -> sunrise(canvas, accent, w, h)
-            "leaves" -> leaves(canvas, accent, w, h)
+            "om"             -> om(canvas, accent, w, h)
+            "lotus"          -> lotus(canvas, accent, w, h)
+            "diya"           -> diya(canvas, accent, w, h)
+            "peacock"        -> peacock(canvas, accent, w, h)
+            "trident"        -> trident(canvas, accent, w, h)
+            "rangoli"        -> rangoli(canvas, accent, w, h)
+            "chakra"         -> chakra(canvas, accent, w, h)
+            "kalash"         -> kalash(canvas, accent, w, h)
+            "yantra"         -> yantra(canvas, accent, w, h)
+            "templeArch"     -> templeArch(canvas, accent, w, h)
+            "cross"          -> cross(canvas, accent, w, h)
+            "dove"           -> dove(canvas, accent, w, h)
+            "olive"          -> olive(canvas, accent, w, h)
+            "stained"        -> stained(canvas, accent, w, h)
+            "ichthys"        -> ichthys(canvas, accent, w, h)
+            "candle"         -> candle(canvas, accent, w, h)
+            "wheat"          -> wheat(canvas, accent, w, h)
+            "anchor"         -> anchor(canvas, accent, w, h)
+            "vine"           -> vine(canvas, accent, w, h)
+            "geometry"       -> geometry(canvas, accent, w, h)
+            "crescent"       -> crescent(canvas, accent, w, h)
+            "mosque"         -> mosque(canvas, accent, w, h)
+            "arabesque"      -> arabesque(canvas, accent, w, h)
+            "lantern"        -> lantern(canvas, accent, w, h)
+            "muqarnas"       -> muqarnas(canvas, accent, w, h)
+            "starPolygon"    -> starPolygon(canvas, accent, w, h)
+            "prayerBeads"    -> prayerBeads(canvas, accent, w, h)
+            "calligraphyArch"-> calligraphyArch(canvas, accent, w, h)
+            "dharma"         -> dharma(canvas, accent, w, h)
+            "bodhi"          -> bodhi(canvas, accent, w, h)
+            "halo"           -> halo(canvas, accent, w, h)
+            "endlessKnot"    -> endlessKnot(canvas, accent, w, h)
+            "zenCircle"      -> zenCircle(canvas, accent, w, h)
+            "prayerFlags"    -> prayerFlags(canvas, accent, w, h)
+            "stupa"          -> stupa(canvas, accent, w, h)
+            "koi"            -> koi(canvas, accent, w, h)
+            "mountains"      -> mountains(canvas, accent, w, h)
+            "sunrise"        -> sunrise(canvas, accent, w, h)
+            "leaves"         -> leaves(canvas, accent, w, h)
+            "treeOfLife"     -> treeOfLife(canvas, accent, w, h)
+            "galaxy"         -> galaxy(canvas, accent, w, h)
+            "feather"        -> feather(canvas, accent, w, h)
+            "spiral"         -> spiral(canvas, accent, w, h)
+            "aurora"         -> aurora(canvas, accent, w, h)
         }
     }
 
@@ -122,6 +147,74 @@ object Motifs {
         for (i in 1..3) c.drawCircle(cx, h * 0.5f, w * 0.2f * i, stroke(accent, w, 24))
     }
 
+    private fun rangoli(c: Canvas, accent: Int, w: Int, h: Int) {
+        val cx = w / 2f; val cy = h * 0.5f; val line = stroke(accent, w, 50, 0.003f)
+        for (i in 0 until 8) {
+            val a = i * PI / 4
+            for (r in listOf(0.15f, 0.28f, 0.40f)) {
+                val x = cx + (w * r * cos(a)).toFloat(); val y = cy + (w * r * sin(a)).toFloat()
+                c.drawCircle(x, y, w * 0.025f, line)
+            }
+        }
+        for (r in listOf(0.15f, 0.28f, 0.40f)) c.drawCircle(cx, cy, w * r, stroke(accent, w, 30, 0.002f))
+        c.drawCircle(cx, cy, w * 0.05f, fill(accent, 60))
+    }
+
+    private fun chakra(c: Canvas, accent: Int, w: Int, h: Int) {
+        val cx = w / 2f; val cy = h * 0.5f; val r = w * 0.38f; val line = stroke(accent, w, 70, 0.005f)
+        c.drawCircle(cx, cy, r, line); c.drawCircle(cx, cy, r * 0.18f, fill(accent, 80))
+        for (i in 0 until 24) {
+            val a = i * 2 * PI / 24
+            val x1 = cx + (r * 0.18f * cos(a)).toFloat(); val y1 = cy + (r * 0.18f * sin(a)).toFloat()
+            val x2 = cx + (r * cos(a)).toFloat(); val y2 = cy + (r * sin(a)).toFloat()
+            c.drawLine(x1, y1, x2, y2, stroke(accent, w, 40, 0.002f))
+        }
+    }
+
+    private fun kalash(c: Canvas, accent: Int, w: Int, h: Int) {
+        val cx = w / 2f; val by = h * 0.65f; val line = stroke(accent, w, 80, 0.005f)
+        val body = Path().apply {
+            moveTo(cx - w * 0.12f, by - w * 0.35f)
+            quadTo(cx - w * 0.22f, by - w * 0.15f, cx - w * 0.18f, by)
+            lineTo(cx + w * 0.18f, by)
+            quadTo(cx + w * 0.22f, by - w * 0.15f, cx + w * 0.12f, by - w * 0.35f)
+            close()
+        }
+        c.drawPath(body, fill(accent, 30)); c.drawPath(body, line)
+        c.drawLine(cx - w * 0.12f, by - w * 0.35f, cx + w * 0.12f, by - w * 0.35f, line)
+        c.drawLine(cx - w * 0.07f, by - w * 0.38f, cx + w * 0.07f, by - w * 0.38f, line)
+        c.drawLine(cx, by - w * 0.38f, cx, by - w * 0.52f, line)
+        c.drawCircle(cx, by - w * 0.55f, w * 0.04f, fill(accent, 70))
+        for (i in 1..3) c.drawLine(cx - w * 0.06f * i, by - w * 0.2f, cx + w * 0.06f * i, by - w * 0.2f, stroke(accent, w, 40, 0.002f))
+    }
+
+    private fun yantra(c: Canvas, accent: Int, w: Int, h: Int) {
+        val cx = w / 2f; val cy = h * 0.5f; val r = w * 0.38f; val line = stroke(accent, w, 60, 0.003f)
+        c.drawCircle(cx, cy, r, line)
+        for (rot in listOf(0f, 60f, 120f)) {
+            val tri = Path()
+            for (i in 0 until 3) {
+                val a = Math.toRadians((rot + i * 120.0))
+                val x = cx + (r * 0.85f * cos(a)).toFloat(); val y = cy + (r * 0.85f * sin(a)).toFloat()
+                if (i == 0) tri.moveTo(x, y) else tri.lineTo(x, y)
+            }
+            tri.close(); c.drawPath(tri, stroke(accent, w, 70, 0.004f))
+        }
+        c.drawCircle(cx, cy, r * 0.15f, fill(accent, 80))
+    }
+
+    private fun templeArch(c: Canvas, accent: Int, w: Int, h: Int) {
+        val l = w * 0.18f; val r = w * 0.82f; val bot = h * 0.85f; val mid = (l + r) / 2f
+        val arch = Path().apply {
+            moveTo(l, bot); lineTo(l, h * 0.45f)
+            arcTo(l, h * 0.2f, r, h * 0.45f + (r - l) / 2, 180f, 180f, false)
+            lineTo(r, bot); close()
+        }
+        c.drawPath(arch, fill(accent, 20)); c.drawPath(arch, stroke(accent, w, 80, 0.005f))
+        c.drawLine(mid, h * 0.2f, mid, bot, stroke(accent, w, 40, 0.003f))
+        for (i in 1..3) c.drawLine(l, h * (0.5f + i * 0.08f), r, h * (0.5f + i * 0.08f), stroke(accent, w, 25, 0.002f))
+    }
+
     // ── Christian ───────────────────────────────────────────────────────────
     private fun cross(c: Canvas, accent: Int, w: Int, h: Int) {
         val cx = w / 2f; val cy = h * 0.48f
@@ -182,6 +275,77 @@ object Motifs {
         for (i in 0 until 8) { val a = i * PI / 4; c.drawLine(mid, top + (r - l) * 0.38f, mid + (cos(a) * (r - l) * 0.16f).toFloat(), top + (r - l) * 0.38f + (sin(a) * (r - l) * 0.16f).toFloat(), line) }
         val pane = fill(accent, 30)
         c.drawRect(l + (r - l) / 3, h * 0.5f, mid, h * 0.62f, pane); c.drawRect(mid, h * 0.4f, r - (r - l) / 3, h * 0.5f, pane)
+    }
+
+    private fun ichthys(c: Canvas, accent: Int, w: Int, h: Int) {
+        val cx = w / 2f; val cy = h * 0.5f; val line = stroke(accent, w, 80, 0.006f)
+        val fish = Path().apply {
+            moveTo(cx - w * 0.28f, cy)
+            cubicTo(cx - w * 0.28f, cy - w * 0.14f, cx + w * 0.18f, cy - w * 0.14f, cx + w * 0.28f, cy)
+            cubicTo(cx + w * 0.18f, cy + w * 0.14f, cx - w * 0.28f, cy + w * 0.14f, cx - w * 0.28f, cy)
+        }
+        c.drawPath(fish, stroke(accent, w, 80, 0.006f))
+        val tail = Path().apply {
+            moveTo(cx + w * 0.28f, cy); lineTo(cx + w * 0.44f, cy - w * 0.12f)
+            lineTo(cx + w * 0.44f, cy + w * 0.12f); close()
+        }
+        c.drawPath(tail, stroke(accent, w, 80, 0.006f))
+        c.drawCircle(cx - w * 0.1f, cy, w * 0.012f, fill(accent, 120))
+    }
+
+    private fun candle(c: Canvas, accent: Int, w: Int, h: Int) {
+        val cx = w / 2f; val by = h * 0.72f
+        c.drawRoundRect(cx - w * 0.06f, by - w * 0.38f, cx + w * 0.06f, by, w * 0.02f, w * 0.02f, fill(accent, 40))
+        c.drawRoundRect(cx - w * 0.06f, by - w * 0.38f, cx + w * 0.06f, by, w * 0.02f, w * 0.02f, stroke(accent, w, 80, 0.004f))
+        val flame = Path().apply {
+            moveTo(cx, by - w * 0.52f); quadTo(cx + w * 0.06f, by - w * 0.42f, cx, by - w * 0.38f); quadTo(cx - w * 0.06f, by - w * 0.42f, cx, by - w * 0.52f); close()
+        }
+        c.drawPath(flame, fill(accent, 90))
+        for (i in 1..4) c.drawCircle(cx, by - w * 0.45f, w * 0.08f * i, stroke(accent, w, 30 - i * 5, 0.002f))
+    }
+
+    private fun wheat(c: Canvas, accent: Int, w: Int, h: Int) {
+        val line = stroke(accent, w, 70, 0.004f)
+        for (s in listOf(-1f, 0f, 1f)) {
+            val cx = w * (0.5f + s * 0.18f); val top = h * 0.2f; val bot = h * 0.78f
+            c.drawLine(cx, top, cx, bot, line)
+            for (i in 0..5) {
+                val y = top + (bot - top) * i / 5f
+                for (side in listOf(-1f, 1f)) {
+                    val gx = cx + side * w * 0.07f; val gy = y - w * 0.04f
+                    c.drawLine(cx, y, gx, gy, line)
+                    c.drawOval(gx - w * 0.025f, gy - w * 0.05f, gx + w * 0.025f, gy, fill(accent, 35))
+                }
+            }
+        }
+    }
+
+    private fun anchor(c: Canvas, accent: Int, w: Int, h: Int) {
+        val cx = w / 2f; val cy = h * 0.5f; val line = stroke(accent, w, 80, 0.007f)
+        c.drawCircle(cx, cy - w * 0.28f, w * 0.06f, line)
+        c.drawLine(cx, cy - w * 0.22f, cx, cy + w * 0.3f, line)
+        val cross = Path().apply { moveTo(cx - w * 0.14f, cy - w * 0.14f); lineTo(cx + w * 0.14f, cy - w * 0.14f) }
+        c.drawPath(cross, line)
+        val arc = Path().apply { addArc(cx - w * 0.2f, cy + w * 0.1f, cx + w * 0.2f, cy + w * 0.5f, 0f, 180f) }
+        c.drawPath(arc, line)
+        c.drawLine(cx - w * 0.2f, cy + w * 0.3f, cx - w * 0.08f, cy + w * 0.3f, line)
+        c.drawLine(cx + w * 0.08f, cy + w * 0.3f, cx + w * 0.2f, cy + w * 0.3f, line)
+    }
+
+    private fun vine(c: Canvas, accent: Int, w: Int, h: Int) {
+        val line = stroke(accent, w, 70, 0.004f)
+        val stem = Path().apply { moveTo(w * 0.08f, h * 0.9f); cubicTo(w * 0.3f, h * 0.6f, w * 0.7f, h * 0.4f, w * 0.92f, h * 0.1f) }
+        c.drawPath(stem, line)
+        val pm = android.graphics.PathMeasure(stem, false); val pos = FloatArray(2); val tan = FloatArray(2)
+        for (i in 1..7) {
+            pm.getPosTan(pm.length * i / 8f, pos, tan)
+            val ang = Math.toDegrees(Math.atan2(tan[1].toDouble(), tan[0].toDouble())).toFloat()
+            for (side in listOf(-1f, 1f)) {
+                c.save(); c.translate(pos[0], pos[1]); c.rotate(ang + side * 60f)
+                val lf = Path().apply { moveTo(0f, 0f); quadTo(w * 0.06f, -w * 0.04f, w * 0.12f, 0f); quadTo(w * 0.06f, w * 0.04f, 0f, 0f); close() }
+                c.drawPath(lf, fill(accent, 30)); c.drawPath(lf, stroke(accent, w, 70, 0.002f)); c.restore()
+            }
+        }
     }
 
     // ── Islamic ──────────────────────────────────────────────────────────────
@@ -255,6 +419,77 @@ object Motifs {
         for (i in 1..3) c.drawCircle(cx, cy, w * 0.14f * i, stroke(accent, w, 30, 0.004f))
     }
 
+    private fun lantern(c: Canvas, accent: Int, w: Int, h: Int) {
+        val cx = w / 2f; val cy = h * 0.5f; val line = stroke(accent, w, 80, 0.005f)
+        val body = Path().apply {
+            moveTo(cx - w * 0.1f, cy - w * 0.28f); lineTo(cx - w * 0.16f, cy + w * 0.18f)
+            lineTo(cx + w * 0.16f, cy + w * 0.18f); lineTo(cx + w * 0.1f, cy - w * 0.28f); close()
+        }
+        c.drawPath(body, fill(accent, 30)); c.drawPath(body, line)
+        c.drawLine(cx - w * 0.1f, cy - w * 0.28f, cx + w * 0.1f, cy - w * 0.28f, line)
+        c.drawLine(cx - w * 0.16f, cy + w * 0.18f, cx + w * 0.16f, cy + w * 0.18f, line)
+        c.drawLine(cx, cy - w * 0.28f, cx, cy - w * 0.36f, line)
+        for (i in 1..3) c.drawLine(cx - w * 0.16f, cy - w * 0.1f + i * w * 0.1f, cx + w * 0.16f, cy - w * 0.1f + i * w * 0.1f, stroke(accent, w, 40, 0.002f))
+        for (i in 1..4) c.drawCircle(cx, cy, w * 0.12f * i, stroke(accent, w, 20, 0.002f))
+    }
+
+    private fun muqarnas(c: Canvas, accent: Int, w: Int, h: Int) {
+        val line = stroke(accent, w, 60, 0.003f); val fill2 = fill(accent, 22)
+        val levels = listOf(0.18f to 0.08f, 0.28f to 0.12f, 0.40f to 0.16f)
+        for ((yFrac, size) in levels) {
+            val y = h * yFrac; val count = (w / (size * w * 2.2f)).toInt().coerceAtLeast(3)
+            val step = w / count.toFloat()
+            for (i in 0 until count) {
+                val cx = step * (i + 0.5f)
+                val cell = Path().apply {
+                    moveTo(cx, y - size * w); lineTo(cx + size * w, y); lineTo(cx, y + size * w * 0.5f); lineTo(cx - size * w, y); close()
+                }
+                c.drawPath(cell, fill2); c.drawPath(cell, line)
+            }
+        }
+    }
+
+    private fun starPolygon(c: Canvas, accent: Int, w: Int, h: Int) {
+        val cx = w / 2f; val cy = h * 0.5f
+        for (points in listOf(8, 6)) {
+            val r1 = w * (if (points == 8) 0.38f else 0.24f); val r2 = r1 * 0.45f
+            val star = Path()
+            for (i in 0 until points * 2) {
+                val r = if (i % 2 == 0) r1 else r2
+                val a = -PI / 2 + i * PI / points
+                val x = cx + (r * cos(a)).toFloat(); val y = cy + (r * sin(a)).toFloat()
+                if (i == 0) star.moveTo(x, y) else star.lineTo(x, y)
+            }
+            star.close(); c.drawPath(star, stroke(accent, w, 70, 0.004f))
+        }
+        c.drawCircle(cx, cy, w * 0.06f, fill(accent, 80))
+    }
+
+    private fun prayerBeads(c: Canvas, accent: Int, w: Int, h: Int) {
+        val cx = w / 2f; val cy = h * 0.5f; val r = w * 0.36f; val bead = fill(accent, 70)
+        c.drawCircle(cx, cy, r, stroke(accent, w, 30, 0.002f))
+        for (i in 0 until 33) {
+            val a = i * 2 * PI / 33
+            c.drawCircle(cx + (r * cos(a)).toFloat(), cy + (r * sin(a)).toFloat(), w * 0.018f, bead)
+        }
+        c.drawLine(cx, cy - r, cx, cy - r - w * 0.1f, stroke(accent, w, 60, 0.004f))
+        c.drawCircle(cx, cy - r - w * 0.13f, w * 0.025f, fill(accent, 90))
+    }
+
+    private fun calligraphyArch(c: Canvas, accent: Int, w: Int, h: Int) {
+        val l = w * 0.12f; val r = w * 0.88f; val bot = h * 0.88f; val mid = (l + r) / 2f
+        val arch = Path().apply {
+            moveTo(l, bot); lineTo(l, h * 0.42f)
+            arcTo(l, h * 0.18f, r, h * 0.42f + (r - l) / 2, 180f, 180f, false)
+            lineTo(r, bot)
+        }
+        c.drawPath(arch, stroke(accent, w, 80, 0.005f))
+        for (i in 1..2) c.drawPath(arch.also {}, stroke(accent, w, 30, 0.002f))
+        val line = stroke(accent, w, 40, 0.003f)
+        for (i in 0 until 6) c.drawLine(l + (r - l) * i / 5f, h * 0.55f, l + (r - l) * i / 5f, bot, line)
+        c.drawCircle(mid, h * 0.3f, w * 0.04f, fill(accent, 70))
+    }
+
     // ── Buddhist ─────────────────────────────────────────────────────────────
     private fun dharma(c: Canvas, accent: Int, w: Int, h: Int) {
         val cx = w / 2f; val cy = h * 0.5f; val r = w * 0.4f; val line = stroke(accent, w, 80, 0.006f)
@@ -321,6 +556,133 @@ object Motifs {
         repeat(22) {
             c.save(); c.translate(rnd.nextFloat() * w, rnd.nextFloat() * h); c.rotate(rnd.nextFloat() * 360f); val s = 0.5f + rnd.nextFloat() * 1.2f; c.scale(s, s)
             c.drawPath(leaf, fill(accent, 16 + rnd.nextInt(26))); c.drawPath(leaf, stroke(accent, w, 36, 0.002f)); c.restore()
+        }
+    }
+
+    private fun endlessKnot(c: Canvas, accent: Int, w: Int, h: Int) {
+        val cx = w / 2f; val cy = h * 0.5f; val r = w * 0.3f; val line = stroke(accent, w, 70, 0.005f)
+        val path = Path().apply {
+            moveTo(cx - r, cy)
+            cubicTo(cx - r, cy - r, cx, cy - r, cx, cy)
+            cubicTo(cx, cy + r, cx + r, cy + r, cx + r, cy)
+            cubicTo(cx + r, cy - r, cx, cy - r, cx, cy)
+            cubicTo(cx, cy + r, cx - r, cy + r, cx - r, cy)
+        }
+        c.drawPath(path, line)
+        for (i in 1..2) c.drawCircle(cx, cy, r * 0.3f * i, stroke(accent, w, 30, 0.002f))
+    }
+
+    private fun zenCircle(c: Canvas, accent: Int, w: Int, h: Int) {
+        val cx = w / 2f; val cy = h * 0.5f
+        val brush = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE; color = accent; alpha = 90
+            strokeWidth = w * 0.022f; strokeCap = Paint.Cap.ROUND
+        }
+        c.drawPath(Path().apply { addArc(cx - w * 0.34f, cy - w * 0.34f, cx + w * 0.34f, cy + w * 0.34f, 120f, 300f) }, brush)
+        c.drawCircle(cx, cy, w * 0.04f, fill(accent, 50))
+    }
+
+    private fun prayerFlags(c: Canvas, accent: Int, w: Int, h: Int) {
+        val line = stroke(accent, w, 60, 0.003f)
+        c.drawLine(0f, h * 0.22f, w.toFloat(), h * 0.28f, line)
+        val alphas = listOf(50, 35, 45, 30, 55)
+        for (i in 0..4) {
+            val x = w * (0.08f + i * 0.2f); val y = h * (0.22f + i * 0.012f)
+            val flag = Path().apply { moveTo(x, y); lineTo(x + w * 0.14f, y); lineTo(x + w * 0.14f, y + h * 0.1f); lineTo(x, y + h * 0.1f); close() }
+            c.drawPath(flag, fill(accent, alphas[i])); c.drawPath(flag, line)
+        }
+    }
+
+    private fun stupa(c: Canvas, accent: Int, w: Int, h: Int) {
+        val cx = w / 2f; val sil = fill(accent, 45); val line = stroke(accent, w, 70, 0.004f)
+        val base = Path().apply { moveTo(w * 0.15f, h * 0.88f); lineTo(w * 0.85f, h * 0.88f); lineTo(w * 0.78f, h * 0.72f); lineTo(w * 0.22f, h * 0.72f); close() }
+        c.drawPath(base, sil); c.drawPath(base, line)
+        val dome = Path().apply { addArc(cx - w * 0.22f, h * 0.44f, cx + w * 0.22f, h * 0.72f, 180f, 180f) }
+        c.drawPath(dome, sil); c.drawPath(dome, line)
+        c.drawLine(cx, h * 0.44f, cx, h * 0.18f, line)
+        for (i in 1..4) c.drawLine(cx - w * 0.04f, h * (0.44f - i * 0.05f), cx + w * 0.04f, h * (0.44f - i * 0.05f), line)
+        c.drawCircle(cx, h * 0.16f, w * 0.025f, fill(accent, 80))
+    }
+
+    private fun koi(c: Canvas, accent: Int, w: Int, h: Int) {
+        val line = stroke(accent, w, 70, 0.005f)
+        for ((ox, oy, flip) in listOf(Triple(w * 0.3f, h * 0.42f, 1f), Triple(w * 0.7f, h * 0.58f, -1f))) {
+            val body = Path().apply {
+                moveTo(ox, oy - w * 0.22f * flip)
+                cubicTo(ox + w * 0.14f, oy - w * 0.1f * flip, ox + w * 0.14f, oy + w * 0.1f * flip, ox, oy + w * 0.22f * flip)
+                cubicTo(ox - w * 0.14f, oy + w * 0.1f * flip, ox - w * 0.14f, oy - w * 0.1f * flip, ox, oy - w * 0.22f * flip)
+            }
+            c.drawPath(body, fill(accent, 35)); c.drawPath(body, line)
+            c.drawCircle(ox + w * 0.04f, oy - w * 0.14f * flip, w * 0.012f, fill(accent, 100))
+        }
+        c.drawCircle(w / 2f, h * 0.5f, w * 0.28f, stroke(accent, w, 30, 0.002f))
+    }
+
+    private fun treeOfLife(c: Canvas, accent: Int, w: Int, h: Int) {
+        val cx = w / 2f; val line = stroke(accent, w, 60, 0.004f)
+        c.drawLine(cx, h * 0.88f, cx, h * 0.5f, stroke(accent, w, 70, 0.006f))
+        fun branch(x: Float, y: Float, angle: Double, len: Float, depth: Int) {
+            if (depth == 0) return
+            val ex = x + (len * cos(angle)).toFloat(); val ey = y + (len * sin(angle)).toFloat()
+            c.drawLine(x, y, ex, ey, line)
+            branch(ex, ey, angle - 0.45, len * 0.68f, depth - 1)
+            branch(ex, ey, angle + 0.45, len * 0.68f, depth - 1)
+        }
+        branch(cx, h * 0.5f, -PI / 2, w * 0.22f, 5)
+        c.drawCircle(cx, h * 0.88f, w * 0.04f, fill(accent, 60))
+    }
+
+    private fun galaxy(c: Canvas, accent: Int, w: Int, h: Int) {
+        val cx = w / 2f; val cy = h * 0.5f; val rnd = java.util.Random(7)
+        repeat(80) {
+            val r = rnd.nextFloat() * w * 0.44f; val a = rnd.nextFloat() * 2 * PI.toFloat() + r * 0.012f
+            val x = cx + (r * cos(a)).toFloat(); val y = cy + (r * sin(a)).toFloat()
+            c.drawCircle(x, y, w * (0.002f + rnd.nextFloat() * 0.005f), fill(accent, 40 + rnd.nextInt(60)))
+        }
+        for (i in 1..3) c.drawCircle(cx, cy, w * 0.1f * i, stroke(accent, w, 20, 0.002f))
+    }
+
+    private fun feather(c: Canvas, accent: Int, w: Int, h: Int) {
+        val cx = w / 2f; val line = stroke(accent, w, 70, 0.004f)
+        val spine = Path().apply { moveTo(cx, h * 0.18f); quadTo(cx + w * 0.1f, h * 0.5f, cx - w * 0.04f, h * 0.82f) }
+        c.drawPath(spine, stroke(accent, w, 90, 0.005f))
+        val pm = android.graphics.PathMeasure(spine, false); val pos = FloatArray(2); val tan = FloatArray(2)
+        for (i in 1..18) {
+            pm.getPosTan(pm.length * i / 19f, pos, tan)
+            val ang = Math.toDegrees(Math.atan2(tan[1].toDouble(), tan[0].toDouble())).toFloat()
+            val len = w * (0.06f + 0.1f * sin(PI * i / 19.0).toFloat())
+            for (side in listOf(-1f, 1f)) {
+                c.save(); c.translate(pos[0], pos[1]); c.rotate(ang + side * 70f)
+                c.drawLine(0f, 0f, len, 0f, line); c.restore()
+            }
+        }
+    }
+
+    private fun spiral(c: Canvas, accent: Int, w: Int, h: Int) {
+        val cx = w / 2f; val cy = h * 0.5f; val path = Path()
+        var first = true
+        for (i in 0..360) {
+            val a = i * 6 * PI / 180.0; val r = w * 0.008f * i / 20f
+            val x = cx + (r * cos(a)).toFloat(); val y = cy + (r * sin(a)).toFloat()
+            if (first) { path.moveTo(x, y); first = false } else path.lineTo(x, y)
+        }
+        c.drawPath(path, stroke(accent, w, 60, 0.004f))
+        c.drawCircle(cx, cy, w * 0.03f, fill(accent, 70))
+    }
+
+    private fun aurora(c: Canvas, accent: Int, w: Int, h: Int) {
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = accent; strokeCap = Paint.Cap.ROUND }
+        for (i in 0..5) {
+            val y = h * (0.2f + i * 0.08f); val amp = w * (0.06f + i * 0.02f)
+            paint.alpha = 20 + i * 8; paint.strokeWidth = w * (0.006f + i * 0.002f)
+            val wave = Path().apply {
+                moveTo(0f, y)
+                for (x in 0..w step (w / 6)) {
+                    val cy = y + amp * sin(PI * x / (w / 3.0) + i).toFloat()
+                    quadTo(x - w / 12f, cy, x.toFloat(), y + amp * sin(PI * x / (w / 3.0) + i + PI / 2).toFloat())
+                }
+            }
+            c.drawPath(wave, paint)
         }
     }
 }

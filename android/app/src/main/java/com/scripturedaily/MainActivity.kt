@@ -666,13 +666,21 @@ private fun ScriptureApp(
             }
             "lock" -> {
                 if (granted) {
+                    // User allowed notifications: enable all notification toggles and schedule.
+                    store.edit()
+                        .putBoolean("reminders", true)
+                        .putBoolean("notify_verse_updates", true)
+                        .putBoolean("notify_wallpaper_updates", true)
+                        .apply()
+                    reminders = true
+                    VerseSyncWorker.schedule(context, frequency)
                     scope.launch {
                         applyCurrentLockVerse()?.let { snackbarHostState.showSnackbar(it) }
                     }
                 } else {
+                    // Denied: wallpaper is already active, just inform the user softly.
                     scope.launch {
-                        VerseNotifier.cancel(context)
-                        snackbarHostState.showSnackbar("The lock-screen wallpaper is still active. Allow notifications to also receive verse notifications.")
+                        snackbarHostState.showSnackbar("Verse wallpaper is active. Notifications were not enabled — you can turn them on in Settings.")
                     }
                 }
             }
@@ -844,22 +852,37 @@ private fun ScriptureApp(
 
     fun enableLockScreen() {
         lockScreen = true
-        store.edit().putBoolean("lock_screen", true)
-            .putBoolean("notify_verse_updates", true)
-            .putBoolean("notify_wallpaper_updates", true)
-            .apply()
-        val needsPermission = Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        store.edit().putBoolean("lock_screen", true).apply()
         scope.launch {
+            // 1. Apply wallpaper immediately — independent of notification permission.
             val message = applyCurrentLockVerse(forceWallpaper = true)
             if (message?.startsWith("No verse") == true) {
+                lockScreen = false
+                store.edit().putBoolean("lock_screen", false).apply()
                 snackbarHostState.showSnackbar(message)
                 return@launch
             }
-            if (needsPermission) {
-                permissionTarget = "lock"
-                notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-            } else message?.let { snackbarHostState.showSnackbar(it) }
+            message?.let { snackbarHostState.showSnackbar(it) }
+            // 2. Ask for notification permission only if not yet granted and not yet asked.
+            if (Build.VERSION.SDK_INT >= 33 &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                val alreadyAsked = store.getBoolean("notification_permission_asked", false)
+                if (!alreadyAsked) {
+                    store.edit().putBoolean("notification_permission_asked", true).apply()
+                    permissionTarget = "lock"
+                    notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                }
+                // If already asked and denied, wallpaper is still active — do nothing more.
+            } else {
+                // Permission already granted: enable all notification toggles.
+                store.edit()
+                    .putBoolean("reminders", true)
+                    .putBoolean("notify_verse_updates", true)
+                    .putBoolean("notify_wallpaper_updates", true)
+                    .apply()
+                reminders = true
+                VerseSyncWorker.schedule(context, frequency)
+            }
         }
     }
 
@@ -1711,46 +1734,58 @@ private fun Onboarding(
                 val selected = religion == item.id
                 val scriptureNames = item.scriptures.joinToString(", ") { it.name }
                 val traditionIconRes = when (item.code.lowercase()) {
-                    "hinduism"       -> R.drawable.ic_tradition_hinduism
-                    "christianity"   -> R.drawable.ic_tradition_christianity
-                    "islam"          -> R.drawable.ic_tradition_islam
-                    "buddhism"       -> R.drawable.ic_tradition_buddhism
-                    else             -> R.drawable.ic_tradition_general_wisdom
+                    "hinduism"     -> R.drawable.ic_tradition_hinduism
+                    "christianity" -> R.drawable.ic_tradition_christianity
+                    "islam"        -> R.drawable.ic_tradition_islam
+                    "buddhism"     -> R.drawable.ic_tradition_buddhism
+                    else           -> R.drawable.ic_tradition_general_wisdom
                 }
+                val bannerRes = when (item.code.lowercase()) {
+                    "hinduism"     -> R.drawable.banner_hinduism
+                    "christianity" -> R.drawable.banner_christianity
+                    "islam"        -> R.drawable.banner_islam
+                    "buddhism"     -> R.drawable.banner_buddhism
+                    else           -> R.drawable.banner_general_wisdom
+                }
+                val bg = if (selected) W.SurfaceAlt else W.Surface
                 Box(
-                    Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(16.dp))
-                        .background(if (selected) Amber.copy(alpha = 0.07f) else W.Surface)
-                        .border(BorderStroke(if (selected) 1.5.dp else 1.dp, if (selected) Amber else W.Gold.copy(alpha = 0.3f)), RoundedCornerShape(16.dp))
+                    Modifier.fillMaxWidth().padding(vertical = 3.dp).height(80.dp).clip(RoundedCornerShape(16.dp))
+                        .border(BorderStroke(if (selected) 1.5.dp else 1.dp, if (selected) W.PurpleMid else W.Gold.copy(alpha = 0.3f)), RoundedCornerShape(16.dp))
                         .clickable { onReligion(item.id); reloadLanguages(item.id) }
                 ) {
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    // Banner artwork on the right — same technique as SettingsHeroHeader
+                    Image(
+                        painter = painterResource(bannerRes), contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        alignment = if (bannerRes == R.drawable.banner_general_wisdom) Alignment.CenterStart else Alignment.CenterEnd,
+                        modifier = Modifier.fillMaxHeight().fillMaxWidth(0.65f).align(Alignment.CenterEnd)
+                    )
+                    // Horizontal veil: surface → transparent
+                    Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to bg, 0.42f to bg, 0.68f to bg.copy(alpha = 0.4f), 1f to Color.Transparent)))
+                    // Top + bottom edge veils
+                    Box(Modifier.fillMaxWidth().height(22.dp).align(Alignment.TopCenter).background(Brush.verticalGradient(listOf(bg, Color.Transparent))))
+                    Box(Modifier.fillMaxWidth().height(22.dp).align(Alignment.BottomCenter).background(Brush.verticalGradient(listOf(Color.Transparent, bg))))
+                    // Content row on top of the veil
+                    Row(Modifier.fillMaxSize().padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             Modifier.size(44.dp).clip(RoundedCornerShape(12.dp))
-                                .background(if (selected) Amber.copy(alpha = 0.15f) else W.SurfaceAlt),
+                                .background(W.Gold.copy(alpha = 0.18f)),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(painter = painterResource(traditionIconRes), contentDescription = null, tint = Color.Unspecified, modifier = Modifier.size(32.dp))
                         }
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(item.name, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, fontSize = 15.sp, color = if (selected) Ink else InkMid)
-                            if (scriptureNames.isNotEmpty()) Text(scriptureNames, fontSize = 12.sp, color = InkSoft)
+                            Text(item.name, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal, fontSize = 15.sp, color = Ink)
+                            if (scriptureNames.isNotEmpty()) Text(scriptureNames, fontSize = 12.sp, color = InkMid, maxLines = 1)
                         }
                         Box(
                             Modifier.size(22.dp).clip(CircleShape)
-                                .background(if (selected) Amber else Color.Transparent)
-                                .border(BorderStroke(1.5.dp, if (selected) Amber else InkSoft.copy(alpha = 0.6f)), CircleShape),
+                                .border(BorderStroke(1.8.dp, if (selected) W.PurpleMid else InkSoft.copy(alpha = 0.6f)), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
-                            if (selected) Box(Modifier.size(8.dp).clip(CircleShape).background(Color.White))
+                            if (selected) Box(Modifier.size(12.dp).clip(CircleShape).background(W.PurpleMid))
                         }
-                        Spacer(Modifier.width(8.dp))
-                        Icon(
-                            painter = painterResource(R.drawable.chevron_right),
-                            contentDescription = null,
-                            tint = if (selected) Amber else InkSoft.copy(alpha = 0.4f),
-                            modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = if (selected) 90f else 0f }
-                        )
                     }
                 }
             }

@@ -6,7 +6,6 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RadialGradient
-import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
 import android.text.Layout
@@ -39,7 +38,7 @@ class LiveWallpaperRenderer {
                 Color.rgb(176, 110, 128), Color.rgb(120, 72, 112), Color.rgb(72, 42, 82), Color.WHITE, Color.rgb(255, 226, 160), false)
             AmbientWisdom.LiveTheme.AFTERNOON -> Palette(
                 Color.rgb(132, 196, 236), Color.rgb(196, 230, 236), Color.rgb(150, 200, 160), Color.rgb(255, 250, 220), Color.rgb(255, 255, 240),
-                Color.rgb(112, 168, 140), Color.rgb(70, 134, 104), Color.rgb(36, 92, 72), Color.WHITE, Color.rgb(255, 236, 170), false)
+                Color.rgb(112, 168, 140), Color.rgb(70, 134, 104), Color.rgb(36, 92, 72), Color.rgb(20, 30, 20), Color.rgb(60, 100, 60), false)
             AmbientWisdom.LiveTheme.EVENING -> Palette(
                 Color.rgb(58, 40, 98), Color.rgb(214, 108, 96), Color.rgb(250, 178, 104), Color.rgb(255, 196, 120), Color.rgb(255, 214, 170),
                 Color.rgb(140, 70, 92), Color.rgb(92, 44, 78), Color.rgb(46, 22, 52), Color.WHITE, Color.rgb(255, 214, 150), false)
@@ -55,7 +54,7 @@ class LiveWallpaperRenderer {
     private val starField = Random(11).let { rnd -> List(70) { floatArrayOf(rnd.nextFloat(), rnd.nextFloat() * 0.6f, 0.6f + rnd.nextFloat() * 1.6f, rnd.nextFloat() * 6.28f) } }
 
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val panelPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val scrimPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val bodyPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.create(Typeface.SERIF, Typeface.NORMAL) }
     private val metaPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD); letterSpacing = 0.08f }
     private val brandPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD); textAlign = Paint.Align.CENTER; letterSpacing = 0.12f }
@@ -155,22 +154,27 @@ class LiveWallpaperRenderer {
             canvas.restore()
         }
 
-        // Verse panel (upper-middle third: clear of the status bar, the clock and most launcher dock rows)
+        // Verse text — no box. A vertical gradient scrim behind the text band ensures readability on any sky colour.
         val body = bodyLayout ?: return
         val ref = refLayout
-        val pad = w * 0.06f
         val gap = h * 0.018f
         val blockH = body.height + gap + (ref?.height ?: 0)
         val top = h * 0.30f
-        val panel = RectF((w - body.width) / 2f - pad, top - pad, (w + body.width) / 2f + pad, top + blockH + pad)
-        panelPaint.color = if (p.stars) Color.argb(96, 6, 10, 30) else Color.argb(92, 20, 10, 30)
-        canvas.drawRoundRect(panel, w * 0.05f, w * 0.05f, panelPaint)
+        val scrimTop = top - h * 0.06f
+        val scrimBottom = top + blockH + h * 0.07f
+        val scrimAlpha = if (p.stars) 140 else 110   // night sky needs a slightly stronger scrim
+        scrimPaint.shader = LinearGradient(
+            0f, scrimTop, 0f, scrimBottom,
+            intArrayOf(Color.TRANSPARENT, withAlpha(Color.BLACK, scrimAlpha), withAlpha(Color.BLACK, scrimAlpha), Color.TRANSPARENT),
+            floatArrayOf(0f, 0.18f, 0.82f, 1f), Shader.TileMode.CLAMP
+        )
+        canvas.drawRect(0f, scrimTop, w.toFloat(), scrimBottom, scrimPaint)
         canvas.save(); canvas.translate((w - body.width) / 2f, top)
         body.draw(canvas)
         if (ref != null) { canvas.translate(0f, body.height + gap); ref.draw(canvas) }
         canvas.restore()
         brandPaint.color = withAlpha(p.text, 170); brandPaint.textSize = max(w, 1) * 0.026f
-        canvas.drawText("WISDOMONE", w / 2f, panel.bottom + h * 0.035f, brandPaint)
+        canvas.drawText("WISDOMONE", w / 2f, scrimBottom + h * 0.025f, brandPaint)
     }
 
     private fun withAlpha(c: Int, a: Int) = Color.argb(a, Color.red(c), Color.green(c), Color.blue(c))
