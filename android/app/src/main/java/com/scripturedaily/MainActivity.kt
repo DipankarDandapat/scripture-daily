@@ -1548,6 +1548,7 @@ private fun SplashScreen(onContinue: () -> Unit) {
     val textAlpha = remember { Animatable(0f) }
     val textOffset = remember { Animatable(24f) }
     val btnAlpha = remember { Animatable(0f) }
+    val footerAlpha = remember { Animatable(0f) }
 
     LaunchedEffect(Unit) {
         kotlinx.coroutines.delay(100)
@@ -1560,35 +1561,123 @@ private fun SplashScreen(onContinue: () -> Unit) {
             launch { textAlpha.animateTo(1f, tween(600, easing = EaseOutCubic)) }
             launch { textOffset.animateTo(0f, tween(600, easing = EaseOutCubic)) }
         }
-        kotlinx.coroutines.delay(400)
-        btnAlpha.animateTo(1f, tween(500, easing = EaseOutCubic))
+        kotlinx.coroutines.delay(300)
+        kotlinx.coroutines.coroutineScope {
+            launch { btnAlpha.animateTo(1f, tween(500, easing = EaseOutCubic)) }
+            launch { footerAlpha.animateTo(1f, tween(700, easing = EaseOutCubic)) }
+        }
     }
 
-    Box(Modifier.fillMaxSize().background(Parchment)) {
-        Box(Modifier.size(320.dp).offset(x = 120.dp, y = (-80).dp).clip(CircleShape).background(Brush.radialGradient(listOf(Amber.copy(alpha = 0.18f), Color.Transparent))))
-        Box(Modifier.size(260.dp).align(Alignment.BottomStart).offset(x = (-60).dp, y = 60.dp).clip(CircleShape).background(Brush.radialGradient(listOf(AmberLight.copy(alpha = 0.14f), Color.Transparent))))
-        Column(Modifier.fillMaxSize().padding(horizontal = 32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-            Box(
-                modifier = Modifier.size(96.dp).graphicsLayer { alpha = logoAlpha.value; translationY = logoOffset.value }
-            ) {
-                Image(
-                    painter = painterResource(R.drawable.ic_wisdomone_ui_logo),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize().clip(CircleShape)
+    Box(Modifier.fillMaxSize()) {
+
+        // Layer 1: full-screen background — solid #F8C3D4 at the bottom so there
+        // is zero gap between the gradient and the footer image top edge.
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.verticalGradient(
+                    0f    to Color(0xFFEDE7F6),
+                    0.42f to Color(0xFFFCEFE8),
+                    0.68f to Color(0xFFF8C3D4),
+                    1f    to Color(0xFFF8C3D4)
                 )
-            }
-            Spacer(Modifier.height(20.dp))
-            Column(Modifier.graphicsLayer { alpha = textAlpha.value; translationY = textOffset.value }, horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("A quieter moment,", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = Ink, textAlign = TextAlign.Center, lineHeight = 42.sp)
-                Text("whenever you need it.", fontSize = 34.sp, fontWeight = FontWeight.Bold, color = Purple, textAlign = TextAlign.Center, lineHeight = 42.sp)
-                Spacer(Modifier.height(16.dp))
-                Text("Daily wisdom from the world's\ngreatest scriptures.", fontSize = 16.sp, color = InkSoft, textAlign = TextAlign.Center, lineHeight = 24.sp)
-            }
-            Spacer(Modifier.height(56.dp))
-            Box(Modifier.graphicsLayer { alpha = btnAlpha.value }) {
-                Button(onClick = onContinue, modifier = Modifier.fillMaxWidth().height(58.dp), shape = RoundedCornerShape(18.dp), colors = ButtonDefaults.buttonColors(containerColor = W.InkButton)) {
-                    Text("Begin your journey", fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = Color.White)
+            )
+        )
+
+        // Layer 2: footer image — always at the bottom, fills full width.
+        // No veil needed: the background behind it is already #F8C3D4.
+        Image(
+            painter = painterResource(R.drawable.wisdomone_bottom_sunrise_footer_clean),
+            contentDescription = null,
+            contentScale = ContentScale.FillWidth,
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+                .graphicsLayer { alpha = footerAlpha.value }
+        )
+
+        // Layer 3: content column centred in the space ABOVE the footer.
+        // We measure the footer height from its aspect ratio (2172×724 ≈ 3:1 wide)
+        // and reserve that space at the bottom so content never overlaps it.
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val footerHeightDp = maxWidth / 3f   // image is ~3:1 aspect ratio
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .height(maxHeight - footerHeightDp)
+                    .padding(horizontal = 32.dp),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Logo
+                Box(
+                    modifier = Modifier
+                        .size(100.dp)
+                        .graphicsLayer { alpha = logoAlpha.value; translationY = logoOffset.value }
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.ic_wisdomone_ui_logo),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize().clip(CircleShape)
+                    )
+                }
+                Spacer(Modifier.height(14.dp))
+
+                // App name
+                Box(Modifier.graphicsLayer { alpha = logoAlpha.value }) {
+                    Text(
+                        "WisdomOne",
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF2D1B69),
+                        letterSpacing = 0.3.sp
+                    )
+                }
+                Spacer(Modifier.height(18.dp))
+
+                // Gold divider with lotus
+                Box(Modifier.graphicsLayer { alpha = textAlpha.value }) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth(0.55f)
+                    ) {
+                        Box(Modifier.weight(1f).height(1.dp).background(Color(0xFFC8A96E)))
+                        Text("  🪷  ", fontSize = 14.sp)
+                        Box(Modifier.weight(1f).height(1.dp).background(Color(0xFFC8A96E)))
+                    }
+                }
+                Spacer(Modifier.height(22.dp))
+
+                // Headline
+                Column(
+                    Modifier.graphicsLayer { alpha = textAlpha.value; translationY = textOffset.value },
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("A quieter moment,", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2D1B69), textAlign = TextAlign.Center, lineHeight = 40.sp)
+                    Text("whenever you",     fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color(0xFF7B2FBE), textAlign = TextAlign.Center, lineHeight = 40.sp)
+                    Text("need it.",         fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2D1B69), textAlign = TextAlign.Center, lineHeight = 40.sp)
+                    Spacer(Modifier.height(16.dp))
+                    Text(
+                        "Daily wisdom from the world's\ngreatest scriptures.",
+                        fontSize = 16.sp, color = Color(0xFF6B6B8A),
+                        textAlign = TextAlign.Center, lineHeight = 24.sp
+                    )
+                }
+                Spacer(Modifier.height(40.dp))
+
+                // CTA button
+                Box(Modifier.graphicsLayer { alpha = btnAlpha.value }) {
+                    Button(
+                        onClick = onContinue,
+                        modifier = Modifier.fillMaxWidth().height(58.dp),
+                        shape = RoundedCornerShape(50.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3D1A78))
+                    ) {
+                        Text("Begin your journey", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
+                        Spacer(Modifier.width(8.dp))
+                        Text("→", fontSize = 18.sp, color = Color.White, fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }
