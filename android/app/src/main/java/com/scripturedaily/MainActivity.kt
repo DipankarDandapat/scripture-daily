@@ -67,6 +67,7 @@ import com.scripturedaily.ui.WisdomOneTheme
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -1029,6 +1030,41 @@ private fun ScriptureApp(
     )
     val useNavigationRail = LocalConfiguration.current.screenWidthDp >= 840
 
+    // ── Setup guide: full-screen, no topBar / bottomBar ─────────────────────
+    if (setupGuidePending) {
+        FirstRunSetupScreen(
+            onRequestNotifications = {
+                if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    permissionTarget = "setup"
+                    notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                } else {
+                    reminders = true
+                    store.edit().putBoolean("reminders", true).apply()
+                    VerseSyncWorker.schedule(context, frequency)
+                    MetaAnalytics.track(context, MetaAnalytics.Event.DAILY_REMINDER_ENABLED, MetaAnalytics.params("source" to "reminders"))
+                    scope.launch { snackbarHostState.showSnackbar("Verse reminders are enabled.") }
+                }
+            },
+            onOpenNotificationSettings = {
+                context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                })
+            },
+            onAddWidget = {
+                val manager = AppWidgetManager.getInstance(context)
+                if (manager.isRequestPinAppWidgetSupported) {
+                    manager.requestPinAppWidget(ComponentName(context, ScriptureWidgetReceiver::class.java), null, null)
+                } else scope.launch { snackbarHostState.showSnackbar("Long-press your home screen, open Widgets, and add Scripture Daily.") }
+            },
+            onFinish = {
+                store.edit().putBoolean("setup_guide_pending", false).apply()
+                setupGuidePending = false
+            },
+            verseText = verse?.text
+        )
+        return
+    }
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         snackbarHost = { AppToastHost(snackbarHostState) },
@@ -1105,38 +1141,8 @@ private fun ScriptureApp(
             }
             Box(Modifier.weight(1f).fillMaxHeight(), contentAlignment = Alignment.TopCenter) {
                 Box(Modifier.fillMaxHeight().widthIn(max = 720.dp).fillMaxWidth()) {
-                    if (setupGuidePending) {
-                        FirstRunSetupScreen(
-                    onRequestNotifications = {
-                        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                            permissionTarget = "setup"
-                            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        } else {
-                            reminders = true
-                            store.edit().putBoolean("reminders", true).apply()
-                            VerseSyncWorker.schedule(context, frequency)
-                            MetaAnalytics.track(context, MetaAnalytics.Event.DAILY_REMINDER_ENABLED, MetaAnalytics.params("source" to "reminders"))
-                            scope.launch { snackbarHostState.showSnackbar("Verse reminders are enabled.") }
-                        }
-                    },
-                    onOpenNotificationSettings = {
-                        context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                        })
-                    },
-                    onAddWidget = {
-                        val manager = AppWidgetManager.getInstance(context)
-                        if (manager.isRequestPinAppWidgetSupported) {
-                            manager.requestPinAppWidget(ComponentName(context, ScriptureWidgetReceiver::class.java), null, null)
-                        } else scope.launch { snackbarHostState.showSnackbar("Long-press your home screen, open Widgets, and add Scripture Daily.") }
-                    },
-                    onFinish = {
-                        store.edit().putBoolean("setup_guide_pending", false).apply()
-                        setupGuidePending = false
-                    }
-                        )
-                    } else when (page) {
-                "Home" -> HomeScreen(
+                    when (page) {
+                    "Home" -> HomeScreen(
                     verse, loading, error, favoriteIds.contains(verse?.id), lockScreen,
                     showScripture = showReadingScripture,
                     showReference = showReadingReference,
@@ -1689,7 +1695,8 @@ private fun FirstRunSetupScreen(
     onRequestNotifications: () -> Unit,
     onOpenNotificationSettings: () -> Unit,
     onAddWidget: () -> Unit,
-    onFinish: () -> Unit
+    onFinish: () -> Unit,
+    verseText: String? = null
 ) {
     val context = LocalContext.current
     var step by remember { mutableIntStateOf(0) }
@@ -1703,72 +1710,417 @@ private fun FirstRunSetupScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // Step 0: re-check notification permission on every resume so button hides when granted
     val notifGranted = remember(resumeTick) {
         Build.VERSION.SDK_INT < 33 ||
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
     }
-    // Step 2: re-check widget on every resume so button label updates after user adds widget
     val widgetAdded = remember(resumeTick) {
         AppWidgetManager.getInstance(context)
             .getAppWidgetIds(ComponentName(context, ScriptureWidgetReceiver::class.java))
             .isNotEmpty()
     }
 
-    val titles = listOf("Stay in the moment", "Choose what appears", "Keep a verse close")
-    val descriptions = listOf(
-        "Allow notifications if you want a verse reminder. You can skip this and enable it later in Settings.",
-        "Enabling Lock screen verse sets a static verse image and posts a notification. Android controls notification privacy, and its static wallpaper may remain after uninstall — turn the feature off first to clear it. You can skip this and change it later.",
-        "Add the Scripture Daily home-screen widget from here, or skip and add it later by long-pressing an empty area of your home screen. Lock-screen widgets are available only on supported Android devices."
-    )
-    Column(
-        Modifier.fillMaxSize().background(Parchment).verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text("Optional setup · ${step + 1} of 3", fontSize = 12.sp, color = InkSoft, fontWeight = FontWeight.SemiBold)
-        Spacer(Modifier.height(18.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            repeat(3) { index ->
-                Box(Modifier.weight(1f).height(4.dp).clip(RoundedCornerShape(4.dp)).background(if (index <= step) Amber else Amber.copy(alpha = 0.2f)))
-            }
+    // Live clock/date for the verse wallpaper mockup (step 1)
+    var liveTime by remember { mutableStateOf(java.time.LocalTime.now()) }
+    var liveDate by remember { mutableStateOf(java.time.LocalDate.now()) }
+    LaunchedEffect(step) {
+        while (step == 1) {
+            liveTime = java.time.LocalTime.now()
+            liveDate = java.time.LocalDate.now()
+            kotlinx.coroutines.delay(1_000)
         }
-        Spacer(Modifier.height(30.dp))
-        Text(titles[step], fontSize = 29.sp, lineHeight = 36.sp, fontWeight = FontWeight.Bold, color = Ink)
-        Spacer(Modifier.height(12.dp))
-        Text(descriptions[step], fontSize = 15.sp, lineHeight = 23.sp, color = InkSoft)
-        Spacer(Modifier.height(26.dp))
-        when (step) {
-            0 -> {
-                if (!notifGranted) {
-                    OutlinedButton(onClick = onRequestNotifications, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(15.dp)) {
-                        Text("Allow notifications", color = Purple, fontWeight = FontWeight.SemiBold)
-                    }
-                } else {
-                    Box(
-                        Modifier.fillMaxWidth().height(52.dp).clip(RoundedCornerShape(15.dp))
-                            .background(W.Success.copy(alpha = 0.1f))
-                            .border(BorderStroke(1.dp, W.Success.copy(alpha = 0.4f)), RoundedCornerShape(15.dp)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text("✓ Notifications allowed", color = W.Success, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+    }
+
+    val topImageRes = when (step) {
+        0    -> R.drawable.screen1_notification_top_clean
+        1    -> R.drawable.screen2_verse_wallpaper_top
+        else -> R.drawable.screen3_home_widget_top
+    }
+
+    // Per-step content
+    data class StepContent(
+        val badge: String,
+        val title: String,
+        val subtitle: String,
+        val features: List<Pair<String, String>>,
+        val primaryLabel: String,
+        val primaryIcon: String
+    )
+    val steps = listOf(
+        StepContent(
+            badge = "Optional Setup · 1 of 3",
+            title = "A moment of wisdom,\nevery day.",
+            subtitle = "Receive meaningful verse reminders and gentle notifications to stay inspired and mindful.",
+            features = listOf(
+                "📅" to "Daily verse reminders",
+                "🔥" to "Build a consistent habit",
+                "🔔" to "Short, uplifting notifications"
+            ),
+            primaryLabel = "Enable Notifications",
+            primaryIcon = "🔔"
+        ),
+        StepContent(
+            badge = "Optional Setup · 2 of 3",
+            title = "Let wisdom greet you.",
+            subtitle = "Bring inspiration to your lock screen with a beautiful verse wallpaper from your selected tradition.",
+            features = listOf(
+                "🖼" to "Daily or scheduled verse wallpaper",
+                "⚙" to "Change anytime in Settings"
+            ),
+            primaryLabel = "Enable Verse Wallpaper",
+            primaryIcon = "🖼"
+        ),
+        StepContent(
+            badge = "Optional Setup · 3 of 3",
+            title = "Keep a verse close.",
+            subtitle = "Add the Scripture Daily home-screen widget to see an inspiring verse right on your home screen.",
+            features = listOf(
+                "⊞" to "Quick access to today's verse",
+                "⭐" to "Beautiful, lightweight widget",
+                "📱" to "Works on most Android devices"
+            ),
+            primaryLabel = "Add Home-Screen Widget",
+            primaryIcon = "⊞"
+        )
+    )
+    val s = steps[step]
+
+    Box(Modifier.fillMaxSize()) {
+        // Background gradient matching splash
+        Box(
+            Modifier.fillMaxSize().background(
+                Brush.verticalGradient(
+                    0f    to Color(0xFFEDE7F6),
+                    0.55f to Color(0xFFFCEFE8),
+                    0.78f to Color(0xFFF8C3D4),
+                    1f    to Color(0xFFF8C3D4)
+                )
+            )
+        )
+
+        // Footer image at bottom
+        Image(
+            painter = painterResource(R.drawable.wisdomone_bottom_sunrise_footer_clean),
+            contentDescription = null,
+            contentScale = ContentScale.FillWidth,
+            modifier = Modifier.fillMaxWidth().align(Alignment.BottomCenter)
+        )
+
+        // Scrollable content above footer
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val footerHeightDp = maxWidth / 3f
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .height(maxHeight - footerHeightDp)
+                    .verticalScroll(rememberScrollState())
+            ) {
+                // ── Top bar: logo + skip ──────────────────────────────────────
+                Row(
+                    Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Image(
+                        painter = painterResource(R.drawable.ic_wisdomone_ui_logo),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(32.dp).clip(CircleShape)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("WisdomOne", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF2D1B69))
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = onFinish) {
+                        Text("Skip setup", color = Color(0xFF7B2FBE), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
+
+                // ── Step badge + progress bar ─────────────────────────────────
+                Column(Modifier.padding(horizontal = 20.dp)) {
+                    Box(
+                        Modifier.clip(RoundedCornerShape(50)).background(Color(0xFFEDE7F6))
+                            .border(BorderStroke(1.dp, Color(0xFFD4B8F0)), RoundedCornerShape(50))
+                            .padding(horizontal = 14.dp, vertical = 5.dp)
+                    ) {
+                        Text(s.badge, fontSize = 12.sp, color = Color(0xFF7B2FBE), fontWeight = FontWeight.SemiBold)
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        repeat(3) { index ->
+                            Box(
+                                Modifier.weight(1f).height(4.dp).clip(RoundedCornerShape(4.dp))
+                                    .background(
+                                        if (index <= step) Color(0xFF7B2FBE)
+                                        else Color(0xFF7B2FBE).copy(alpha = 0.2f)
+                                    )
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                // ── Top illustration image ────────────────────────────────────
+                // Step 0: full-width notification bell image (no side padding)
+                // Step 1: half-phone lock-screen mockup, no border, overlay inside screen area
+                // Step 2: half-phone widget mockup, verse text inside the card box
+                // Figma design:
+                // Screen 1: bell image ~40% height, centered with horizontal padding
+                // Screen 2: phone mockup ~60% of screen width, centered, top-half only
+                // Screen 3: phone mockup ~60% of screen width, centered, widget card overlay
+                BoxWithConstraints(
+                    Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    val screenW = maxWidth
+
+                    when (step) {
+                        // ── Screen 1: notification bell ──────────────────────────
+                        0 -> Image(
+                            painter = painterResource(topImageRes),
+                            contentDescription = null,
+                            contentScale = ContentScale.FillWidth,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(screenW * 0.42f)  // ~42% height, compact
+                                .clipToBounds()
+                        )
+
+                        // ── Screen 2: lock-screen phone mockup ───────────────────
+                        // Phone shown at 62% of screen width, centered.
+                        // screen2 image is 1200x1313 (ratio 1.094 tall).
+                        // We show only the top 55% of the image height (top of phone).
+                        1 -> {
+                            val phoneW = screenW * 0.62f
+                            val phoneH = phoneW * 1.094f * 0.55f  // top 55% of natural height
+                            val verseDisplay = (verseText ?: "")
+                                .let { if (it.length > 80) it.take(77) + "…" else it }
+                                .ifEmpty { "A moment of wisdom, every day." }
+
+                            Box(
+                                Modifier
+                                    .width(phoneW)
+                                    .height(phoneH)
+                                    .clipToBounds(),
+                                contentAlignment = Alignment.TopCenter
+                            ) {
+                                Image(
+                                    painter = painterResource(topImageRes),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.FillWidth,
+                                    modifier = Modifier.width(phoneW)
+                                )
+                                // Overlay: lock icon + time + date + verse
+                                // Phone screen starts ~14% from top of image
+                                Column(
+                                    Modifier
+                                        .align(Alignment.TopCenter)
+                                        .padding(
+                                            top   = phoneH * 0.26f,
+                                            start = phoneW * 0.18f,
+                                            end   = phoneW * 0.18f
+                                        ),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Lock,
+                                        contentDescription = null,
+                                        tint = Color.White.copy(alpha = 0.9f),
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(
+                                        liveTime.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")),
+                                        fontSize = 22.sp,
+                                        fontWeight = FontWeight.Light,
+                                        color = Color.White,
+                                        letterSpacing = 1.sp
+                                    )
+                                    Text(
+                                        liveDate.format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d", java.util.Locale.getDefault())),
+                                        fontSize = 9.sp,
+                                        color = Color.White.copy(alpha = 0.85f)
+                                    )
+                                    Spacer(Modifier.height(5.dp))
+                                    Text(
+                                        verseDisplay,
+                                        fontSize = 8.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White,
+                                        textAlign = TextAlign.Center,
+                                        lineHeight = 12.sp,
+                                        maxLines = 4,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+
+                        // ── Screen 3: widget phone mockup ─────────────────────────
+                        // Phone shown at 62% of screen width, centered.
+                        // screen3 image is 1537x1025 (ratio 0.667 landscape/angled).
+                        // Widget white card is in upper-left of the phone screen.
+                        else -> {
+                            val phoneW = screenW * 0.62f
+                            val phoneH = phoneW * 0.667f
+                            val displayText = (verseText ?: "")
+                                .let { if (it.length > 80) it.take(77) + "…" else it }
+                                .ifEmpty { "A moment of wisdom, every day." }
+
+                            Box(
+                                Modifier
+                                    .width(phoneW)
+                                    .height(phoneH)
+                                    .clipToBounds(),
+                                contentAlignment = Alignment.TopStart
+                            ) {
+                                Image(
+                                    painter = painterResource(topImageRes),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.FillBounds,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                                // Widget card: top~8%, left~6%, right~48% of phone width
+                                Box(
+                                    Modifier
+                                        .align(Alignment.TopStart)
+                                        .padding(
+                                            top   = phoneH * 0.08f,
+                                            start = phoneW * 0.06f,
+                                            end   = phoneW * 0.48f
+                                        )
+                                        .padding(horizontal = 6.dp, vertical = 5.dp)
+                                ) {
+                                    Text(
+                                        text = displayText,
+                                        fontSize = 7.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color(0xFF2D1B69),
+                                        lineHeight = 10.sp,
+                                        maxLines = 5,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(18.dp))
+
+                // ── Title + subtitle ─────────────────────────────────────────
+                Column(Modifier.padding(horizontal = 20.dp)) {
+                    Text(
+                        s.title,
+                        fontSize = 26.sp, lineHeight = 33.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF2D1B69)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        s.subtitle,
+                        fontSize = 14.sp, lineHeight = 21.sp,
+                        color = Color(0xFF6B6B8A)
+                    )
+                    Spacer(Modifier.height(16.dp))
+
+                    // ── Feature rows ─────────────────────────────────────────
+                    Box(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                            .background(Color.White.copy(alpha = 0.65f))
+                            .border(BorderStroke(1.dp, Color(0xFFE8D5F5)), RoundedCornerShape(16.dp))
+                            .padding(horizontal = 16.dp, vertical = 12.dp)
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            s.features.forEach { (icon, label) ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(icon, fontSize = 18.sp)
+                                    Spacer(Modifier.width(12.dp))
+                                    Text(label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF2D1B69))
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(20.dp))
+
+                    // ── Primary action button ─────────────────────────────────
+                    when (step) {
+                        0 -> {
+                            if (!notifGranted) {
+                                Button(
+                                    onClick = onRequestNotifications,
+                                    modifier = Modifier.fillMaxWidth().height(54.dp),
+                                    shape = RoundedCornerShape(50.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3D1A78))
+                                ) {
+                                    Text("${s.primaryIcon}  ${s.primaryLabel}", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Color.White)
+                                }
+                            } else {
+                                Box(
+                                    Modifier.fillMaxWidth().height(54.dp).clip(RoundedCornerShape(50.dp))
+                                        .background(W.Success.copy(alpha = 0.12f))
+                                        .border(BorderStroke(1.dp, W.Success.copy(alpha = 0.5f)), RoundedCornerShape(50.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("✓  Notifications enabled", color = W.Success, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                                }
+                            }
+                        }
+                        1 -> Button(
+                            onClick = onOpenNotificationSettings,
+                            modifier = Modifier.fillMaxWidth().height(54.dp),
+                            shape = RoundedCornerShape(50.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3D1A78))
+                        ) {
+                            Text("${s.primaryIcon}  ${s.primaryLabel}", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Color.White)
+                        }
+                        else -> Button(
+                            onClick = onAddWidget,
+                            modifier = Modifier.fillMaxWidth().height(54.dp),
+                            shape = RoundedCornerShape(50.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3D1A78))
+                        ) {
+                            Text("${s.primaryIcon}  ${s.primaryLabel}", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Color.White)
+                        }
+                    }
+
+                    Spacer(Modifier.height(10.dp))
+
+                    // ── Next / Finish outline button ──────────────────────────
+                    OutlinedButton(
+                        onClick = { if (step < 2) step++ else onFinish() },
+                        modifier = Modifier.fillMaxWidth().height(52.dp),
+                        shape = RoundedCornerShape(50.dp),
+                        border = BorderStroke(1.5.dp, Color(0xFF3D1A78))
+                    ) {
+                        Text(
+                            if (step < 2) "Next" else "Finish",
+                            fontWeight = FontWeight.SemiBold, fontSize = 15.sp,
+                            color = Color(0xFF3D1A78)
+                        )
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+
+                    // ── Skip link ─────────────────────────────────────────────
+                    TextButton(
+                        onClick = onFinish,
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    ) {
+                        Text(
+                            "Skip setup",
+                            color = Color(0xFF7B2FBE),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            style = androidx.compose.ui.text.TextStyle(
+                                textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
+                            )
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(12.dp))
             }
-            1 -> OutlinedButton(onClick = onOpenNotificationSettings, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(15.dp)) {
-                Text("Open notification settings", color = Purple, fontWeight = FontWeight.SemiBold)
-            }
-            else -> OutlinedButton(onClick = onAddWidget, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(15.dp)) {
-                Text(if (widgetAdded) "Add another widget" else "Home screen widget", color = Purple, fontWeight = FontWeight.SemiBold)
-            }
-        }
-        Spacer(Modifier.height(14.dp))
-        Button(
-            onClick = { if (step < 2) step++ else onFinish() },
-            modifier = Modifier.fillMaxWidth().height(54.dp), shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = W.InkButton)
-        ) { Text(if (step < 2) "Next" else "Finish", fontWeight = FontWeight.SemiBold) }
-        TextButton(onClick = onFinish, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-            Text("Skip setup", color = InkSoft)
         }
     }
 }
