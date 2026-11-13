@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Small gold lotus used in the splash divider. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="28dp"
+    android:height="28dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#D9A56B"
+        android:pathData="M12,3 C14.6,6.2 15.6,9.8 12,15.5 C8.4,9.8 9.4,6.2 12,3 Z" />
+    <path
+        android:fillColor="#E3B27C"
+        android:pathData="M11.3,15.6 C7.6,15.2 4.4,12.8 3.4,7.8 C7.6,8.4 10.4,11 11.3,15.6 Z" />
+    <path
+        android:fillColor="#E3B27C"
+        android:pathData="M12.7,15.6 C16.4,15.2 19.6,12.8 20.6,7.8 C16.4,8.4 13.6,11 12.7,15.6 Z" />
+    <path
+        android:fillColor="#C98F55"
+        android:pathData="M11.6,16.4 C8.4,17.8 4.6,17 1.8,13.6 C5.8,12.6 9.6,13.6 11.6,16.4 Z" />
+    <path
+        android:fillColor="#C98F55"
+        android:pathData="M12.4,16.4 C15.6,17.8 19.4,17 22.2,13.6 C18.2,12.6 14.4,13.6 12.4,16.4 Z" />
+    <path
+        android:fillColor="#D9A56B"
+        android:pathData="M12,16.2 C10,18 8.4,19.6 12,21 C15.6,19.6 14,18 12,16.2 Z" />
+</vector>
