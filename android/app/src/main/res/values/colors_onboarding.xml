@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches the top of the first-run splash so the window background never flashes a different colour. -->
+    <color name="wisdomone_splash_bg">#FCF0F0</color>
+</resources>

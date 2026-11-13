@@ -84,6 +84,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -144,6 +145,8 @@ import com.scripturedaily.data.Verse
 import com.scripturedaily.data.VerseSyncWorker
 import com.scripturedaily.data.toCached
 import com.scripturedaily.lockscreen.LockScreenVerse
+import com.scripturedaily.onboarding.FirstRunSetupScreen
+import com.scripturedaily.onboarding.SplashScreen
 import com.google.firebase.messaging.FirebaseMessaging
 import com.scripturedaily.analytics.MetaAnalytics
 import com.scripturedaily.notification.WisdomOneMessagingService
@@ -660,10 +663,19 @@ private fun ScriptureApp(
                 } else if (!lockScreen) VerseNotifier.cancel(context)
             }
             "setup" -> if (granted) {
+                // Same behaviour as turning "Verse reminders" on in Settings.
                 reminders = true
-                store.edit().putBoolean("reminders", true).apply()
+                store.edit().putBoolean("reminders", true).putString("setup_notifications", "enabled").apply()
                 VerseSyncWorker.schedule(context, frequency)
-                MetaAnalytics.track(context, MetaAnalytics.Event.DAILY_REMINDER_ENABLED, MetaAnalytics.params("source" to "reminders"))
+                MetaAnalytics.track(context, MetaAnalytics.Event.DAILY_REMINDER_ENABLED, MetaAnalytics.params("source" to "setup"))
+                scope.launch {
+                    applyCurrentLockVerse()?.let { snackbarHostState.showSnackbar(it) }
+                }
+            } else {
+                store.edit().putString("setup_notifications", "denied").apply()
+                scope.launch {
+                    snackbarHostState.showSnackbar("Notifications are off. You can turn them on anytime in Settings.")
+                }
             }
             "lock" -> {
                 if (granted) {
@@ -970,12 +982,17 @@ private fun ScriptureApp(
     // ── Centralised config: fetched before Home. Bounded by AppConfigManager.STARTUP_TIMEOUT_MS, then the cached / default config applies. ──
     val configDone by AppConfigManager.startupDone.collectAsState()
     LaunchedEffect(Unit) { if (!AppConfigManager.startupDone.value) AppConfigManager.awaitStartup() }
-    if (!configDone) { ConfigLoadingScreen(); return }
+    // First run: the splash is the very first thing drawn (no intermediate loading screen), so its background, logo,
+    // copy and footer appear together. Returning users keep the compact loading screen.
+    if (!configDone && !(!configured && !splashDone)) { ConfigLoadingScreen(); return }
 
     if (!configured) {
         ResponsiveContentFrame {
-            if (!splashDone) {
+            androidx.compose.animation.Crossfade(targetState = splashDone, animationSpec = androidx.compose.animation.core.tween(220), label = "splash-to-onboarding") { showOnboarding ->
+            if (!showOnboarding) {
                 SplashScreen(onContinue = { splashDone = true })
+            } else if (!configDone) {
+                ConfigLoadingScreen()
             } else Onboarding(
             religion = religion,
             language = language,
@@ -1017,6 +1034,7 @@ private fun ScriptureApp(
                 }
             }
             )
+            }
         }
         return
     }
@@ -1032,36 +1050,68 @@ private fun ScriptureApp(
 
     // ── Setup guide: full-screen, no topBar / bottomBar ─────────────────────
     if (setupGuidePending) {
+        /** Persists that the guide is over (completed or skipped) so it is never shown again. */
+        fun finishSetup() {
+            store.edit().putBoolean("setup_guide_pending", false).putBoolean("setup_guide_done", true).remove("setup_step").apply()
+            setupGuidePending = false
+        }
+        Box(Modifier.fillMaxSize()) {
         FirstRunSetupScreen(
-            onRequestNotifications = {
-                if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                    permissionTarget = "setup"
-                    notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                } else {
+            initialStep = store.getInt("setup_step", 0),
+            remindersOn = reminders,
+            wallpaperOn = lockScreen,
+            verseText = verse?.text,
+            verseCitation = verse?.let { v -> "${v.scripture} · ${v.chapter}.${v.verseNumber}" },
+            onStepChange = { store.edit().putInt("setup_step", it).apply() },
+            // Step 1 — notifications: the same reminder pipeline as the Settings "Verse reminders" switch.
+            onEnableNotifications = {
+                val granted = Build.VERSION.SDK_INT < 33 ||
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+                if (granted) {
                     reminders = true
-                    store.edit().putBoolean("reminders", true).apply()
+                    store.edit().putBoolean("reminders", true).putString("setup_notifications", "enabled").apply()
                     VerseSyncWorker.schedule(context, frequency)
-                    MetaAnalytics.track(context, MetaAnalytics.Event.DAILY_REMINDER_ENABLED, MetaAnalytics.params("source" to "reminders"))
-                    scope.launch { snackbarHostState.showSnackbar("Verse reminders are enabled.") }
+                    MetaAnalytics.track(context, MetaAnalytics.Event.DAILY_REMINDER_ENABLED, MetaAnalytics.params("source" to "setup"))
+                    scope.launch { applyCurrentLockVerse()?.let { snackbarHostState.showSnackbar(it) } }
+                } else {
+                    val asked = store.getBoolean("notification_permission_asked", false)
+                    val canAsk = !asked || ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.POST_NOTIFICATIONS)
+                    if (canAsk) {
+                        store.edit().putBoolean("notification_permission_asked", true).apply()
+                        permissionTarget = "setup"
+                        notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        // Denied permanently: Android will not show the dialog again, so send the user to the system settings.
+                        scope.launch { snackbarHostState.showSnackbar("Allow notifications for WisdomOne in Android settings to get verse reminders.") }
+                        context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                            putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        })
+                    }
                 }
             },
-            onOpenNotificationSettings = {
-                context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                    putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                })
+            // Step 2 — wallpaper: exactly what the Home screen "Lock screen verse" switch does.
+            onEnableWallpaper = {
+                if (!lockScreen) enableLockScreen()
             },
+            // Step 3 — widget: Android's pin-widget flow where the launcher supports it.
             onAddWidget = {
                 val manager = AppWidgetManager.getInstance(context)
-                if (manager.isRequestPinAppWidgetSupported) {
-                    manager.requestPinAppWidget(ComponentName(context, ScriptureWidgetReceiver::class.java), null, null)
-                } else scope.launch { snackbarHostState.showSnackbar("Long-press your home screen, open Widgets, and add Scripture Daily.") }
+                val provider = ComponentName(context, ScriptureWidgetReceiver::class.java)
+                when {
+                    manager.getAppWidgetIds(provider).isNotEmpty() ->
+                        scope.launch { snackbarHostState.showSnackbar("The widget is already on your home screen.") }
+                    manager.isRequestPinAppWidgetSupported -> {
+                        val ok = runCatching { manager.requestPinAppWidget(provider, null, null) }.getOrDefault(false)
+                        if (ok) store.edit().putBoolean("setup_widget_requested", true).apply()
+                        else scope.launch { snackbarHostState.showSnackbar("Couldn't open the widget picker. Long-press your home screen, open Widgets, and add WisdomOne.") }
+                    }
+                    else -> scope.launch { snackbarHostState.showSnackbar("Your launcher can't add widgets from here. Long-press your home screen, open Widgets, and add WisdomOne.") }
+                }
             },
-            onFinish = {
-                store.edit().putBoolean("setup_guide_pending", false).apply()
-                setupGuidePending = false
-            },
-            verseText = verse?.text
+            onFinish = { finishSetup() }
         )
+        Box(Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.statusBars).padding(top = 52.dp)) { AppToastHost(snackbarHostState) }
+        }
         return
     }
 
@@ -1542,584 +1592,6 @@ private fun ApiHealthScreen(state: HealthState, onRetry: () -> Unit) {
                     }
                 }
                 else -> {}
-            }
-        }
-    }
-}
-
-@Composable
-private fun SplashScreen(onContinue: () -> Unit) {
-    val logoAlpha = remember { Animatable(0f) }
-    val logoOffset = remember { Animatable(40f) }
-    val textAlpha = remember { Animatable(0f) }
-    val textOffset = remember { Animatable(24f) }
-    val btnAlpha = remember { Animatable(0f) }
-    val footerAlpha = remember { Animatable(0f) }
-
-    LaunchedEffect(Unit) {
-        kotlinx.coroutines.delay(100)
-        kotlinx.coroutines.coroutineScope {
-            launch { logoAlpha.animateTo(1f, tween(700, easing = EaseOutCubic)) }
-            launch { logoOffset.animateTo(0f, tween(700, easing = EaseOutCubic)) }
-        }
-        kotlinx.coroutines.delay(200)
-        kotlinx.coroutines.coroutineScope {
-            launch { textAlpha.animateTo(1f, tween(600, easing = EaseOutCubic)) }
-            launch { textOffset.animateTo(0f, tween(600, easing = EaseOutCubic)) }
-        }
-        kotlinx.coroutines.delay(300)
-        kotlinx.coroutines.coroutineScope {
-            launch { btnAlpha.animateTo(1f, tween(500, easing = EaseOutCubic)) }
-            launch { footerAlpha.animateTo(1f, tween(700, easing = EaseOutCubic)) }
-        }
-    }
-
-    Box(Modifier.fillMaxSize()) {
-
-        // Layer 1: full-screen background — solid #F8C3D4 at the bottom so there
-        // is zero gap between the gradient and the footer image top edge.
-        Box(
-            Modifier.fillMaxSize().background(
-                Brush.verticalGradient(
-                    0f    to Color(0xFFEDE7F6),
-                    0.42f to Color(0xFFFCEFE8),
-                    0.68f to Color(0xFFF8C3D4),
-                    1f    to Color(0xFFF8C3D4)
-                )
-            )
-        )
-
-        // Layer 2: footer image — always at the bottom, fills full width.
-        // No veil needed: the background behind it is already #F8C3D4.
-        Image(
-            painter = painterResource(R.drawable.wisdomone_bottom_sunrise_footer_clean),
-            contentDescription = null,
-            contentScale = ContentScale.FillWidth,
-            modifier = Modifier
-                .fillMaxWidth()
-                .align(Alignment.BottomCenter)
-                .graphicsLayer { alpha = footerAlpha.value }
-        )
-
-        // Layer 3: content column centred in the space ABOVE the footer.
-        // We measure the footer height from its aspect ratio (2172×724 ≈ 3:1 wide)
-        // and reserve that space at the bottom so content never overlaps it.
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            val footerHeightDp = maxWidth / 3f   // image is ~3:1 aspect ratio
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .height(maxHeight - footerHeightDp)
-                    .padding(horizontal = 32.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                // Logo
-                Box(
-                    modifier = Modifier
-                        .size(100.dp)
-                        .graphicsLayer { alpha = logoAlpha.value; translationY = logoOffset.value }
-                ) {
-                    Image(
-                        painter = painterResource(R.drawable.ic_wisdomone_ui_logo),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize().clip(CircleShape)
-                    )
-                }
-                Spacer(Modifier.height(14.dp))
-
-                // App name
-                Box(Modifier.graphicsLayer { alpha = logoAlpha.value }) {
-                    Text(
-                        "WisdomOne",
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF2D1B69),
-                        letterSpacing = 0.3.sp
-                    )
-                }
-                Spacer(Modifier.height(18.dp))
-
-                // Gold divider with lotus
-                Box(Modifier.graphicsLayer { alpha = textAlpha.value }) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier.fillMaxWidth(0.55f)
-                    ) {
-                        Box(Modifier.weight(1f).height(1.dp).background(Color(0xFFC8A96E)))
-                        Text("  🪷  ", fontSize = 14.sp)
-                        Box(Modifier.weight(1f).height(1.dp).background(Color(0xFFC8A96E)))
-                    }
-                }
-                Spacer(Modifier.height(22.dp))
-
-                // Headline
-                Column(
-                    Modifier.graphicsLayer { alpha = textAlpha.value; translationY = textOffset.value },
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text("A quieter moment,", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2D1B69), textAlign = TextAlign.Center, lineHeight = 40.sp)
-                    Text("whenever you",     fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color(0xFF7B2FBE), textAlign = TextAlign.Center, lineHeight = 40.sp)
-                    Text("need it.",         fontSize = 32.sp, fontWeight = FontWeight.Bold, color = Color(0xFF2D1B69), textAlign = TextAlign.Center, lineHeight = 40.sp)
-                    Spacer(Modifier.height(16.dp))
-                    Text(
-                        "Daily wisdom from the world's\ngreatest scriptures.",
-                        fontSize = 16.sp, color = Color(0xFF6B6B8A),
-                        textAlign = TextAlign.Center, lineHeight = 24.sp
-                    )
-                }
-                Spacer(Modifier.height(40.dp))
-
-                // CTA button
-                Box(Modifier.graphicsLayer { alpha = btnAlpha.value }) {
-                    Button(
-                        onClick = onContinue,
-                        modifier = Modifier.fillMaxWidth().height(58.dp),
-                        shape = RoundedCornerShape(50.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3D1A78))
-                    ) {
-                        Text("Begin your journey", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.White)
-                        Spacer(Modifier.width(8.dp))
-                        Text("→", fontSize = 18.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FirstRunSetupScreen(
-    onRequestNotifications: () -> Unit,
-    onOpenNotificationSettings: () -> Unit,
-    onAddWidget: () -> Unit,
-    onFinish: () -> Unit,
-    verseText: String? = null
-) {
-    val context = LocalContext.current
-    var step by remember { mutableIntStateOf(0) }
-    val lifecycleOwner = LocalLifecycleOwner.current
-    var resumeTick by remember { mutableIntStateOf(0) }
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) resumeTick++
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
-
-    val notifGranted = remember(resumeTick) {
-        Build.VERSION.SDK_INT < 33 ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-    }
-    val widgetAdded = remember(resumeTick) {
-        AppWidgetManager.getInstance(context)
-            .getAppWidgetIds(ComponentName(context, ScriptureWidgetReceiver::class.java))
-            .isNotEmpty()
-    }
-
-    // Live clock/date for the verse wallpaper mockup (step 1)
-    var liveTime by remember { mutableStateOf(java.time.LocalTime.now()) }
-    var liveDate by remember { mutableStateOf(java.time.LocalDate.now()) }
-    LaunchedEffect(step) {
-        while (step == 1) {
-            liveTime = java.time.LocalTime.now()
-            liveDate = java.time.LocalDate.now()
-            kotlinx.coroutines.delay(1_000)
-        }
-    }
-
-    val topImageRes = when (step) {
-        0    -> R.drawable.screen1_notification_top_clean
-        1    -> R.drawable.screen2_verse_wallpaper_top
-        else -> R.drawable.screen3_home_widget_top
-    }
-
-    // Per-step content
-    data class StepContent(
-        val badge: String,
-        val title: String,
-        val subtitle: String,
-        val features: List<Pair<String, String>>,
-        val primaryLabel: String,
-        val primaryIcon: String
-    )
-    val steps = listOf(
-        StepContent(
-            badge = "Optional Setup · 1 of 3",
-            title = "A moment of wisdom,\nevery day.",
-            subtitle = "Receive meaningful verse reminders and gentle notifications to stay inspired and mindful.",
-            features = listOf(
-                "📅" to "Daily verse reminders",
-                "🔥" to "Build a consistent habit",
-                "🔔" to "Short, uplifting notifications"
-            ),
-            primaryLabel = "Enable Notifications",
-            primaryIcon = "🔔"
-        ),
-        StepContent(
-            badge = "Optional Setup · 2 of 3",
-            title = "Let wisdom greet you.",
-            subtitle = "Bring inspiration to your lock screen with a beautiful verse wallpaper from your selected tradition.",
-            features = listOf(
-                "🖼" to "Daily or scheduled verse wallpaper",
-                "⚙" to "Change anytime in Settings"
-            ),
-            primaryLabel = "Enable Verse Wallpaper",
-            primaryIcon = "🖼"
-        ),
-        StepContent(
-            badge = "Optional Setup · 3 of 3",
-            title = "Keep a verse close.",
-            subtitle = "Add the Scripture Daily home-screen widget to see an inspiring verse right on your home screen.",
-            features = listOf(
-                "⊞" to "Quick access to today's verse",
-                "⭐" to "Beautiful, lightweight widget",
-                "📱" to "Works on most Android devices"
-            ),
-            primaryLabel = "Add Home-Screen Widget",
-            primaryIcon = "⊞"
-        )
-    )
-    val s = steps[step]
-
-    Box(Modifier.fillMaxSize()) {
-        // Background gradient matching splash
-        Box(
-            Modifier.fillMaxSize().background(
-                Brush.verticalGradient(
-                    0f    to Color(0xFFEDE7F6),
-                    0.55f to Color(0xFFFCEFE8),
-                    0.78f to Color(0xFFF8C3D4),
-                    1f    to Color(0xFFF8C3D4)
-                )
-            )
-        )
-
-        // Footer image at bottom
-        Image(
-            painter = painterResource(R.drawable.wisdomone_bottom_sunrise_footer_clean),
-            contentDescription = null,
-            contentScale = ContentScale.FillWidth,
-            modifier = Modifier.fillMaxWidth().align(Alignment.BottomCenter)
-        )
-
-        // Scrollable content above footer
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            val footerHeightDp = maxWidth / 3f
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .height(maxHeight - footerHeightDp)
-                    .verticalScroll(rememberScrollState())
-            ) {
-                // ── Top bar: logo + skip ──────────────────────────────────────
-                Row(
-                    Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Image(
-                        painter = painterResource(R.drawable.ic_wisdomone_ui_logo),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(32.dp).clip(CircleShape)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text("WisdomOne", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF2D1B69))
-                    Spacer(Modifier.weight(1f))
-                    TextButton(onClick = onFinish) {
-                        Text("Skip setup", color = Color(0xFF7B2FBE), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                    }
-                }
-
-                // ── Step badge + progress bar ─────────────────────────────────
-                Column(Modifier.padding(horizontal = 20.dp)) {
-                    Box(
-                        Modifier.clip(RoundedCornerShape(50)).background(Color(0xFFEDE7F6))
-                            .border(BorderStroke(1.dp, Color(0xFFD4B8F0)), RoundedCornerShape(50))
-                            .padding(horizontal = 14.dp, vertical = 5.dp)
-                    ) {
-                        Text(s.badge, fontSize = 12.sp, color = Color(0xFF7B2FBE), fontWeight = FontWeight.SemiBold)
-                    }
-                    Spacer(Modifier.height(10.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        repeat(3) { index ->
-                            Box(
-                                Modifier.weight(1f).height(4.dp).clip(RoundedCornerShape(4.dp))
-                                    .background(
-                                        if (index <= step) Color(0xFF7B2FBE)
-                                        else Color(0xFF7B2FBE).copy(alpha = 0.2f)
-                                    )
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(16.dp))
-
-                // ── Top illustration image ────────────────────────────────────
-                // Step 0: full-width notification bell image (no side padding)
-                // Step 1: half-phone lock-screen mockup, no border, overlay inside screen area
-                // Step 2: half-phone widget mockup, verse text inside the card box
-                // Figma design:
-                // Screen 1: bell image ~40% height, centered with horizontal padding
-                // Screen 2: phone mockup ~60% of screen width, centered, top-half only
-                // Screen 3: phone mockup ~60% of screen width, centered, widget card overlay
-                BoxWithConstraints(
-                    Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    val screenW = maxWidth
-
-                    when (step) {
-                        // ── Screen 1: notification bell ──────────────────────────
-                        0 -> Image(
-                            painter = painterResource(topImageRes),
-                            contentDescription = null,
-                            contentScale = ContentScale.FillWidth,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(screenW * 0.42f)  // ~42% height, compact
-                                .clipToBounds()
-                        )
-
-                        // ── Screen 2: lock-screen phone mockup ───────────────────
-                        // Phone shown at 62% of screen width, centered.
-                        // screen2 image is 1200x1313 (ratio 1.094 tall).
-                        // We show only the top 55% of the image height (top of phone).
-                        1 -> {
-                            val phoneW = screenW * 0.62f
-                            val phoneH = phoneW * 1.094f * 0.55f  // top 55% of natural height
-                            val verseDisplay = (verseText ?: "")
-                                .let { if (it.length > 80) it.take(77) + "…" else it }
-                                .ifEmpty { "A moment of wisdom, every day." }
-
-                            Box(
-                                Modifier
-                                    .width(phoneW)
-                                    .height(phoneH)
-                                    .clipToBounds(),
-                                contentAlignment = Alignment.TopCenter
-                            ) {
-                                Image(
-                                    painter = painterResource(topImageRes),
-                                    contentDescription = null,
-                                    contentScale = ContentScale.FillWidth,
-                                    modifier = Modifier.width(phoneW)
-                                )
-                                // Overlay: lock icon + time + date + verse
-                                // Phone screen starts ~14% from top of image
-                                Column(
-                                    Modifier
-                                        .align(Alignment.TopCenter)
-                                        .padding(
-                                            top   = phoneH * 0.26f,
-                                            start = phoneW * 0.18f,
-                                            end   = phoneW * 0.18f
-                                        ),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Lock,
-                                        contentDescription = null,
-                                        tint = Color.White.copy(alpha = 0.9f),
-                                        modifier = Modifier.size(12.dp)
-                                    )
-                                    Spacer(Modifier.height(2.dp))
-                                    Text(
-                                        liveTime.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")),
-                                        fontSize = 22.sp,
-                                        fontWeight = FontWeight.Light,
-                                        color = Color.White,
-                                        letterSpacing = 1.sp
-                                    )
-                                    Text(
-                                        liveDate.format(java.time.format.DateTimeFormatter.ofPattern("EEE, MMM d", java.util.Locale.getDefault())),
-                                        fontSize = 9.sp,
-                                        color = Color.White.copy(alpha = 0.85f)
-                                    )
-                                    Spacer(Modifier.height(5.dp))
-                                    Text(
-                                        verseDisplay,
-                                        fontSize = 8.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = Color.White,
-                                        textAlign = TextAlign.Center,
-                                        lineHeight = 12.sp,
-                                        maxLines = 4,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-                        }
-
-                        // ── Screen 3: widget phone mockup ─────────────────────────
-                        // Phone shown at 62% of screen width, centered.
-                        // screen3 image is 1537x1025 (ratio 0.667 landscape/angled).
-                        // Widget white card is in upper-left of the phone screen.
-                        else -> {
-                            val phoneW = screenW * 0.62f
-                            val phoneH = phoneW * 0.667f
-                            val displayText = (verseText ?: "")
-                                .let { if (it.length > 80) it.take(77) + "…" else it }
-                                .ifEmpty { "A moment of wisdom, every day." }
-
-                            Box(
-                                Modifier
-                                    .width(phoneW)
-                                    .height(phoneH)
-                                    .clipToBounds(),
-                                contentAlignment = Alignment.TopStart
-                            ) {
-                                Image(
-                                    painter = painterResource(topImageRes),
-                                    contentDescription = null,
-                                    contentScale = ContentScale.FillBounds,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                                // Widget card: top~8%, left~6%, right~48% of phone width
-                                Box(
-                                    Modifier
-                                        .align(Alignment.TopStart)
-                                        .padding(
-                                            top   = phoneH * 0.08f,
-                                            start = phoneW * 0.06f,
-                                            end   = phoneW * 0.48f
-                                        )
-                                        .padding(horizontal = 6.dp, vertical = 5.dp)
-                                ) {
-                                    Text(
-                                        text = displayText,
-                                        fontSize = 7.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = Color(0xFF2D1B69),
-                                        lineHeight = 10.sp,
-                                        maxLines = 5,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Spacer(Modifier.height(18.dp))
-
-                // ── Title + subtitle ─────────────────────────────────────────
-                Column(Modifier.padding(horizontal = 20.dp)) {
-                    Text(
-                        s.title,
-                        fontSize = 26.sp, lineHeight = 33.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF2D1B69)
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        s.subtitle,
-                        fontSize = 14.sp, lineHeight = 21.sp,
-                        color = Color(0xFF6B6B8A)
-                    )
-                    Spacer(Modifier.height(16.dp))
-
-                    // ── Feature rows ─────────────────────────────────────────
-                    Box(
-                        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                            .background(Color.White.copy(alpha = 0.65f))
-                            .border(BorderStroke(1.dp, Color(0xFFE8D5F5)), RoundedCornerShape(16.dp))
-                            .padding(horizontal = 16.dp, vertical = 12.dp)
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            s.features.forEach { (icon, label) ->
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(icon, fontSize = 18.sp)
-                                    Spacer(Modifier.width(12.dp))
-                                    Text(label, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF2D1B69))
-                                }
-                            }
-                        }
-                    }
-
-                    Spacer(Modifier.height(20.dp))
-
-                    // ── Primary action button ─────────────────────────────────
-                    when (step) {
-                        0 -> {
-                            if (!notifGranted) {
-                                Button(
-                                    onClick = onRequestNotifications,
-                                    modifier = Modifier.fillMaxWidth().height(54.dp),
-                                    shape = RoundedCornerShape(50.dp),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3D1A78))
-                                ) {
-                                    Text("${s.primaryIcon}  ${s.primaryLabel}", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Color.White)
-                                }
-                            } else {
-                                Box(
-                                    Modifier.fillMaxWidth().height(54.dp).clip(RoundedCornerShape(50.dp))
-                                        .background(W.Success.copy(alpha = 0.12f))
-                                        .border(BorderStroke(1.dp, W.Success.copy(alpha = 0.5f)), RoundedCornerShape(50.dp)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text("✓  Notifications enabled", color = W.Success, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-                                }
-                            }
-                        }
-                        1 -> Button(
-                            onClick = onOpenNotificationSettings,
-                            modifier = Modifier.fillMaxWidth().height(54.dp),
-                            shape = RoundedCornerShape(50.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3D1A78))
-                        ) {
-                            Text("${s.primaryIcon}  ${s.primaryLabel}", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Color.White)
-                        }
-                        else -> Button(
-                            onClick = onAddWidget,
-                            modifier = Modifier.fillMaxWidth().height(54.dp),
-                            shape = RoundedCornerShape(50.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3D1A78))
-                        ) {
-                            Text("${s.primaryIcon}  ${s.primaryLabel}", fontWeight = FontWeight.SemiBold, fontSize = 15.sp, color = Color.White)
-                        }
-                    }
-
-                    Spacer(Modifier.height(10.dp))
-
-                    // ── Next / Finish outline button ──────────────────────────
-                    OutlinedButton(
-                        onClick = { if (step < 2) step++ else onFinish() },
-                        modifier = Modifier.fillMaxWidth().height(52.dp),
-                        shape = RoundedCornerShape(50.dp),
-                        border = BorderStroke(1.5.dp, Color(0xFF3D1A78))
-                    ) {
-                        Text(
-                            if (step < 2) "Next" else "Finish",
-                            fontWeight = FontWeight.SemiBold, fontSize = 15.sp,
-                            color = Color(0xFF3D1A78)
-                        )
-                    }
-
-                    Spacer(Modifier.height(8.dp))
-
-                    // ── Skip link ─────────────────────────────────────────────
-                    TextButton(
-                        onClick = onFinish,
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
-                    ) {
-                        Text(
-                            "Skip setup",
-                            color = Color(0xFF7B2FBE),
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            style = androidx.compose.ui.text.TextStyle(
-                                textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
-                            )
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(12.dp))
             }
         }
     }
