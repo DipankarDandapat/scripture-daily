@@ -133,30 +133,32 @@ fun TreeIllustration(stage: TreeStage, modifier: Modifier = Modifier, locked: Bo
 
 /** The single progress card on Home: tree, level + status, encouragement, "View journey" and the five milestones. */
 @Composable
-fun WisdomTreeCard(state: TreeState, onJourney: () -> Unit, modifier: Modifier = Modifier, activities: TreeActivitiesDto? = null, showActivities: Boolean = false) {
+fun WisdomTreeCard(state: TreeState, onJourney: () -> Unit, modifier: Modifier = Modifier, activities: TreeActivitiesDto? = null, showActivities: Boolean = false, showMilestones: Boolean = false) {
     Column(
         modifier.fillMaxWidth().clip(RoundedCornerShape(26.dp)).background(CardBg).border(BorderStroke(1.dp, W.Gold.copy(alpha = 0.25f)), RoundedCornerShape(26.dp))
-            .padding(start = 18.dp, end = 12.dp, top = 16.dp, bottom = 12.dp)
+            .padding(start = 16.dp, end = 12.dp, top = 12.dp, bottom = 10.dp)
     ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-            Column(Modifier.weight(1f).padding(top = 2.dp)) {
-                Text("🌱  Wisdom Tree", fontSize = 21.sp, fontWeight = FontWeight.Bold, color = W.Ink)
-                Spacer(Modifier.height(8.dp))
+        // Compact by design: the daily verse is the hero of Home, the tree is a supporting visual (~96dp tall).
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("🌱  Wisdom Tree", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = W.Ink)
+                Spacer(Modifier.height(6.dp))
                 Box(Modifier.clip(RoundedCornerShape(50)).background(Color(0xFFFFE8A6)).padding(horizontal = 12.dp, vertical = 5.dp)) {
                     Text("${state.stage.emoji}  Level ${state.level} · ${state.status}", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF4A3410))
                 }
-                Spacer(Modifier.height(10.dp))
-                Text(TreeLogic.message(state), fontSize = 13.sp, color = W.InkMid, lineHeight = 18.sp)
-                Spacer(Modifier.height(10.dp))
-                Text("View journey  →", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = W.PurpleDark,
+                Spacer(Modifier.height(6.dp))
+                Text(TreeLogic.message(state), fontSize = 12.sp, color = W.InkMid, lineHeight = 16.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                Text("View journey  →", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = W.PurpleDark,
                     modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onJourney).padding(vertical = 6.dp).semantics { contentDescription = "View your Wisdom Tree journey" })
             }
-            TreeIllustration(state.stage, Modifier.width(150.dp).height(150.dp), animated = true, description = "Your Wisdom Tree at the ${state.stage.label} stage")
+            TreeIllustration(state.stage, Modifier.size(88.dp), animated = true, description = "Your Wisdom Tree at the ${state.stage.label} stage")
         }
-        Spacer(Modifier.height(6.dp))
-        Box(Modifier.fillMaxWidth().height(1.dp).background(W.Gold.copy(alpha = 0.25f)))
-        Spacer(Modifier.height(8.dp))
-        MilestoneRow(state)
+        if (showMilestones) {
+            Spacer(Modifier.height(6.dp))
+            Box(Modifier.fillMaxWidth().height(1.dp).background(W.Gold.copy(alpha = 0.25f)))
+            Spacer(Modifier.height(8.dp))
+            MilestoneRow(state)
+        }
         // This level's own activities. When every one is done (nothing pending) the box is not composed at all.
         if (showActivities && activities != null && !activities.allCompleted) {
             Spacer(Modifier.height(10.dp))

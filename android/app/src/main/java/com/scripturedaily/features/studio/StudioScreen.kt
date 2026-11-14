@@ -101,7 +101,7 @@ fun StudioScreen(verse: Verse, religionId: Int, religionCode: String?, initialTa
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (tab == StudioTab.SHARE) ShareTab(verse, style, templates, onShared = onActivity) { style = it }
-            else VideoTab(verse, style, templates) { style = it }
+            else VideoTab(verse, style, templates, religionId) { style = it }
             Spacer(Modifier.height(24.dp))
         }
     }
@@ -280,13 +280,15 @@ private fun ShareTab(verse: Verse, style: CardStyle, templates: List<StudioTempl
 
 // ── Video Studio ───────────────────────────────────────────────────────────────
 @Composable
-private fun VideoTab(verse: Verse, baseStyle: CardStyle, templates: List<StudioTemplate>, onChange: (CardStyle) -> Unit) {
+private fun VideoTab(verse: Verse, baseStyle: CardStyle, templates: List<StudioTemplate>, religionId: Int, onChange: (CardStyle) -> Unit) {
     val context = LocalContext.current
     val activity = context as Activity
     val scope = rememberCoroutineScope()
     val style = baseStyle.copy(format = CardFormat.STORY)
     var seconds by remember { mutableStateOf(12) }
-    var music by remember { mutableStateOf(MusicStyle.CALM_PAD) }
+    // Every track is available; the ones inspired by the user's tradition are listed first and the first one is the default.
+    val musicOptions = remember(religionId) { MusicStyle.ordered(religionId) }
+    var music by remember(religionId) { mutableStateOf(musicOptions.first()) }
     var volume by remember { mutableFloatStateOf(0.8f) }
     var animation by remember { mutableStateOf(TextAnimation.FADE) }
     var motion by remember { mutableStateOf(BgMotion.ZOOM_IN) }
@@ -324,7 +326,7 @@ private fun VideoTab(verse: Verse, baseStyle: CardStyle, templates: List<StudioT
             Switch(checked = particles, onCheckedChange = { particles = it }, colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = W.Gold))
         }
         Label("Calm music")
-        ChipRow(MusicStyle.values().toList(), music, { it.label }) { if (!running) { music = it; MusicPreview.stop(); listening = false } }
+        ChipRow(musicOptions, music, { if (it.tradition == religionId && it.tradition != null) "★ ${it.label}" else it.label }) { if (!running) { music = it; MusicPreview.stop(); listening = false } }
         Text(music.description, fontSize = 11.sp, color = W.InkSoft)
         if (music != MusicStyle.NONE) {
             Label("Volume · ${(volume * 100).toInt()}%")
@@ -380,6 +382,7 @@ private fun VideoTab(verse: Verse, baseStyle: CardStyle, templates: List<StudioT
         val file = result!!
         Text("Your video is ready", fontWeight = FontWeight.Bold, fontSize = 17.sp, color = W.Ink)
         var view by remember { mutableStateOf<VideoView?>(null) }
+        DisposableEffect(file) { onDispose { runCatching { view?.stopPlayback() }; view = null } }
         Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             AndroidView(
                 factory = { ctx ->
@@ -447,29 +450,32 @@ private fun VideoTab(verse: Verse, baseStyle: CardStyle, templates: List<StudioT
 private fun LivePreview(verse: Verse, options: VideoOptions, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val pw = 360; val ph = 640
-    val bitmap = remember { Bitmap.createBitmap(pw, ph, Bitmap.Config.ARGB_8888) }
-    val image: ImageBitmap = remember(bitmap) { bitmap.asImageBitmap() }
-    var tick by remember { mutableIntStateOf(0) }
+    // Triple buffering: frames are always drawn into a bitmap that is NOT the one on screen, and only then published.
+    // (The old single shared bitmap was written on a background thread while the UI drew it — visible tearing/flicker —
+    // and a restarted effect could write into it while it was displayed.)
+    val buffers = remember { Array(3) { Bitmap.createBitmap(pw, ph, Bitmap.Config.ARGB_8888) } }
+    val cursor = remember { IntArray(1) }
+    var shown by remember { mutableStateOf<ImageBitmap?>(null) }
     var playing by remember { mutableStateOf(true) }
     val content = remember(verse.id, verse.text) { CardContent.from(verse) }
     LaunchedEffect(options.style, options.animation, options.motion, options.transition, options.particles, options.seconds, content, playing) {
         val composer = withContext(Dispatchers.Default) { FrameComposer(context, content, options.copy(width = pw, height = ph), pw, ph) }
-        val canvas = android.graphics.Canvas(bitmap)
         try {
             val start = System.nanoTime()
             while (true) {
                 val t = if (playing) ((System.nanoTime() - start) / 1e9f) % (options.seconds + 1.2f) else 2.5f
-                withContext(Dispatchers.Default) { composer.draw(canvas, t.coerceAtMost(options.seconds.toFloat())) }
-                tick++
+                val target = buffers[cursor[0]]
+                cursor[0] = (cursor[0] + 1) % buffers.size
+                withContext(Dispatchers.Default) { composer.draw(android.graphics.Canvas(target), t.coerceAtMost(options.seconds.toFloat())) }
+                shown = target.asImageBitmap()
                 if (!playing) break
-                delay(60)
+                delay(50)
             }
         } finally { composer.release() }
     }
     Box(modifier.aspectRatio(9f / 16f).shadow(10.dp, RoundedCornerShape(18.dp)).clip(RoundedCornerShape(18.dp)).clickable { playing = !playing }) {
         Canvas(Modifier.fillMaxSize().semantics { contentDescription = "Animated video preview. Tap to ${if (playing) "pause" else "play"}." }) {
-            tick // observe: redraw when a new frame is ready
-            drawImage(image, dstOffset = androidx.compose.ui.unit.IntOffset.Zero, dstSize = IntSize(size.width.toInt(), size.height.toInt()))
+            shown?.let { drawImage(it, dstOffset = androidx.compose.ui.unit.IntOffset.Zero, dstSize = IntSize(size.width.toInt(), size.height.toInt())) }
         }
         Box(Modifier.align(Alignment.TopEnd).padding(10.dp).clip(RoundedCornerShape(50)).background(Color.Black.copy(alpha = 0.45f)).padding(horizontal = 10.dp, vertical = 4.dp)) {
             Text(if (playing) "Preview · tap to pause" else "Paused · tap to play", color = Color.White, fontSize = 10.sp)

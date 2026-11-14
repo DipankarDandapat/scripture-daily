@@ -18,6 +18,7 @@ class WisdomOneApplication : Application() {
         AppConfigManager.init(this)
         AppConfigManager.observeForeground(this)
         AdManager.attach(this)
+        runCatching { com.scripturedaily.data.VerseScheduler.ensureArmed(this) }
         // The Meta SDK never auto-initialises (see AndroidManifest). Wait for the startup config, then apply meta_ads_enabled —
         // and re-apply it whenever a later refresh changes it, so turning the flag off also stops the SDK.
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {

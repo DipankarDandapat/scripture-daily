@@ -20,9 +20,13 @@ class VerseSyncWorker(context: Context, params: WorkerParameters) : CoroutineWor
         val scripture = prefs.getInt("scripture", 0)  // cache label only; verses come from the whole tradition
         return try {
             val db = ScriptureDatabase.get(applicationContext).verses()
-            val verse = ApiClient.api.refreshActiveVerse().data.verse
+            val response = ApiClient.api.refreshActiveVerse().data
+            val verse = response.verse
+            // The server owns the schedule: always arm the next alarm for its next_update_at (even when nothing changed this time).
+            VerseScheduler.recordServerSchedule(applicationContext, response.nextUpdateAt)
             val previousActiveId = prefs.getInt("last_verse_id", -1)
-            if (previousActiveId == verse.id && db.find(verse.id) != null) return Result.success()
+            val lockWallpaperStale = prefs.getBoolean("lock_screen", false) && !LockScreenVerse.isWallpaperAppliedForVerse(applicationContext, verse.id)
+            if (previousActiveId == verse.id && db.find(verse.id) != null && !lockWallpaperStale) return Result.success()
             val previous = db.find(verse.id)
             val cached = verse.toCached(verse.scriptureId ?: scripture, verse.languageId ?: language)
             db.save(cached)
@@ -33,16 +37,12 @@ class VerseSyncWorker(context: Context, params: WorkerParameters) : CoroutineWor
             ScriptureWidget().refreshAll(applicationContext)
             LockScreenVerse.applyIfEnabled(applicationContext, verse.id, verse.scripture, verse.text, verse.reference())
             Result.success()
-        } catch (_: Exception) { Result.retry() }
+        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+        catch (_: Exception) { Result.retry() }
     }
 
     companion object {
-        fun schedule(context: Context, frequency: String, resetTimer: Boolean = false) {
-            val hours = when (frequency) { "Every hour" -> 1L; "Every 6 hours" -> 6L; "Every 12 hours" -> 12L; else -> 24L }
-            // Keep-same-verse wallpaper refresh works offline; normal verse updates retry when network is unavailable.
-            val request = PeriodicWorkRequestBuilder<VerseSyncWorker>(hours, TimeUnit.HOURS).build()
-            val policy = if (resetTimer) ExistingPeriodicWorkPolicy.REPLACE else ExistingPeriodicWorkPolicy.UPDATE
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork("scripture-daily-sync", policy, request)
-        }
+        /** Kept for existing callers; see [VerseScheduler] for how updates are scheduled. */
+        fun schedule(context: Context, frequency: String, resetTimer: Boolean = false) = VerseScheduler.schedule(context, frequency, resetTimer)
     }
 }

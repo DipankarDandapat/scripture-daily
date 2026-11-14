@@ -58,6 +58,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -527,7 +528,7 @@ fun FirstRunSetupScreen(
 ) {
     LightSystemBars()
     val context = LocalContext.current
-    var step by remember { mutableIntStateOf(initialStep.coerceIn(0, 2)) }
+    var step by rememberSaveable { mutableIntStateOf(initialStep.coerceIn(0, 2)) }
     fun goTo(s: Int) { step = s; onStepChange(s) }
     BackHandler(enabled = step > 0) { goTo(step - 1) }
 
