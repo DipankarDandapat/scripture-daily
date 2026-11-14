@@ -208,6 +208,75 @@ object LockScreenVerse {
             previewSelected = true, showVerseOverride = showVerseOverride, showReferenceOverride = showReferenceOverride, widthPx = widthPx, heightPx = heightPx)
     }
 
+    /**
+     * Output size in pixels. Uses the real display (including system bars) so the wallpaper has exactly the screen's aspect ratio;
+     * an over-large size is scaled down *proportionally* (never clamped per-axis, which used to stretch tall phones).
+     */
+    private fun targetSize(context: Context, widthPx: Int, heightPx: Int): Pair<Int, Int> {
+        var w: Int; var h: Int
+        if (widthPx > 0 && heightPx > 0) { w = widthPx; h = heightPx } else {
+            val real = realScreenSize(context)
+            w = real.first; h = real.second
+        }
+        val maxSide = 3200f
+        val down = minOf(1f, maxSide / maxOf(w, h))
+        val minSide = 240f
+        val up = maxOf(1f, minSide / minOf(w, h))
+        val k = if (down < 1f) down else up
+        return Pair(maxOf(1, (w * k).toInt()), maxOf(1, (h * k).toInt()))
+    }
+
+    private fun realScreenSize(context: Context): Pair<Int, Int> = try {
+        val wm = context.getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val b = wm.maximumWindowMetrics.bounds
+            Pair(minOf(b.width(), b.height()), maxOf(b.width(), b.height()))
+        } else {
+            val m = android.util.DisplayMetrics()
+            @Suppress("DEPRECATION") wm.defaultDisplay.getRealMetrics(m)
+            Pair(minOf(m.widthPixels, m.heightPixels), maxOf(m.widthPixels, m.heightPixels))
+        }
+    } catch (_: Exception) {
+        val m = context.resources.displayMetrics
+        Pair(m.widthPixels, m.heightPixels)
+    }
+
+    /**
+     * Draws artwork without stretching. When "cover" scaling would throw away more than ~22% of the image (artwork is 2:3 but phones
+     * are ~9:20), the whole picture is fitted to the width instead and the remaining top/bottom is filled with a soft, darkened
+     * extension of the same image, feathered into the artwork so there is no visible seam.
+     */
+    private fun drawArtwork(canvas: Canvas, src: Bitmap, width: Int, height: Int) {
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG)
+        val cover = maxOf(width.toFloat() / src.width, height.toFloat() / src.height)
+        val fitW = width.toFloat() / src.width
+        val keptFraction = fitW / cover          // share of the source that stays visible under cover scaling
+        if (keptFraction >= 0.78f || src.width.toFloat() / src.height >= width.toFloat() / height) {
+            val sw = src.width * cover; val sh = src.height * cover
+            canvas.drawBitmap(src, null, RectF((width - sw) / 2f, (height - sh) / 2f, (width + sw) / 2f, (height + sh) / 2f), paint)
+            return
+        }
+        // 1) soft backdrop: cover-scaled via a tiny intermediate bitmap (cheap blur), darkened a little
+        val tinyW = 32; val tinyH = maxOf(1, (tinyW * height.toFloat() / width).toInt())
+        val tiny = Bitmap.createScaledBitmap(src, tinyW, tinyH, true)
+        canvas.drawBitmap(tiny, null, RectF(0f, 0f, width.toFloat(), height.toFloat()), paint)
+        tiny.recycle()
+        canvas.drawColor(Color.argb(70, 0, 0, 0))
+        // 2) the full artwork, fitted to the width, centred
+        val ph = src.height * fitW
+        val top = (height - ph) / 2f
+        val layer = canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), null)
+        canvas.drawBitmap(src, null, RectF(0f, top, width.toFloat(), top + ph), paint)
+        // 3) feather the top/bottom edges of the artwork into the backdrop
+        val feather = minOf(ph * 0.18f, height * 0.12f)
+        val mask = Paint().apply { xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.DST_OUT) }
+        mask.shader = LinearGradient(0f, top, 0f, top + feather, Color.argb(255, 0, 0, 0), Color.argb(0, 0, 0, 0), Shader.TileMode.CLAMP)
+        canvas.drawRect(0f, top, width.toFloat(), top + feather, mask)
+        mask.shader = LinearGradient(0f, top + ph - feather, 0f, top + ph, Color.argb(0, 0, 0, 0), Color.argb(255, 0, 0, 0), Shader.TileMode.CLAMP)
+        canvas.drawRect(0f, top + ph - feather, width.toFloat(), top + ph, mask)
+        canvas.restoreToCount(layer)
+    }
+
     private fun render(
         context: Context, scripture: String, text: String, reference: String, rotation: Int,
         themeOverride: String?, categoryOverride: String?, textSizeOverride: String? = null,
@@ -215,9 +284,7 @@ object LockScreenVerse {
         religionOverride: Int? = null, modeOverride: String? = null, previewSelected: Boolean = false,
         showVerseOverride: Boolean? = null, showReferenceOverride: Boolean? = null, widthPx: Int = 0, heightPx: Int = 0
     ): Bitmap {
-        val metrics = context.resources.displayMetrics
-        val width = (if (widthPx > 0) widthPx else metrics.widthPixels).coerceIn(300, 1440)
-        val height = (if (heightPx > 0) heightPx else metrics.heightPixels).coerceIn(500, 3200)
+        val (width, height) = targetSize(context, widthPx, heightPx)
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val theme = themeOverride ?: (prefs.getString("wallpaper_theme", "MULTICOLOR") ?: "MULTICOLOR")
         val palette = paletteFor(theme, rotation)
@@ -238,11 +305,7 @@ object LockScreenVerse {
         val imageResource = if (sourceImage != null) 1 else 0
         val bgPaint = Paint(Paint.ANTI_ALIAS_FLAG)
         if (sourceImage != null) {
-            val scale = maxOf(width.toFloat() / sourceImage.width, height.toFloat() / sourceImage.height)
-            val scaledW = sourceImage.width * scale
-            val scaledH = sourceImage.height * scale
-            val dest = RectF((width - scaledW) / 2f, (height - scaledH) / 2f, (width + scaledW) / 2f, (height + scaledH) / 2f)
-            canvas.drawBitmap(sourceImage, null, dest, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+            drawArtwork(canvas, sourceImage, width, height)
             sourceImage.recycle()
             val tint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 shader = LinearGradient(0f, 0f, 0f, height.toFloat(),

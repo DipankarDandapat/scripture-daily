@@ -61,6 +61,7 @@ import androidx.compose.material3.*
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.ReadOnlyComposable
 import com.scripturedaily.ui.W
 import com.scripturedaily.ui.WisdomOneTheme
@@ -387,10 +388,14 @@ private fun ScriptureApp(
     // Update prompts and maintenance mode are handled before this screen is ever composed (gate/AppGateScreens.kt).
 
     // ── Health check — nothing else starts until the server responds OK ─────
-    var healthState by remember { mutableStateOf<HealthState>(HealthState.Checking) }
+    // healthReady survives Activity re-creation (e.g. the system re-themes the app after a wallpaper change). Without it the whole
+    // app fell back to the "connecting" screen and reloaded every time the verse wallpaper was applied.
+    var healthReady by rememberSaveable { mutableStateOf(false) }
+    var healthState by remember { mutableStateOf<HealthState>(if (healthReady) HealthState.Ready else HealthState.Checking) }
     var healthRetryKey by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(healthRetryKey) {
+        if (healthReady && healthRetryKey == 0) return@LaunchedEffect
         healthState = HealthState.Checking
         var success = false
         for (attempt in 1..3) {
@@ -401,6 +406,7 @@ private fun ScriptureApp(
             } catch (_: Exception) {}
             if (attempt < 3) kotlinx.coroutines.delay(2_000L)
         }
+        if (success) healthReady = true
         healthState = if (success) HealthState.Ready else HealthState.Failed
     }
 
@@ -418,8 +424,8 @@ private fun ScriptureApp(
     var lockScreen by remember { mutableStateOf(store.getBoolean("lock_screen", false)) }
     var configured by remember { mutableStateOf(store.getBoolean("configured", false)) }
     var setupGuidePending by remember { mutableStateOf(store.getBoolean("setup_guide_pending", false)) }
-    var splashDone by remember { mutableStateOf(false) }
-    var page by remember { mutableStateOf("Home") }
+    var splashDone by rememberSaveable { mutableStateOf(false) }
+    var page by rememberSaveable { mutableStateOf("Home") }
     var showFeedback by remember { mutableStateOf(false) }
     var verse by remember { mutableStateOf<Verse?>(null) }
     var readingPrefsVersion by remember { mutableIntStateOf(0) }
@@ -852,7 +858,11 @@ private fun ScriptureApp(
         store.getString("bearer_token", null)
             ?: withContext(Dispatchers.IO) { refreshToken(context) }
 
+    var lockScreenBusy by remember { mutableStateOf(false) }
     fun enableLockScreen() {
+        // Ignore repeated taps / recomposition-driven re-entry while the first request is still running.
+        if (lockScreenBusy) return
+        lockScreenBusy = true
         lockScreen = true
         store.edit().putBoolean("lock_screen", true).apply()
         scope.launch {
@@ -861,9 +871,11 @@ private fun ScriptureApp(
             if (message?.startsWith("No verse") == true) {
                 lockScreen = false
                 store.edit().putBoolean("lock_screen", false).apply()
+                lockScreenBusy = false
                 snackbarHostState.showSnackbar(message)
                 return@launch
             }
+            lockScreenBusy = false
             message?.let { snackbarHostState.showSnackbar(it) }
             // 2. Ask for notification permission only if not yet granted and not yet asked.
             if (Build.VERSION.SDK_INT >= 33 &&
@@ -1080,7 +1092,7 @@ private fun ScriptureApp(
             },
             // Step 2 — wallpaper: exactly what the Home screen "Lock screen verse" switch does.
             onEnableWallpaper = {
-                if (!lockScreen) enableLockScreen()
+                if (!lockScreen && !lockScreenBusy) enableLockScreen()
             },
             // Step 3 — widget: Android's pin-widget flow where the launcher supports it.
             onAddWidget = {
@@ -1249,6 +1261,23 @@ private fun ScriptureApp(
                     savedVerses,
                     onOpen = { v -> verse = v; page = "Home" },
                     onRemove = { v -> scope.launch { toggleFavorite(v) } },
+                )
+                "Explore" -> ExploreScreen(
+                    query, { query = it }, results, loading, favoriteIds,
+                    languages, scriptures, searchLanguageFilter, searchScriptureFilter,
+                    onSearch = {
+                        val q = query.trim()
+                        if (q.length >= 2) scope.launch {
+                            loading = true
+                            results = try { withContext(Dispatchers.IO) { ApiClient.api.search(q, searchLanguageFilter, searchScriptureFilter) } } catch (e: kotlinx.coroutines.CancellationException) { throw e } catch (_: Exception) { emptyList() }
+                            loading = false
+                        }
+                    },
+                    onFavorite = { v -> scope.launch { toggleFavorite(v) } },
+                    onQueryChange = { query = it; if (it.isEmpty()) results = emptyList() },
+                    onLanguageFilter = { searchLanguageFilter = it; results = emptyList() },
+                    onScriptureFilter = { searchScriptureFilter = it; results = emptyList() },
+                    onOpen = { v -> verse = v; page = "Home" }
                 )
                 "Discover" -> DiscoverScreen(onOpen = { item ->
                     when (item) {
@@ -1780,7 +1809,8 @@ private fun HomeScreen(
             AdSlot("home_after_mood")
             // A completed five-level journey passes null: emit no layout node and no spacer.
             // All following Home content naturally moves up in the scroll column.
-            treeSlot?.invoke()
+            // The verse is the hero: while it is still loading (or failed) the tree stays on top, otherwise it sits below the verse actions.
+            if (verse == null) treeSlot?.invoke()
             if (loading && verse == null) {
                 Box(Modifier.fillMaxWidth().height(280.dp).clip(RoundedCornerShape(28.dp)).background(Amber.copy(alpha = 0.06f)), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -1818,6 +1848,7 @@ private fun HomeScreen(
                     }
                 }
                 actionsSlot()
+                treeSlot?.invoke()
                 AdSlot("home_after_daily_verse")
                 Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(if (lockScreen) Amber.copy(alpha = 0.1f) else MaterialTheme.colorScheme.surface).border(1.dp, if (lockScreen) Amber.copy(alpha = 0.4f) else Amber.copy(alpha = 0.1f), RoundedCornerShape(20.dp)).padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1992,7 +2023,7 @@ private fun FavoritesScreen(
 }
 
 @Composable
-private fun ExploreScreen(query: String, onQuery: (String) -> Unit, results: List<Verse>, loading: Boolean, favoriteIds: Set<Int>, languages: List<CatalogItem>, scriptures: List<CatalogItem>, languageFilter: Int?, scriptureFilter: Int?, onSearch: () -> Unit, onFavorite: (Verse) -> Unit, onQueryChange: (String) -> Unit, onLanguageFilter: (Int?) -> Unit, onScriptureFilter: (Int?) -> Unit) {
+private fun ExploreScreen(query: String, onQuery: (String) -> Unit, results: List<Verse>, loading: Boolean, favoriteIds: Set<Int>, languages: List<CatalogItem>, scriptures: List<CatalogItem>, languageFilter: Int?, scriptureFilter: Int?, onSearch: () -> Unit, onFavorite: (Verse) -> Unit, onQueryChange: (String) -> Unit, onLanguageFilter: (Int?) -> Unit, onScriptureFilter: (Int?) -> Unit, onOpen: (Verse) -> Unit = {}) {
     val keyboardController = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     var searched by remember { mutableStateOf(false) }
 
@@ -2024,10 +2055,11 @@ private fun ExploreScreen(query: String, onQuery: (String) -> Unit, results: Lis
             Icon(Icons.Outlined.Search, contentDescription = null, tint = Amber.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(10.dp))
             TextField(
-                value = query, onValueChange = { onQuery(it); onQueryChange(it) }, modifier = Modifier.weight(1f),
-                placeholder = { Text("Search a word or idea…", color = InkSoft, fontSize = 14.sp) },
+                value = query, onValueChange = { searched = false; onQuery(it); onQueryChange(it) }, modifier = Modifier.weight(1f),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { if (query.trim().length >= 2 && !loading) { keyboardController?.hide(); searched = true; onSearch() } }),
+                placeholder = { Text("Search a word, idea or reference…", color = InkSoft, fontSize = 14.sp) },
                 singleLine = true,
-                enabled = !searched,
                 colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, focusedIndicatorColor = Color.Transparent, unfocusedIndicatorColor = Color.Transparent,
                     disabledContainerColor = Color.Transparent, disabledIndicatorColor = Color.Transparent, disabledTextColor = Ink)
             )
@@ -2063,7 +2095,7 @@ private fun ExploreScreen(query: String, onQuery: (String) -> Unit, results: Lis
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(results) { v ->
                     val saved = favoriteIds.contains(v.id)
-                    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surface).border(1.dp, Amber.copy(alpha = 0.12f), RoundedCornerShape(20.dp))) {
+                    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surface).border(1.dp, Amber.copy(alpha = 0.12f), RoundedCornerShape(20.dp)).clickable { onOpen(v) }) {
                         Column {
                             Box(Modifier.fillMaxWidth().height(3.dp).background(Brush.horizontalGradient(listOf(Amber, AmberLight))))
                             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

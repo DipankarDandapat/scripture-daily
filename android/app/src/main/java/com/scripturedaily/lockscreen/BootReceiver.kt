@@ -14,12 +14,15 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         val action = intent?.action
         if (action != Intent.ACTION_BOOT_COMPLETED &&
+            action != Intent.ACTION_MY_PACKAGE_REPLACED &&
             action != Intent.ACTION_TIME_CHANGED &&
             action != Intent.ACTION_TIMEZONE_CHANGED
         ) return
         val pending = goAsync()
         val app = context.applicationContext
         PaletteRefreshWorker.cancel(app)
+        // Alarms do not survive a reboot (and a clock/zone change shifts them): re-arm the verse schedule from persisted state.
+        com.scripturedaily.data.VerseScheduler.ensureArmed(app)
         if (action != Intent.ACTION_BOOT_COMPLETED) {
             pending.finish()
             return
@@ -29,6 +32,7 @@ class BootReceiver : BroadcastReceiver() {
         com.scripturedaily.ambient.AmbientNotification.update(app)
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                runCatching { com.scripturedaily.widget.ScriptureWidget().refreshAll(app) }
                 val prefs = app.getSharedPreferences("reader", Context.MODE_PRIVATE)
                 if (!prefs.getBoolean("lock_screen", false) && !prefs.getBoolean("reminders", false)) return@launch
                 val cached = ScriptureDatabase.get(app).verses().matching(

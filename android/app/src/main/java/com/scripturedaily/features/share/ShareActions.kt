@@ -48,49 +48,82 @@ object StudioPrefs {
 
 object ShareActions {
     private val WHATSAPP = listOf("com.whatsapp", "com.whatsapp.w4b")
+    private const val SHARE_DIR = "shared"
 
     private fun cacheUri(context: Context, file: File): Uri =
         FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
 
+    /** Writes the card to a uniquely named cache file (so a receiving app never sees a stale file with the same name). */
     fun writeCacheImage(context: Context, bmp: Bitmap, name: String = "wisdomone_card.png"): Uri {
-        val file = File(context.cacheDir, name)
-        file.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 95, it) }
+        val dir = File(context.cacheDir, SHARE_DIR).apply { mkdirs() }
+        pruneOld(dir)
+        val unique = name.substringBeforeLast('.') + "_" + System.currentTimeMillis() + "." + name.substringAfterLast('.', "png")
+        val file = File(dir, unique)
+        file.outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
         return cacheUri(context, file)
+    }
+
+    /** Old shared files are removed after a day; recent ones stay so the receiving app can still read them. */
+    private fun pruneOld(dir: File) {
+        val cutoff = System.currentTimeMillis() - 24L * 60 * 60 * 1000
+        dir.listFiles()?.forEach { if (it.lastModified() < cutoff) runCatching { it.delete() } }
+    }
+
+    /**
+     * Builds an ACTION_SEND for a content Uri. The Uri is also attached as ClipData and read permission is granted
+     * explicitly to the target, so the receiving app can open it whatever its Android version.
+     */
+    private fun sendIntent(context: Context, uri: Uri, mime: String, caption: String?, pkg: String?): Intent =
+        Intent(Intent.ACTION_SEND).apply {
+            type = mime
+            putExtra(Intent.EXTRA_STREAM, uri)
+            if (!caption.isNullOrBlank()) putExtra(Intent.EXTRA_TEXT, caption)
+            clipData = android.content.ClipData.newRawUri("WisdomOne", uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            if (pkg != null) {
+                `package` = pkg
+                runCatching { context.grantUriPermission(pkg, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            }
+        }
+
+    private fun chooser(context: Context, send: Intent, title: String) {
+        val chooser = Intent.createChooser(send, title).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(chooser)
     }
 
     fun shareImage(context: Context, bmp: Bitmap, caption: String) {
         val uri = writeCacheImage(context, bmp)
-        val send = Intent(Intent.ACTION_SEND).apply {
-            type = "image/png"; putExtra(Intent.EXTRA_STREAM, uri); putExtra(Intent.EXTRA_TEXT, caption)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(Intent.createChooser(send, "Share verse card").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        chooser(context, sendIntent(context, uri, "image/png", caption, null), "Share verse card")
     }
 
     private fun installedWhatsApp(context: Context): String? =
         WHATSAPP.firstOrNull { pkg -> runCatching { context.packageManager.getPackageInfo(pkg, 0) }.isSuccess }
 
-    /** Opens WhatsApp's status composer with the image/video. Falls back to the share sheet when WhatsApp is missing. */
+    /**
+     * Opens WhatsApp's share screen directly with the image/video attached. The caption is deliberately NOT sent as
+     * EXTRA_TEXT here: some WhatsApp builds then treat the share as text-only and drop the media. Falls back to the
+     * system share sheet when WhatsApp is missing or cannot handle the file. Returns true when WhatsApp opened.
+     */
     fun shareToWhatsApp(context: Context, uri: Uri, mime: String, caption: String): Boolean {
         val pkg = installedWhatsApp(context)
-        val send = Intent(Intent.ACTION_SEND).apply {
-            type = mime; putExtra(Intent.EXTRA_STREAM, uri); putExtra(Intent.EXTRA_TEXT, caption)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-            if (pkg != null) `package` = pkg
+        if (pkg != null) {
+            try {
+                context.startActivity(sendIntent(context, uri, mime, null, pkg).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                return true
+            } catch (_: android.content.ActivityNotFoundException) { /* fall through to the share sheet */ }
+            catch (_: SecurityException) { /* fall through to the share sheet */ }
         }
-        return if (pkg != null) { context.startActivity(send); true } else {
-            context.startActivity(Intent.createChooser(send, "Share").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            Toast.makeText(context, "WhatsApp is not installed — choose another app", Toast.LENGTH_SHORT).show()
-            false
+        try {
+            chooser(context, sendIntent(context, uri, mime, caption, null), "Share")
+            Toast.makeText(context, "WhatsApp isn't available — choose another app", Toast.LENGTH_SHORT).show()
+        } catch (_: android.content.ActivityNotFoundException) {
+            Toast.makeText(context, "No app found to share with", Toast.LENGTH_SHORT).show()
         }
+        return false
     }
 
     fun shareVideo(context: Context, uri: Uri, caption: String) {
-        val send = Intent(Intent.ACTION_SEND).apply {
-            type = "video/mp4"; putExtra(Intent.EXTRA_STREAM, uri); putExtra(Intent.EXTRA_TEXT, caption)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(Intent.createChooser(send, "Share video").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        chooser(context, sendIntent(context, uri, "video/mp4", caption, null), "Share video")
     }
 
     /** Saves a PNG into Pictures/WisdomOne. Returns the content Uri, or null when unsupported. */
