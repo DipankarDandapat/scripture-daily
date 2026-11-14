@@ -24,7 +24,7 @@ class VerseSyncWorker(context: Context, params: WorkerParameters) : CoroutineWor
             val previousActiveId = prefs.getInt("last_verse_id", -1)
             if (previousActiveId == verse.id && db.find(verse.id) != null) return Result.success()
             val previous = db.find(verse.id)
-            val cached = verse.toCached(verse.scriptureId ?: scripture, verse.languageId ?: language, previous?.favorite == true)
+            val cached = verse.toCached(verse.scriptureId ?: scripture, verse.languageId ?: language)
             db.save(cached)
             prefs.edit().putInt("last_verse_id", verse.id).putInt("current_verse_id", verse.id)
                 .putString("last_verse_day", java.time.LocalDate.now().toString())

@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     challenge_one_per_day: bool = True
     # Firebase Admin SDK service account JSON file path (optional — FCM push only works when set)
     firebase_credentials_path: str = ""
+    # Swagger UI basic-auth credentials
+    swagger_username: str = "apiadmin"
+    swagger_password: str = "ChangeThisPassword"
 
     @property
     def allowed_origins(self) -> list[str]:

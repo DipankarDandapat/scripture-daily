@@ -40,7 +40,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.rounded.ArrowForward
+import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.LocalFireDepartment
@@ -341,7 +341,7 @@ fun SplashScreen(onContinue: () -> Unit) {
             Spacer(Modifier.height((34 * k).dp))
             PrimaryPill(
                 label = "Begin your journey",
-                trailingIcon = Icons.Rounded.ArrowForward,
+                trailingIcon = Icons.AutoMirrored.Rounded.ArrowForward,
                 height = (56 * k).dp,
                 fontSize = (18 * k),
                 onClick = onContinue,

@@ -76,6 +76,12 @@ data class FcmTokenInput(
     @SerializedName("fcm_token") val fcmToken: String
 )
 
+data class DeviceVersionInput(
+    @SerializedName("app_version") val appVersion: String,
+    @SerializedName("app_version_code") val appVersionCode: Int,
+    @SerializedName("os_version") val osVersion: String
+)
+
 data class FeedbackInput(
     val rating: Int,
     val comment: String?,
@@ -443,6 +449,9 @@ interface ScriptureApi {
     @PUT("devices/fcm-token")
     suspend fun updateFcmToken(@Body body: FcmTokenInput): Response<Unit>
 
+    @PUT("devices/version")
+    suspend fun updateDeviceVersion(@Body body: DeviceVersionInput): Response<Unit>
+
     @POST("feedback")
     suspend fun submitFeedback(@Body body: FeedbackInput): Response<Unit>
 }
@@ -460,8 +469,30 @@ object ApiClient {
                 chain.request()
             chain.proceed(req)
         }
+        val retryInterceptor = Interceptor { chain ->
+            val request = chain.request()
+            val isReadOnly = request.method == "GET" || request.method == "HEAD"
+            var response = runCatching { chain.proceed(request) }
+            var attempt = 0
+            while (attempt < 3) {
+                val code = response.getOrNull()?.code ?: 0
+                val shouldRetry = when {
+                    response.isFailure -> true                        // network / timeout
+                    code in 500..599 && isReadOnly -> true            // server error, safe to replay
+                    code in 500..599 && attempt == 0 -> true          // first retry on mutating calls (request may not have reached server)
+                    else -> false
+                }
+                if (!shouldRetry) break
+                response.getOrNull()?.close()
+                Thread.sleep(1_000L * (1 shl attempt))               // 1 s → 2 s → 4 s
+                attempt++
+                response = runCatching { chain.proceed(request) }
+            }
+            response.getOrThrow()
+        }
         val client = OkHttpClient.Builder()
             .addInterceptor(authInterceptor)
+            .addInterceptor(retryInterceptor)
             .addInterceptor(ChuckerInterceptor.Builder(context).build())
             .build()
         _api = Retrofit.Builder()

@@ -153,7 +153,7 @@ fun SettingsExperienceScreen(
 
     Column(Modifier.fillMaxSize().background(W.Parchment)) {
         if (route == "home") {
-            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 18.dp).padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 SettingsHeroHeader()
                 val entries = listOf(
                     SettingEntry("Tradition & Language", "$selectedTradition \u00b7 ${availableLanguages.firstOrNull { it.id == language }?.name ?: "Language"}", Icons.Outlined.Spa, "tradition", painterRes = traditionIcon(selectedTraditionItem?.code ?: "")),
@@ -259,76 +259,61 @@ fun SettingsExperienceScreen(
                         InfoCard("Frequency keeps your verse, wallpaper and widget in sync.")
                     }
                     "wallpaper" -> {
-                        // ── SURFACES ──────────────────────────────────────────────────────
-                        SectionTitle("LOCK SCREEN")
-                        ToggleCard("Verse on lock screen", "Automatically update your lock screen with a new verse.", autoWallpaper, icon = Icons.Outlined.Lock) { autoWallpaper = it; onLockScreen(it) }
-                        SectionTitle("REFRESH FREQUENCY")
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            com.scripturedaily.ambient.AmbientWisdom.FREQUENCIES.forEach { (value, label) ->
-                                FrequencyChip(label, selectedFrequency == value || (selectedFrequency == "Daily" && value == "Every 24 hours"), Modifier.weight(1f)) {
-                                    selectedFrequency = value
-                                    onSavePreferences(selectedReligion, selectedLanguage, value, selectedReminders, wallpaperMode)
-                                }
-                            }
-                        }
-                        SectionTitle("BACKGROUND IMAGE ROTATION")
                         val ambientPrefs = remember { context.getSharedPreferences("reader", Context.MODE_PRIVATE) }
-                        var imageOrder by remember { mutableStateOf(com.scripturedaily.ambient.AmbientWisdom.ImageOrder.of(ambientPrefs.getString(com.scripturedaily.ambient.AmbientWisdom.KEY_IMAGE_ORDER, null))) }
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            com.scripturedaily.ambient.AmbientWisdom.ImageOrder.entries.forEach { o ->
-                                SelectPill(o.label, "", imageOrder == o, Modifier.weight(1f)) {
-                                    imageOrder = o
-                                    ambientPrefs.edit().putString(com.scripturedaily.ambient.AmbientWisdom.KEY_IMAGE_ORDER, o.key).apply()
+
+                        // -- 1. LOCK SCREEN ON/OFF ------------------------------------------
+                        SectionTitle("LOCK SCREEN")
+                        ToggleCard("Verse on lock screen", "Show a verse on your lock screen wallpaper.", autoWallpaper, icon = Icons.Outlined.Lock) { autoWallpaper = it; onLockScreen(it) }
+
+                        if (autoWallpaper) {
+
+                        // -- 2. BACKGROUND STYLE (single radio · replaces two confusing toggles) --
+                        SectionTitle("BACKGROUND STYLE")
+                        listOf(
+                            Triple(WallpaperMode.VERSE_AND_IMAGE, "Artwork + verse", "A new image from your gallery with every verse."),
+                            Triple(WallpaperMode.KEEP_IMAGE,      "Keep my image",   "Verse updates; your chosen image stays."),
+                            Triple(WallpaperMode.COLORS,          "Colour theme",    "No photo · a colour gradient background.")
+                        ).forEach { (mode, title, subtitle) ->
+                            Row(
+                                Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                                    .background(if (wallpaperMode == mode) W.SurfaceAlt else W.Surface)
+                                    .border(if (wallpaperMode == mode) 1.5.dp else 1.dp, if (wallpaperMode == mode) W.PurpleMid else W.Gold.copy(alpha = .25f), RoundedCornerShape(16.dp))
+                                    .clickable { wallpaperMode = mode }.padding(14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(title, color = W.Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                                    Text(subtitle, color = W.InkMid, fontSize = 12.sp, lineHeight = 16.sp)
+                                }
+                                Box(Modifier.size(22.dp).clip(CircleShape).border(1.8.dp, if (wallpaperMode == mode) W.PurpleMid else W.InkSoft, CircleShape), contentAlignment = Alignment.Center) {
+                                    if (wallpaperMode == mode) Box(Modifier.size(12.dp).clip(CircleShape).background(W.PurpleMid))
                                 }
                             }
                         }
-                        InfoCard(imageOrder.detail)
 
-                        // ── WALLPAPER CONTENT ──────────────────────────────────────────────
-                        SectionTitle("WALLPAPER CONTENT")
-                        ToggleCard("Change Verse and Image Together", "Automatically rotate through your selected artwork with every new verse.", wallpaperMode == WallpaperMode.VERSE_AND_IMAGE, icon = Icons.Outlined.AutoAwesome) { on ->
-                            wallpaperMode = if (on) WallpaperMode.VERSE_AND_IMAGE else WallpaperMode.COLORS
-                        }
-                        ToggleCard("Keep Same Image", "Update the verse while keeping your current wallpaper.", wallpaperMode == WallpaperMode.KEEP_IMAGE, icon = Icons.Outlined.Lock) { on ->
-                            wallpaperMode = if (on) WallpaperMode.KEEP_IMAGE else WallpaperMode.COLORS
-                        }
-                        if (wallpaperMode == WallpaperMode.COLORS) InfoCard("Both options are off, so your verse appears on the colour themes below instead of artwork.")
-
-                        SectionTitle("WALLPAPER GALLERY · ${selectedTradition.uppercase()}")
-                        WallpaperGallery(context, selectedReligion, wallpaperImageIndex, enabled = wallpaperMode != WallpaperMode.COLORS) { wallpaperImageIndex = it }
-                        Text(
-                            when (wallpaperMode) {
-                                WallpaperMode.VERSE_AND_IMAGE -> "Artwork starts at image $wallpaperImageIndex and moves on with every new verse."
-                                WallpaperMode.KEEP_IMAGE -> "Image $wallpaperImageIndex stays on your wallpaper; only the verse changes."
-                                else -> "Turn on one of the options above to use artwork."
-                            }, color = W.InkMid, fontSize = 12.sp
-                        )
-                        AdSlot("wallpaper_gallery_banner")
-
-                        // ── PREVIEW TABS ───────────────────────────────────────────────────
-                        SectionTitle("PREVIEW")
-                        var previewTab by remember { mutableIntStateOf(0) }
-                        val showAlwaysOn = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE
-                        val previewTabs = if (showAlwaysOn) listOf("Lock Screen", "Live Wallpaper", "Always-on") else listOf("Lock Screen", "Live Wallpaper")
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            previewTabs.forEachIndexed { i, label ->
-                                SelectPill(label, "", previewTab == i, Modifier.weight(1f)) { previewTab = i }
-                            }
-                        }
-                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                            when (previewTab) {
-                                0 -> LockScreenPreview(selectedReligion, selectedLanguage, wallpaperMode, wallpaperImageIndex, wallpaperTheme, wallpaperTextSize, wallpaperTextPosition, showVerseText, showReference, Modifier.width(210.dp))
-                                1 -> {
-                                    var liveTheme by remember { mutableStateOf(com.scripturedaily.ambient.AmbientWisdom.LiveTheme.of(ambientPrefs.getString(com.scripturedaily.ambient.AmbientWisdom.KEY_LIVE_THEME, null))) }
-                                    var motion by remember { mutableStateOf(com.scripturedaily.ambient.AmbientWisdom.Motion.of(ambientPrefs.getString(com.scripturedaily.ambient.AmbientWisdom.KEY_LIVE_MOTION, null))) }
-                                    com.scripturedaily.ambient.LiveWallpaperPreview(liveTheme, motion, Modifier.width(210.dp))
+                        // -- 3. GALLERY (only when artwork is selected) ---------------------
+                        if (wallpaperMode != WallpaperMode.COLORS) {
+                            SectionTitle("WALLPAPER GALLERY · ${selectedTradition.uppercase()}")
+                            var imageOrder by remember { mutableStateOf(com.scripturedaily.ambient.AmbientWisdom.ImageOrder.of(ambientPrefs.getString(com.scripturedaily.ambient.AmbientWisdom.KEY_IMAGE_ORDER, null))) }
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                com.scripturedaily.ambient.AmbientWisdom.ImageOrder.entries.forEach { o ->
+                                    SelectPill(o.label, "", imageOrder == o, Modifier.weight(1f)) {
+                                        imageOrder = o
+                                        ambientPrefs.edit().putString(com.scripturedaily.ambient.AmbientWisdom.KEY_IMAGE_ORDER, o.key).apply()
+                                    }
                                 }
-                                else -> AlwaysOnPreviewCard(Modifier.width(210.dp))
                             }
+                            WallpaperGallery(context, selectedReligion, wallpaperImageIndex, enabled = true) { wallpaperImageIndex = it }
+                            AdSlot("wallpaper_gallery_banner")
                         }
 
+                        // -- 4. COLOUR THEME (only when colour style is selected) ------------
                         if (wallpaperMode == WallpaperMode.COLORS) {
                             SectionTitle("COLOUR THEME")
+                            // Auto-select MULTICOLOR when user first picks Colour theme
+                            LaunchedEffect(wallpaperMode) {
+                                if (wallpaperMode == WallpaperMode.COLORS && wallpaperTheme.isBlank()) wallpaperTheme = "MULTICOLOR"
+                            }
                             val themes = listOf("MULTICOLOR" to "Multicolor\n(Auto)", "GOLDEN" to "Golden", "ROYAL_PURPLE" to "Royal Purple", "FOREST_GREEN" to "Forest Green", "OCEAN_BLUE" to "Ocean Blue", "SOFT_SAND" to "Soft Sand", "MIDNIGHT" to "Midnight")
                             themes.chunked(4).forEach { chunk ->
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
@@ -338,83 +323,193 @@ fun SettingsExperienceScreen(
                             }
                             InfoCard(if (wallpaperTheme == "MULTICOLOR") "Multicolor rotates the whole palette each time the verse changes." else "Your colour theme stays fixed when the verse updates.")
                         }
-                        SectionTitle("VERSE TEXT SIZE")
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf("Small", "Medium", "Large").forEach { option -> SelectPill(option, "", wallpaperTextSize == option, Modifier.weight(1f)) { wallpaperTextSize = option } }
-                        }
-                        SectionTitle("TEXT PLACEMENT")
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf("Top", "Middle", "Bottom").forEach { option -> SelectPill(option, "", wallpaperTextPosition == option, Modifier.weight(1f)) { wallpaperTextPosition = option } }
-                        }
-                        InfoCard("Text automatically wraps and scales to fit.")
-                        SectionTitle("VERSE CONTENT")
-                        ToggleCard("Show verse text on wallpaper", "Keep the verse readable on the image", showVerseText) { showVerseText = it }
-                        ToggleCard("Show scripture reference", "Display scripture, chapter and verse", showReference) { showReference = it }
 
-                        // ── LIVE WALLPAPER ─────────────────────────────────────────────────
+                        // -- 5. PREVIEW -----------------------------------------------------
+                        SectionTitle("PREVIEW")
+                        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                            LockScreenPreview(selectedReligion, selectedLanguage, wallpaperMode, wallpaperImageIndex, wallpaperTheme, wallpaperTextSize, wallpaperTextPosition, showVerseText, showReference, Modifier.width(210.dp))
+                        }
+
+                        // -- 6. TEXT & LAYOUT -----------------------------------------------
+                        SectionTitle("TEXT & LAYOUT")
+                        SettingCard {
+                            Text("Text size", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = W.Ink)
+                            Spacer(Modifier.height(8.dp))
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                listOf("Small", "Medium", "Large").forEach { option -> SelectPill(option, "", wallpaperTextSize == option, Modifier.weight(1f)) { wallpaperTextSize = option } }
+                            }
+                            Spacer(Modifier.height(14.dp))
+                            Text("Text position", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, color = W.Ink)
+                            Spacer(Modifier.height(8.dp))
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                listOf("Top", "Middle", "Bottom").forEach { option -> SelectPill(option, "", wallpaperTextPosition == option, Modifier.weight(1f)) { wallpaperTextPosition = option } }
+                            }
+                            Spacer(Modifier.height(14.dp))
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) { Text("Show verse text", color = W.Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp); Text("Display the verse on the wallpaper", color = W.InkMid, fontSize = 12.sp) }
+                                Switch(showVerseText, onCheckedChange = { showVerseText = it }, colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = W.Purple, uncheckedThumbColor = W.InkMid, uncheckedTrackColor = W.SurfaceAlt, uncheckedBorderColor = W.InkSoft))
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) { Text("Show scripture reference", color = W.Ink, fontWeight = FontWeight.SemiBold, fontSize = 13.sp); Text("Display chapter and verse number", color = W.InkMid, fontSize = 12.sp) }
+                                Switch(showReference, onCheckedChange = { showReference = it }, colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = W.Purple, uncheckedThumbColor = W.InkMid, uncheckedTrackColor = W.SurfaceAlt, uncheckedBorderColor = W.InkSoft))
+                            }
+                        }
+
+                        // -- SAVE & APPLY ---------------------------------------------------
+                        wallpaperNotice?.let { (msg, isError) -> NoticeCard(msg, isError) }
+                        Button(
+                            onClick = {
+                                prefs.edit().putInt("religion", selectedReligion).putInt("language", selectedLanguage).putString("wallpaper_mode", wallpaperMode)
+                                    .putString("wallpaper_theme", wallpaperTheme).putBoolean("wallpaper_show_verse", showVerseText).putBoolean("wallpaper_show_reference", showReference)
+                                    .putString("wallpaper_text_size", wallpaperTextSize).putString("wallpaper_text_position", wallpaperTextPosition)
+                                    .putInt("wallpaper_image_index", wallpaperImageIndex).apply()
+                                onSavePreferences(selectedReligion, selectedLanguage, selectedFrequency, selectedReminders, wallpaperMode)
+                                wallpaperNotice = null
+                                applySheet = true
+                            },
+                            enabled = !applying, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = W.Purple, contentColor = W.OnPurple)
+                        ) {
+                            if (applying) CircularProgressIndicator(color = W.OnPurple, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            else { Icon(Icons.Outlined.Check, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Save & Apply Wallpaper", fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 1) }
+                        }
+
+                        } // end if (autoWallpaper)
+
+                        // -- LIVE WALLPAPER -------------------------------------------------
                         val flags = com.scripturedaily.config.AppConfigManager.state.collectAsState().value.obj("ambient_wisdom")
                         fun available(key: String) = runCatching { flags?.get(key)?.asBoolean }.getOrNull() ?: true
                         if (available("live_wallpaper_available")) {
                             SectionTitle("LIVE WALLPAPER")
                             var liveTheme by remember { mutableStateOf(com.scripturedaily.ambient.AmbientWisdom.LiveTheme.of(ambientPrefs.getString(com.scripturedaily.ambient.AmbientWisdom.KEY_LIVE_THEME, null))) }
                             var motion by remember { mutableStateOf(com.scripturedaily.ambient.AmbientWisdom.Motion.of(ambientPrefs.getString(com.scripturedaily.ambient.AmbientWisdom.KEY_LIVE_MOTION, null))) }
-                            var liveActive by remember { mutableStateOf(com.scripturedaily.ambient.VerseLiveWallpaperService.isActive(context)) }
+                            var liveActive by remember { mutableStateOf(
+                                com.scripturedaily.ambient.VerseLiveWallpaperService.isActive(context) &&
+                                ambientPrefs.getBoolean(com.scripturedaily.ambient.AmbientWisdom.KEY_LIVE_WALLPAPER_ENABLED, true)
+                            ) }
+                            var liveExpanded by remember { mutableStateOf(liveActive) }
                             val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
                             DisposableEffect(lifecycle) {
                                 val obs = androidx.lifecycle.LifecycleEventObserver { _, e ->
-                                    if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) liveActive = com.scripturedaily.ambient.VerseLiveWallpaperService.isActive(context)
+                                    if (e == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                                        val userEnabled = ambientPrefs.getBoolean(com.scripturedaily.ambient.AmbientWisdom.KEY_LIVE_WALLPAPER_ENABLED, true)
+                                        val wasActive = liveActive
+                                        liveActive = userEnabled && com.scripturedaily.ambient.VerseLiveWallpaperService.isActive(context)
+                                        if (liveActive) {
+                                            liveExpanded = true
+                                            if (!wasActive) Toast.makeText(context, "Home screen live wallpaper successfully applied", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
                                 }
                                 lifecycle.addObserver(obs); onDispose { lifecycle.removeObserver(obs) }
                             }
-                            ToggleCard(
-                                "WisdomOne live wallpaper",
-                                if (liveActive) "Active on your home screen." else "A calm animated sky with today's verse.",
-                                liveActive, Icons.Outlined.Wallpaper
-                            ) { on -> if (on) com.scripturedaily.ambient.openLiveWallpaperPreview(context) else scope.launch { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), "Choose a wallpaper")) } }
-                            SectionTitle("LIVE WALLPAPER THEME")
-                            @OptIn(ExperimentalLayoutApi::class)
-                            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                com.scripturedaily.ambient.AmbientWisdom.LiveTheme.entries.forEach { t ->
-                                    SelectPill(t.label, "", liveTheme == t, Modifier.wrapContentWidth()) {
-                                        liveTheme = t
-                                        ambientPrefs.edit().putString(com.scripturedaily.ambient.AmbientWisdom.KEY_LIVE_THEME, t.key).apply()
+                            ToggleCard("WisdomOne live wallpaper",
+                                if (liveActive) "Active on your home screen." else if (liveExpanded) "Customise below, then tap Apply." else "A calm animated sky with today's verse.",
+                                liveExpanded,
+                                Icons.Outlined.Wallpaper
+                            ) { on ->
+                                if (!on && liveActive) {
+                                    ambientPrefs.edit().putBoolean(com.scripturedaily.ambient.AmbientWisdom.KEY_LIVE_WALLPAPER_ENABLED, false).apply()
+                                    liveActive = false
+                                    com.scripturedaily.ambient.openWallpaperChooserPublic(context)
+                                }
+                                liveExpanded = on
+                            }
+                            if (liveExpanded) {
+                                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                                    com.scripturedaily.ambient.LiveWallpaperPreview(liveTheme, motion, Modifier.width(210.dp))
+                                }
+                                SectionTitle("THEME")
+                                Text("Time of day", color = W.InkMid, fontSize = 11.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                                @OptIn(ExperimentalLayoutApi::class)
+                                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    listOf(
+                                        com.scripturedaily.ambient.AmbientWisdom.LiveTheme.AUTO,
+                                        com.scripturedaily.ambient.AmbientWisdom.LiveTheme.MORNING,
+                                        com.scripturedaily.ambient.AmbientWisdom.LiveTheme.AFTERNOON,
+                                        com.scripturedaily.ambient.AmbientWisdom.LiveTheme.EVENING,
+                                        com.scripturedaily.ambient.AmbientWisdom.LiveTheme.NIGHT
+                                    ).forEach { t ->
+                                        SelectPill("${t.emoji} ${t.label}", "", liveTheme == t, Modifier.wrapContentWidth()) {
+                                            liveTheme = t
+                                            ambientPrefs.edit().putString(com.scripturedaily.ambient.AmbientWisdom.KEY_LIVE_THEME, t.key).apply()
+                                        }
                                     }
                                 }
-                            }
-                            InfoCard(if (liveTheme == com.scripturedaily.ambient.AmbientWisdom.LiveTheme.AUTO) "Sunrise gold in the morning, bright nature in the afternoon, sunset colours in the evening and deep blue at night." else "The ${liveTheme.label.lowercase()} mood stays all day.")
-                            SectionTitle("MOTION")
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                com.scripturedaily.ambient.AmbientWisdom.Motion.entries.forEach { mo ->
-                                    SelectPill(mo.label, "", motion == mo, Modifier.weight(1f)) {
-                                        motion = mo
-                                        ambientPrefs.edit().putString(com.scripturedaily.ambient.AmbientWisdom.KEY_LIVE_MOTION, mo.key).apply()
+                                Text("Nature & mood", color = W.InkMid, fontSize = 11.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                                @OptIn(ExperimentalLayoutApi::class)
+                                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    listOf(
+                                        com.scripturedaily.ambient.AmbientWisdom.LiveTheme.GOLDEN_HOUR,
+                                        com.scripturedaily.ambient.AmbientWisdom.LiveTheme.MONSOON,
+                                        com.scripturedaily.ambient.AmbientWisdom.LiveTheme.DESERT_DAWN,
+                                        com.scripturedaily.ambient.AmbientWisdom.LiveTheme.FOREST,
+                                        com.scripturedaily.ambient.AmbientWisdom.LiveTheme.OCEAN,
+                                        com.scripturedaily.ambient.AmbientWisdom.LiveTheme.SNOW,
+                                        com.scripturedaily.ambient.AmbientWisdom.LiveTheme.LOTUS,
+                                        com.scripturedaily.ambient.AmbientWisdom.LiveTheme.STARFIELD,
+                                        com.scripturedaily.ambient.AmbientWisdom.LiveTheme.CANDLELIGHT,
+                                        com.scripturedaily.ambient.AmbientWisdom.LiveTheme.CHERRY_BLOSSOM
+                                    ).forEach { t ->
+                                        SelectPill("${t.emoji} ${t.label}", "", liveTheme == t, Modifier.wrapContentWidth()) {
+                                            liveTheme = t
+                                            ambientPrefs.edit().putString(com.scripturedaily.ambient.AmbientWisdom.KEY_LIVE_THEME, t.key).apply()
+                                        }
                                     }
                                 }
-                            }
-                            InfoCard("Animation runs only while your home screen is visible and pauses in Battery Saver.")
-                            OutlinedButton(
-                                onClick = { com.scripturedaily.ambient.openLiveWallpaperPreview(context) },
-                                modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(16.dp),
-                                border = BorderStroke(1.dp, W.PurpleMid)
-                            ) {
-                                Icon(Icons.Outlined.Visibility, null, tint = W.PurpleDark, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
-                                Text("Preview & apply live wallpaper", color = W.PurpleDark, fontWeight = FontWeight.Bold)
+                                InfoCard(when (liveTheme) {
+                                    com.scripturedaily.ambient.AmbientWisdom.LiveTheme.AUTO -> "Sunrise gold in the morning, bright nature in the afternoon, sunset colours in the evening and deep blue at night."
+                                    com.scripturedaily.ambient.AmbientWisdom.LiveTheme.MONSOON -> "Dark clouds, cool blue-grey sky and falling rain streaks."
+                                    com.scripturedaily.ambient.AmbientWisdom.LiveTheme.OCEAN -> "Deep blue horizon with slow water ripples and light shimmer."
+                                    com.scripturedaily.ambient.AmbientWisdom.LiveTheme.LOTUS -> "Soft pink and purple with drifting petals and a still pond."
+                                    com.scripturedaily.ambient.AmbientWisdom.LiveTheme.CHERRY_BLOSSOM -> "Pale pink sky with slowly falling cherry blossom petals."
+                                    com.scripturedaily.ambient.AmbientWisdom.LiveTheme.SNOW -> "Cool blue-white sky with gently drifting snowflakes."
+                                    com.scripturedaily.ambient.AmbientWisdom.LiveTheme.STARFIELD -> "Deep space with twinkling stars and drifting fireflies."
+                                    com.scripturedaily.ambient.AmbientWisdom.LiveTheme.CANDLELIGHT -> "Warm amber darkness with a soft flickering flame."
+                                    com.scripturedaily.ambient.AmbientWisdom.LiveTheme.FOREST -> "Deep green canopy with dappled light and floating dust."
+                                    com.scripturedaily.ambient.AmbientWisdom.LiveTheme.GOLDEN_HOUR -> "Rich amber and crimson sky with sweeping light rays."
+                                    com.scripturedaily.ambient.AmbientWisdom.LiveTheme.DESERT_DAWN -> "Sandy orange horizon with warm god rays at sunrise."
+                                    else -> "The ${liveTheme.label.lowercase()} mood stays all day."
+                                })
+                                SectionTitle("MOTION")
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    com.scripturedaily.ambient.AmbientWisdom.Motion.entries.forEach { mo ->
+                                        SelectPill(mo.label, "", motion == mo, Modifier.weight(1f)) {
+                                            motion = mo
+                                            ambientPrefs.edit().putString(com.scripturedaily.ambient.AmbientWisdom.KEY_LIVE_MOTION, mo.key).apply()
+                                        }
+                                    }
+                                }
+                                InfoCard("Animation runs only while your home screen is visible and pauses in Battery Saver.")
+                                Button(
+                                    onClick = {
+                                        if (liveActive) {
+                                            ambientPrefs.edit().putBoolean(com.scripturedaily.ambient.AmbientWisdom.KEY_LIVE_WALLPAPER_ENABLED, false).apply()
+                                            liveActive = false
+                                            liveExpanded = false
+                                            com.scripturedaily.ambient.openWallpaperChooserPublic(context)
+                                        } else {
+                                            ambientPrefs.edit().putBoolean(com.scripturedaily.ambient.AmbientWisdom.KEY_LIVE_WALLPAPER_ENABLED, true).apply()
+                                            com.scripturedaily.ambient.openLiveWallpaperPreview(context)
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(16.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = W.Purple, contentColor = W.OnPurple)
+                                ) {
+                                    Icon(Icons.Outlined.Wallpaper, null, modifier = Modifier.size(18.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(if (liveActive) "Change Home Screen Live Wallpaper" else "Set as Home Screen Live Wallpaper", fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
 
-                        // ── ACTIVITY-AWARE ─────────────────────────────────────────────────
-                        if (available("activity_aware_available")) {
-                            SectionTitle("ACTIVITY-AWARE WISDOM")
-                            com.scripturedaily.ambient.ActivityAwareSection(selectedReligion)
-                        }
+                        // -- ACTIVITY-AWARE -------------------------------------------------
+                        // (removed)
 
-                        // ── ALWAYS-ON DISPLAY (Android 14+ only) ───────────────────────────
+                        // -- ALWAYS-ON DISPLAY (Android 14+ only) ---------------------------
                         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
                             SectionTitle("ALWAYS-ON DISPLAY")
-                            InfoCard(
-                                "Android doesn't let apps draw on the always-on display directly. " +
-                                "WisdomOne uses a quiet one-line verse notification visible on the lock screen — and on the always-on display on phones that show notifications there."
-                            )
                             if (available("ambient_notification_available")) {
                                 var ambientNote by remember { mutableStateOf(com.scripturedaily.ambient.AmbientNotification.enabled(context)) }
                                 val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -435,34 +530,9 @@ fun SettingsExperienceScreen(
                                     }
                                 }
                             }
-                            SecondaryAction("Lock screen notification settings") {
-                                runCatching { context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)) }
-                            }
-                            InfoCard("Privacy: your activity and preferences stay on this phone. WisdomOne never uploads where you are or what you're doing.")
                         }
 
-                        // ── SAVE & APPLY ───────────────────────────────────────────────────
-                        wallpaperNotice?.let { (msg, isError) -> NoticeCard(msg, isError) }
-                        Button(
-                            onClick = {
-                                prefs.edit().putInt("religion", selectedReligion).putInt("language", selectedLanguage).putString("wallpaper_mode", wallpaperMode)
-                                    .putString("wallpaper_theme", wallpaperTheme).putBoolean("wallpaper_show_verse", showVerseText).putBoolean("wallpaper_show_reference", showReference)
-                                    .putString("wallpaper_text_size", wallpaperTextSize).putString("wallpaper_text_position", wallpaperTextPosition)
-                                    .putInt("wallpaper_image_index", wallpaperImageIndex).apply()
-                                onSavePreferences(selectedReligion, selectedLanguage, selectedFrequency, selectedReminders, wallpaperMode)
-                                wallpaperNotice = null
-                                applySheet = true
-                            },
-                            enabled = !applying, modifier = Modifier.fillMaxWidth().height(56.dp), shape = RoundedCornerShape(16.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = W.Purple, contentColor = W.OnPurple)
-                        ) {
-                            if (applying) CircularProgressIndicator(color = W.OnPurple, modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                            else { Icon(Icons.Outlined.Check, null, Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Save & Apply Wallpaper", fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 1) }
-                        }
-                        OutlinedButton(onClick = { fullPreview = true }, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp), border = BorderStroke(1.dp, W.PurpleMid)) {
-                            Icon(Icons.Outlined.Visibility, null, tint = W.PurpleDark, modifier = Modifier.size(20.dp)); Spacer(Modifier.width(8.dp)); Text("Preview full screen", color = W.PurpleDark, fontWeight = FontWeight.Bold)
-                        }
-                    }
+                                            }
                     "reading" -> {
                         SettingCard {
                             Text("Verse font size", fontWeight = FontWeight.Bold, color = W.Ink)
@@ -538,7 +608,7 @@ fun SettingsExperienceScreen(
         }
     }
 
-    // Save & Apply Wallpaper → choose where it goes.
+    // Save & Apply Wallpaper ? choose where it goes.
     if (applySheet) {
         @OptIn(ExperimentalMaterial3Api::class)
         ModalBottomSheet(onDismissRequest = { applySheet = false }, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = W.Parchment) {
@@ -580,12 +650,7 @@ fun SettingsExperienceScreen(
             }
         }
     }
-    if (fullPreview) Dialog(onDismissRequest = { fullPreview = false }) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            LockScreenPreview(selectedReligion, selectedLanguage, wallpaperMode, wallpaperImageIndex, wallpaperTheme, wallpaperTextSize, wallpaperTextPosition, showVerseText, showReference, Modifier.fillMaxWidth(0.82f))
-            Button(onClick = { fullPreview = false }, colors = ButtonDefaults.buttonColors(containerColor = W.Purple, contentColor = W.OnPurple)) { Text("Close") }
-        }
-    }
+    if (fullPreview) {}
     treeConfirm?.let { turnOn ->
         AlertDialog(
             onDismissRequest = { treeConfirm = null }, containerColor = W.Surface,
@@ -624,7 +689,7 @@ fun SettingsExperienceScreen(
     }
 }
 
-// ── Shared building blocks ────────────────────────────────────────────────────────────────
+// -- Shared building blocks ----------------------------------------------------------------
 
 @Composable private fun rememberVector(v: ImageVector): ImageVector = v
 
@@ -727,10 +792,10 @@ fun SettingsExperienceScreen(
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to W.Parchment, 0.38f to W.Parchment, 0.62f to W.Parchment.copy(alpha = 0.35f), 1f to Color.Transparent)))
         Box(Modifier.fillMaxWidth().height(44.dp).align(Alignment.TopCenter).background(Brush.verticalGradient(listOf(W.Parchment, Color.Transparent))))
         Box(Modifier.fillMaxWidth().height(36.dp).align(Alignment.BottomCenter).background(Brush.verticalGradient(listOf(Color.Transparent, W.Parchment))))
-        Column(Modifier.align(Alignment.CenterStart).padding(start = 18.dp).fillMaxWidth(0.66f)) {
-            Text("Settings", fontSize = 32.sp, fontWeight = FontWeight.Bold, color = W.Ink)
+        Column(Modifier.align(Alignment.TopStart).padding(start = 20.dp, top = 18.dp).fillMaxWidth(0.66f)) {
+            Text("Settings", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = W.Ink)
             Spacer(Modifier.height(4.dp))
-            Text("Personalise your experience and daily inspiration", color = W.InkMid, fontSize = 14.sp, lineHeight = 19.sp)
+            Text("Personalise your experience and daily inspiration", color = W.InkMid, fontSize = 13.sp, lineHeight = 19.sp)
         }
     }
 }
@@ -803,14 +868,14 @@ fun SettingsExperienceScreen(
             .clickable(onClick = onClick)
             .semantics { contentDescription = "${item.name}${if (selected) ", selected" else ""}" }
     ) {
-        // Artwork on the right — same ContentScale.Crop + CenterEnd as SettingsHeroHeader
+        // Artwork on the right · same ContentScale.Crop + CenterEnd as SettingsHeroHeader
         Image(
             painter = painterResource(bannerRes), contentDescription = null,
             contentScale = ContentScale.Crop,
             alignment = if (bannerRes == R.drawable.banner_general_wisdom) Alignment.CenterStart else Alignment.CenterEnd,
             modifier = Modifier.fillMaxHeight().fillMaxWidth(0.65f).align(Alignment.CenterEnd)
         )
-        // Horizontal veil: surface colour → transparent (mirrors SettingsHeroHeader)
+        // Horizontal veil: surface colour ? transparent (mirrors SettingsHeroHeader)
         val bg = if (selected) W.SurfaceAlt else W.Surface
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to bg, 0.42f to bg, 0.68f to bg.copy(alpha = 0.4f), 1f to Color.Transparent)))
         // Top + bottom edge veils so the card blends into the list
@@ -885,7 +950,7 @@ private fun AlwaysOnPreviewCard(modifier: Modifier = Modifier) {
     }
 }
 
-// ── Wallpaper gallery: 20 images, 4 per visible group, swipe horizontally ─────────────────
+// -- Wallpaper gallery: 20 images, 4 per visible group, swipe horizontally -----------------
 
 @Composable private fun WallpaperGallery(context: Context, religionId: Int, selected: Int, enabled: Boolean, onSelect: (Int) -> Unit) {
     val pages = WallpaperPacks.COUNT / 4
@@ -918,7 +983,7 @@ private fun AlwaysOnPreviewCard(modifier: Modifier = Modifier) {
     }
 }
 
-// ── Realistic lock-screen preview ──────────────────────────────────────────────────────────
+// -- Realistic lock-screen preview ----------------------------------------------------------
 
 @Composable
 private fun LockScreenPreview(
@@ -1000,3 +1065,4 @@ fun normalizeWallpaperTheme(value: String?): String = when (value?.trim()?.upper
     "AUTO", "TIME OF DAY", null, "" -> "MULTICOLOR"
     else -> "MULTICOLOR"
 }
+

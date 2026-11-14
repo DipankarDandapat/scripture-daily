@@ -1,11 +1,14 @@
 package com.scripturedaily.features.discover
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -25,10 +28,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.scripturedaily.R
 import com.scripturedaily.ads.AdSlot
 import com.scripturedaily.data.ApiClient
 import com.scripturedaily.data.StorySummary
@@ -54,9 +61,24 @@ enum class DiscoverItem(val emoji: String, val title: String, val subtitle: Stri
 
 @Composable
 fun DiscoverScreen(onOpen: (DiscoverItem) -> Unit) {
-    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Discover", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = W.Ink)
-        Text("Go deeper with your daily verse.", fontSize = 13.sp, color = W.InkSoft)
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // Hero header — identical to Settings, Saved and Explore
+        Box(Modifier.fillMaxWidth().height(150.dp)) {
+            Image(
+                painter = painterResource(R.drawable.settings_header_landscape), contentDescription = null,
+                contentScale = ContentScale.Crop, alignment = Alignment.CenterEnd,
+                modifier = Modifier.fillMaxHeight().fillMaxWidth(0.72f).align(Alignment.CenterEnd)
+            )
+            Box(Modifier.fillMaxWidth().fillMaxHeight().background(Brush.horizontalGradient(0f to W.Parchment, 0.38f to W.Parchment, 0.62f to W.Parchment.copy(alpha = 0.35f), 1f to Color.Transparent)))
+            Box(Modifier.fillMaxWidth().height(44.dp).align(Alignment.TopCenter).background(Brush.verticalGradient(listOf(W.Parchment, Color.Transparent))))
+            Box(Modifier.fillMaxWidth().height(36.dp).align(Alignment.BottomCenter).background(Brush.verticalGradient(listOf(Color.Transparent, W.Parchment))))
+            Column(Modifier.align(Alignment.TopStart).padding(start = 20.dp, top = 18.dp)) {
+                Text("Discover", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = W.Ink)
+                Spacer(Modifier.height(4.dp))
+                Text("Go deeper with your daily verse.", fontSize = 13.sp, color = W.InkSoft)
+            }
+        }
+        Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         AdSlot("discover_top_banner")
         DiscoverItem.values().forEachIndexed { index, item ->
             if (index == 3) AdSlot("discover_inline_native")
@@ -73,6 +95,7 @@ fun DiscoverScreen(onOpen: (DiscoverItem) -> Unit) {
         }
         AdSlot("discover_bottom_banner")
         Spacer(Modifier.height(12.dp))
+        }
     }
 }
 

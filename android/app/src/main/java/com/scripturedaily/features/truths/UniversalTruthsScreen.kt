@@ -33,7 +33,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Image
 import androidx.compose.material.icons.outlined.Shuffle
-import androidx.compose.material.icons.outlined.TextSnippet
+import androidx.compose.material.icons.automirrored.outlined.TextSnippet
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -148,7 +148,7 @@ fun UniversalTruthsScreen(languageId: Int, preferredReligionCode: String?, onBac
                                     val text = "${t.topic.icon} ${t.topic.name} across traditions\n\n“${a.verse.text}”\n— ${a.religion}, ${a.verse.scripture} · ${a.verse.reference()}\n\n“${b.verse.text}”\n— ${b.religion}, ${b.verse.scripture} · ${b.verse.reference()}\n\nvia WisdomOne"
                                     context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "Share comparison"))
                                 }, modifier = Modifier.weight(1f), shape = RoundedCornerShape(14.dp)) {
-                                    Icon(Icons.Outlined.TextSnippet, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("Text", fontWeight = FontWeight.SemiBold)
+                                    Icon(Icons.AutoMirrored.Outlined.TextSnippet, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("Text", fontWeight = FontWeight.SemiBold)
                                 }
                                 OutlinedButton(onClick = {
                                     scope.launch {

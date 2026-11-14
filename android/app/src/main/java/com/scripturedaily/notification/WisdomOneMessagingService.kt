@@ -47,6 +47,7 @@ class WisdomOneMessagingService : FirebaseMessagingService() {
     }
 
     // Called when Firebase rotates the token (first install, reinstall, token expiry)
+    @Suppress("OVERRIDE_DEPRECATION")
     override fun onNewToken(token: String) {
         Log.d(TAG, "FCM token refreshed: $token")
         getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -60,6 +61,7 @@ class WisdomOneMessagingService : FirebaseMessagingService() {
     // Called ONLY when the app is in the FOREGROUND.
     // When the app is BACKGROUND or KILLED, FCM shows the notification automatically
     // using the channel declared in the manifest (wisdomone_fcm_v1) — no code needed.
+    @Suppress("OVERRIDE_DEPRECATION")
     override fun onMessageReceived(message: RemoteMessage) {
         val title = message.notification?.title
             ?: message.data["title"]

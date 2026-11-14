@@ -79,6 +79,157 @@ capabilities:
   hides that section in the app without a release.
 - User choices stay on the device (they only affect this phone's surfaces), so no new preference API was needed.
 
+---
+
+## Admin API — Enable / Disable Ambient Wisdom Features
+
+All three Ambient Wisdom features are controlled by a single `ambient_wisdom` key in the `app_config` table.
+Changes take effect on the next app foreground config refresh (within `config_refresh_min_interval_seconds`,
+default 300 s). Kill and reopen the app to apply immediately.
+
+### Admin token
+
+```
+WisdomOne@2024
+```
+
+> Change this before production (`SD_ADMIN_TOKEN` in `backend/.env`).
+
+### Base URL
+
+| Environment | URL |
+|---|---|
+| Local dev | `http://localhost:8000/api/v1` |
+| Android emulator | `http://10.0.2.2:8000/api/v1` |
+| Production | `https://your-domain.com/api/v1` |
+
+---
+
+### View current state
+
+```bash
+curl http://localhost:8000/api/v1/config | python -m json.tool
+```
+
+Look for the `ambient_wisdom` key in the response:
+
+```json
+"ambient_wisdom": {
+  "activity_aware_available": true,
+  "ambient_notification_available": true,
+  "live_wallpaper_available": true
+}
+```
+
+---
+
+### Kill switches — one feature at a time
+
+Use `?merge=true` to update only the keys you specify without touching the others.
+
+#### Disable live wallpaper only
+
+```bash
+curl -X PUT http://localhost:8000/api/v1/admin/config/ambient_wisdom?merge=true \
+  -H "X-Admin-Token: WisdomOne@2024" \
+  -H "Content-Type: application/json" \
+  -d '{"value": {"live_wallpaper_available": false}}'
+```
+
+#### Disable activity-aware wisdom only
+
+```bash
+curl -X PUT http://localhost:8000/api/v1/admin/config/ambient_wisdom?merge=true \
+  -H "X-Admin-Token: WisdomOne@2024" \
+  -H "Content-Type: application/json" \
+  -d '{"value": {"activity_aware_available": false}}'
+```
+
+#### Disable ambient notifications only
+
+```bash
+curl -X PUT http://localhost:8000/api/v1/admin/config/ambient_wisdom?merge=true \
+  -H "X-Admin-Token: WisdomOne@2024" \
+  -H "Content-Type: application/json" \
+  -d '{"value": {"ambient_notification_available": false}}'
+```
+
+---
+
+### Disable all three at once (full kill switch)
+
+```bash
+curl -X PUT http://localhost:8000/api/v1/admin/config/ambient_wisdom \
+  -H "X-Admin-Token: WisdomOne@2024" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "value": {
+      "live_wallpaper_available": false,
+      "activity_aware_available": false,
+      "ambient_notification_available": false
+    }
+  }'
+```
+
+### Re-enable all three
+
+```bash
+curl -X PUT http://localhost:8000/api/v1/admin/config/ambient_wisdom \
+  -H "X-Admin-Token: WisdomOne@2024" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "value": {
+      "live_wallpaper_available": true,
+      "activity_aware_available": true,
+      "ambient_notification_available": true
+    }
+  }'
+```
+
+---
+
+### What each switch does when set to `false`
+
+| Key | Effect in the app |
+|---|---|
+| `live_wallpaper_available` | The **Live Wallpaper** option is hidden in Settings → Ambient Wisdom. Any active live wallpaper is not forcibly removed (Android controls that), but the user can no longer set or preview it from the app. |
+| `activity_aware_available` | The **Activity-aware wisdom** section is hidden. The `ActivityWisdomTracker` stops registering for activity transitions. Existing suggestions are not shown. |
+| `ambient_notification_available` | The **Ambient verse notification** toggle is hidden. The ongoing silent notification (`AmbientNotification`) is cancelled immediately on the next config refresh. |
+
+---
+
+### Verify the change
+
+```bash
+# 1. Admin view — shows updated_at timestamp
+curl http://localhost:8000/api/v1/admin/config \
+  -H "X-Admin-Token: WisdomOne@2024" | python -m json.tool
+
+# 2. Public view — exactly what the app receives
+curl http://localhost:8000/api/v1/config | python -m json.tool
+```
+
+The `ETag` header on `GET /config` changes whenever any value changes, so the app will
+pick up the new config on its next foreground poll.
+
+### Force the app to re-fetch immediately
+
+```bash
+# Temporarily set refresh interval to 0, then restore
+curl -X PUT http://localhost:8000/api/v1/admin/config/config_refresh_min_interval_seconds \
+  -H "X-Admin-Token: WisdomOne@2024" \
+  -H "Content-Type: application/json" \
+  -d '{"value": 0}'
+
+# Restore after the app has refreshed
+curl -X PUT http://localhost:8000/api/v1/admin/config/config_refresh_min_interval_seconds \
+  -H "X-Admin-Token: WisdomOne@2024" \
+  -H "Content-Type: application/json" \
+  -d '{"value": 300}'
+```
+
+Or simply **kill and reopen the app** — the startup fetch always runs regardless of the interval.
+
 ## Permissions added
 | Permission | When | Why |
 |---|---|---|

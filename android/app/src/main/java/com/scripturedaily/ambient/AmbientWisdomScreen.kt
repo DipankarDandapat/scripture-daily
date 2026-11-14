@@ -79,14 +79,22 @@ fun AmbientWisdomSettings(
     var liveTheme by remember { mutableStateOf(AmbientWisdom.LiveTheme.of(prefs.getString(AmbientWisdom.KEY_LIVE_THEME, null))) }
     var motion by remember { mutableStateOf(AmbientWisdom.Motion.of(prefs.getString(AmbientWisdom.KEY_LIVE_MOTION, null))) }
     var imageOrder by remember { mutableStateOf(AmbientWisdom.ImageOrder.of(prefs.getString(AmbientWisdom.KEY_IMAGE_ORDER, null))) }
-    var liveActive by remember { mutableStateOf(VerseLiveWallpaperService.isActive(context)) }
+    var liveActive by remember { mutableStateOf(
+        VerseLiveWallpaperService.isActive(context) &&
+        prefs.getBoolean(AmbientWisdom.KEY_LIVE_WALLPAPER_ENABLED, true)
+    ) }
     var ambientNote by remember { mutableStateOf(AmbientNotification.enabled(context)) }
     var previewTab by remember { mutableIntStateOf(0) }
 
     // Re-check things the user may have changed in Android settings (live wallpaper chosen, permissions granted).
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     DisposableEffect(lifecycle) {
-        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) { liveActive = VerseLiveWallpaperService.isActive(context) } }
+        val obs = LifecycleEventObserver { _, e ->
+            if (e == Lifecycle.Event.ON_RESUME) {
+                val userEnabled = prefs.getBoolean(AmbientWisdom.KEY_LIVE_WALLPAPER_ENABLED, true)
+                liveActive = userEnabled && VerseLiveWallpaperService.isActive(context)
+            }
+        }
         lifecycle.addObserver(obs); onDispose { lifecycle.removeObserver(obs) }
     }
 
@@ -135,9 +143,27 @@ fun AmbientWisdomSettings(
                 Toggle(
                     "WisdomOne live wallpaper", if (liveActive) "Active on your home screen." else "A calm animated sky with today's verse.",
                     liveActive, Icons.Outlined.Wallpaper
-                ) { on -> if (on) openLiveWallpaperPreview(context) else openWallpaperChooser(context) }
+                ) { on ->
+                    prefs.edit().putBoolean(AmbientWisdom.KEY_LIVE_WALLPAPER_ENABLED, on).apply()
+                    liveActive = on && VerseLiveWallpaperService.isActive(context)
+                    if (on) openLiveWallpaperPreview(context)
+                    else openWallpaperChooser(context)
+                }
                 Label("Visual theme")
-                FlowChips(AmbientWisdom.LiveTheme.entries.map { it to it.label }, liveTheme) { t -> liveTheme = t; prefs.edit().putString(AmbientWisdom.KEY_LIVE_THEME, t.key).apply() }
+                Label("Time of day")
+                FlowChips(listOf(
+                    AmbientWisdom.LiveTheme.AUTO, AmbientWisdom.LiveTheme.MORNING,
+                    AmbientWisdom.LiveTheme.AFTERNOON, AmbientWisdom.LiveTheme.EVENING,
+                    AmbientWisdom.LiveTheme.NIGHT
+                ).map { it to "${it.emoji} ${it.label}" }, liveTheme) { t -> liveTheme = t; prefs.edit().putString(AmbientWisdom.KEY_LIVE_THEME, t.key).apply() }
+                Label("Nature & mood")
+                FlowChips(listOf(
+                    AmbientWisdom.LiveTheme.GOLDEN_HOUR, AmbientWisdom.LiveTheme.MONSOON,
+                    AmbientWisdom.LiveTheme.DESERT_DAWN, AmbientWisdom.LiveTheme.FOREST,
+                    AmbientWisdom.LiveTheme.OCEAN, AmbientWisdom.LiveTheme.SNOW,
+                    AmbientWisdom.LiveTheme.LOTUS, AmbientWisdom.LiveTheme.STARFIELD,
+                    AmbientWisdom.LiveTheme.CANDLELIGHT, AmbientWisdom.LiveTheme.CHERRY_BLOSSOM
+                ).map { it to "${it.emoji} ${it.label}" }, liveTheme) { t -> liveTheme = t; prefs.edit().putString(AmbientWisdom.KEY_LIVE_THEME, t.key).apply() }
                 Hint(if (liveTheme == AmbientWisdom.LiveTheme.AUTO) "Sunrise gold in the morning, bright nature in the afternoon, sunset colours in the evening and deep blue at night." else "The ${liveTheme.label.lowercase()} mood stays all day.")
                 Label("Motion")
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -171,7 +197,7 @@ fun AmbientWisdomSettings(
                     }
                 }
             }
-            NavRow(Icons.Outlined.Settings, "Lock screen notification settings", "Let Android show notification content on the lock screen") {
+            NavRow(Icons.Outlined.Info, "Lock screen notification settings", "Let Android show notification content on the lock screen") {
                 runCatching { context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)) }
             }
             Info("Privacy: your activity and preferences stay on this phone. WisdomOne never uploads where you are or what you're doing.")
@@ -306,7 +332,6 @@ fun LiveWallpaperPreview(theme: AmbientWisdom.LiveTheme, motion: AmbientWisdom.M
         Canvas(Modifier.fillMaxSize()) {
             drawIntoCanvas { renderer.draw(it.nativeCanvas, size.width.toInt(), size.height.toInt(), clock, resolved, verse.first, verse.second) }
         }
-        StatusRow(Color.White)
     }
 }
 
@@ -368,6 +393,8 @@ fun openLiveWallpaperPreview(context: Context) {
         runCatching { context.startActivity(Intent(WallpaperManager.ACTION_LIVE_WALLPAPER_CHOOSER)) }
     }
 }
+
+fun openWallpaperChooserPublic(context: Context) = openWallpaperChooser(context)
 
 private fun openWallpaperChooser(context: Context) {
     runCatching { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), "Choose a wallpaper")) }

@@ -35,7 +35,7 @@ class StoryNarrator(
                 engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(utteranceId: String?) { sceneOf(utteranceId)?.let { i -> main.post { onSceneStart(i) } } }
                     override fun onDone(utteranceId: String?) { if (utteranceId?.startsWith(LAST_PREFIX) == true) main.post { onFinished() } }
-                    @Deprecated("Deprecated in Java") override fun onError(utteranceId: String?) { main.post { onProblem("Couldn't read this story aloud.") } }
+                    @Deprecated("Deprecated in Java") @Suppress("DEPRECATION") override fun onError(utteranceId: String?) { main.post { onProblem("Couldn't read this story aloud.") } }
                 })
                 ready = true
                 pending?.invoke(); pending = null
@@ -70,8 +70,8 @@ class StoryNarrator(
     companion object {
         private const val LAST_PREFIX = "last_"
         fun localeFor(code: String): Locale = when (code) {
-            "hi" -> Locale("hi", "IN"); "bn" -> Locale("bn", "IN"); "es" -> Locale("es", "ES"); "ar" -> Locale("ar")
-            "ur" -> Locale("ur", "PK"); "th" -> Locale("th", "TH"); else -> Locale.ENGLISH
+            "hi" -> Locale.forLanguageTag("hi-IN"); "bn" -> Locale.forLanguageTag("bn-IN"); "es" -> Locale.forLanguageTag("es-ES"); "ar" -> Locale.forLanguageTag("ar")
+            "ur" -> Locale.forLanguageTag("ur-PK"); "th" -> Locale.forLanguageTag("th-TH"); else -> Locale.ENGLISH
         }
         fun displayName(code: String) = localeFor(code).getDisplayLanguage(Locale.ENGLISH).ifBlank { code }
     }

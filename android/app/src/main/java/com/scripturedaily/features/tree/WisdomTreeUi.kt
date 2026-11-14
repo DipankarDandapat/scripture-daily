@@ -102,20 +102,20 @@ private fun DrawScope.leaf(x: Float, y: Float, len: Float, angleDeg: Float, colo
     val ex = x + (len * Math.cos(a)).toFloat(); val ey = y + (len * Math.sin(a)).toFloat()
     val mx = (x + ex) / 2; val my = (y + ey) / 2
     val nx = -(ey - y) * 0.35f; val ny = (ex - x) * 0.35f
-    val path = Path().apply { moveTo(x, y); quadraticBezierTo(mx + nx, my + ny, ex, ey); quadraticBezierTo(mx - nx, my - ny, x, y); close() }
+    val path = Path().apply { moveTo(x, y); quadraticTo(mx + nx, my + ny, ex, ey); quadraticTo(mx - nx, my - ny, x, y); close() }
     drawPath(path, color)
 }
 
 private fun DrawScope.trunk(cx: Float, w: Float, h: Float, locked: Boolean, branches: Boolean) {
     val c1 = if (locked) Color(0xFF8A8490) else Trunk; val c2 = if (locked) Color(0xFF6F6A75) else TrunkDark
     val t = Path().apply {
-        moveTo(w * 0.44f, h * 0.9f); quadraticBezierTo(w * 0.47f, h * 0.7f, w * 0.46f, h * 0.5f); lineTo(w * 0.54f, h * 0.5f)
-        quadraticBezierTo(w * 0.53f, h * 0.7f, w * 0.56f, h * 0.9f); close()
+        moveTo(w * 0.44f, h * 0.9f); quadraticTo(w * 0.47f, h * 0.7f, w * 0.46f, h * 0.5f); lineTo(w * 0.54f, h * 0.5f)
+        quadraticTo(w * 0.53f, h * 0.7f, w * 0.56f, h * 0.9f); close()
     }
     drawPath(t, Brush.horizontalGradient(listOf(c2, c1, c2)))
     val b = Stroke(width = w * 0.028f)
     for ((x1, y1, x2, y2) in listOf(listOf(0.5f, 0.6f, 0.3f, 0.42f), listOf(0.5f, 0.56f, 0.7f, 0.4f), listOf(0.5f, 0.5f, 0.42f, 0.28f), listOf(0.5f, 0.5f, 0.6f, 0.26f))) {
-        val p = Path().apply { moveTo(w * x1, h * y1); quadraticBezierTo(w * (x1 + x2) / 2, h * (y1 - 0.02f), w * x2, h * y2) }
+        val p = Path().apply { moveTo(w * x1, h * y1); quadraticTo(w * (x1 + x2) / 2, h * (y1 - 0.02f), w * x2, h * y2) }
         drawPath(p, c1, style = b)
     }
 }

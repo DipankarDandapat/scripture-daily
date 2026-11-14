@@ -134,6 +134,12 @@ class Device(Base):
     platform: Mapped[str] = mapped_column(String(30), default="android")
     device_model: Mapped[str | None] = mapped_column(String(120), nullable=True)
     fcm_token: Mapped[str | None] = mapped_column(String(512), nullable=True, index=True)
+    # App version tracking
+    app_version: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)   # e.g. "2.0.0"
+    app_version_code: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True) # e.g. 200
+    os_version: Mapped[str | None] = mapped_column(String(40), nullable=True)                # e.g. "Android 14"
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class Feedback(Base):

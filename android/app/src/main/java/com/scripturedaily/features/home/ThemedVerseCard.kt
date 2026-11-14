@@ -87,7 +87,7 @@ private fun DrawScope.drawArt(art: String, accent: Color, ink: Color) {
         }
         "nature" -> {
             for ((i, a) in listOf(0.16f, 0.22f).withIndex()) {
-                val p = Path().apply { moveTo(0f, h); lineTo(0f, h * (0.8f - i * 0.08f)); quadraticBezierTo(w * 0.3f, h * (0.66f - i * 0.1f), w * 0.6f, h * (0.82f - i * 0.06f)); quadraticBezierTo(w * 0.85f, h * (0.9f - i * 0.1f), w, h * (0.74f - i * 0.04f)); lineTo(w, h); close() }
+                val p = Path().apply { moveTo(0f, h); lineTo(0f, h * (0.8f - i * 0.08f)); quadraticTo(w * 0.3f, h * (0.66f - i * 0.1f), w * 0.6f, h * (0.82f - i * 0.06f)); quadraticTo(w * 0.85f, h * (0.9f - i * 0.1f), w, h * (0.74f - i * 0.04f)); lineTo(w, h); close() }
                 drawPath(p, accent.copy(alpha = a))
             }
             for (i in 0 until 7) { val x = w * (0.08f + i * 0.14f); drawOval(accent.copy(alpha = 0.14f), Offset(x, h * 0.06f + (i % 3) * h * 0.04f), Size(w * 0.07f, w * 0.035f)) }

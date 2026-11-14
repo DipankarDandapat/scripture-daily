@@ -25,6 +25,7 @@ object AmbientWisdom {
     const val KEY_LAST_ACTIVITY = "activity_wisdom_last"
     const val KEY_LAST_ACTIVITY_AT = "activity_wisdom_last_at"
     const val KEY_AMBIENT_NOTIFICATION = "ambient_notification"
+    const val KEY_LIVE_WALLPAPER_ENABLED = "live_wallpaper_user_enabled"
 
     fun prefs(context: Context): SharedPreferences = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
@@ -55,8 +56,6 @@ object AmbientWisdom {
     private fun permutation(cycle: Int, count: Int, seed: Long): List<Int> {
         var previousLast = -1
         var p: MutableList<Int> = mutableListOf()
-        // Build cycles in order so each boundary fix sees the (already fixed) previous cycle. Swapping the first two entries
-        // never changes a cycle's last entry when count > 2, so the chain stays consistent.
         for (c in 0..cycle) {
             p = (1..count).shuffled(Random(seed * 31 + c)).toMutableList()
             if (c > 0 && count > 1 && p.first() == previousLast) { val t = p[0]; p[0] = p[1]; p[1] = t }
@@ -65,10 +64,26 @@ object AmbientWisdom {
         return p
     }
 
-    // ── Live wallpaper themes (time-of-day mood) ─────────────────────────────
-    enum class LiveTheme(val key: String, val label: String) {
-        AUTO("auto", "Time of day"), MORNING("morning", "Morning"), AFTERNOON("afternoon", "Afternoon"),
-        EVENING("evening", "Evening"), NIGHT("night", "Night");
+    // ── Live wallpaper themes ────────────────────────────────────────────────
+    enum class LiveTheme(val key: String, val label: String, val emoji: String) {
+        // Time-of-day (original)
+        AUTO("auto", "Time of day", "🕐"),
+        MORNING("morning", "Morning", "🌅"),
+        AFTERNOON("afternoon", "Afternoon", "☀️"),
+        EVENING("evening", "Evening", "🌇"),
+        NIGHT("night", "Night", "🌙"),
+        // New nature themes
+        GOLDEN_HOUR("golden_hour", "Golden Hour", "✨"),
+        MONSOON("monsoon", "Monsoon", "🌧️"),
+        DESERT_DAWN("desert_dawn", "Desert Dawn", "🏜️"),
+        FOREST("forest", "Forest", "🌿"),
+        OCEAN("ocean", "Ocean", "🌊"),
+        SNOW("snow", "Snow", "❄️"),
+        LOTUS("lotus", "Lotus Pond", "🪷"),
+        STARFIELD("starfield", "Starfield", "⭐"),
+        CANDLELIGHT("candlelight", "Candlelight", "🕯️"),
+        CHERRY_BLOSSOM("cherry_blossom", "Cherry Blossom", "🌸");
+
         companion object { fun of(raw: String?) = entries.firstOrNull { it.key == raw } ?: AUTO }
     }
 
@@ -82,13 +97,21 @@ object AmbientWisdom {
 
     fun resolveTheme(choice: LiveTheme, hour: Int): LiveTheme = if (choice == LiveTheme.AUTO) themeForHour(hour) else choice
 
+    /** Suggested default theme for a tradition (used when user hasn't picked one yet). */
+    fun defaultThemeForReligion(religionId: Int): LiveTheme = when (religionId) {
+        1 -> LiveTheme.LOTUS          // Hinduism
+        2 -> LiveTheme.MORNING        // Christianity
+        3 -> LiveTheme.DESERT_DAWN    // Islam
+        4 -> LiveTheme.CHERRY_BLOSSOM // Buddhism
+        else -> LiveTheme.AUTO
+    }
+
     enum class Motion(val key: String, val label: String) {
         SUBTLE("subtle", "Gentle motion"), STILL("still", "Still");
         companion object { fun of(raw: String?) = entries.firstOrNull { it.key == raw } ?: SUBTLE }
     }
 
     // ── Activity-aware wisdom ────────────────────────────────────────────────
-    /** A verse category, backed by an existing Universal Truths topic (GET /universal-truths/{code}). */
     enum class Category(val key: String, val label: String, val topic: String, val emoji: String) {
         ENERGY("energy", "Energy & motivation", "hope", "🌅"),
         STRENGTH("strength", "Strength & perseverance", "courage", "💪"),
@@ -98,7 +121,6 @@ object AmbientWisdom {
         companion object { fun of(raw: String?) = entries.firstOrNull { it.key == raw } }
     }
 
-    /** Detected (or assumed) state. Mirrors the subset of Google activity types we listen for. */
     enum class Activity(val key: String, val label: String) {
         WALKING("walking", "Walking"), RUNNING("running", "Running"), STILL("still", "Sitting or working"),
         IN_VEHICLE("in_vehicle", "On the move"), CYCLING("cycling", "Cycling"), UNKNOWN("unknown", "Not detected yet");
@@ -113,13 +135,8 @@ object AmbientWisdom {
         companion object { fun of(raw: String?) = entries.firstOrNull { it.key == raw } ?: OFF }
     }
 
-    /** A detected activity older than this is ignored (we only receive transitions, never continuous tracking). */
     const val ACTIVITY_FRESH_MS = 3 * 60 * 60 * 1000L
 
-    /**
-     * The recommended category, or null when the feature is off.
-     * Night / resting always wins in activity mode when the phone is still, so a late-evening "still" means calm, not focus.
-     */
     fun recommend(mode: ActivityMode, activity: Activity, activityAgeMs: Long, hour: Int, manual: Category?): Category? = when (mode) {
         ActivityMode.OFF -> null
         ActivityMode.MANUAL -> manual ?: Category.PEACE
@@ -146,9 +163,8 @@ object AmbientWisdom {
     }
 
     // ── Always-on / single-line excerpt ──────────────────────────────────────
-    /** A short, single-line excerpt for minimal surfaces (AOD-friendly notification, status chip). Cuts on a word boundary. */
     fun excerpt(text: String, max: Int = 60): String {
-        val clean = text.replace(Regex("\\s+"), " ").trim().trim('“', '”', '"')
+        val clean = text.replace(Regex("\\s+"), " ").trim().trim('\u201c', '\u201d', '"')
         if (clean.length <= max) return clean
         val firstSentence = clean.split(Regex("(?<=[.;!?।])\\s")).first()
         if (firstSentence.length in 20..max) return firstSentence.trimEnd()

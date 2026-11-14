@@ -1,0 +1,19 @@
+cp1252 special chars:
+  U+0192 -> byte 0x83
+  U+201A -> byte 0x82
+  U+20AC -> byte 0x80
+  U+0161 -> byte 0x9A
+  U+009D -> byte 0x-1
+
+chunk: '\xc3\u0192\xc2\xa2\xc3\xa2\xe2\u201a\xac\xc2\x9d'
+b1: c383c2a2c3a2e282acc29d
+r1: '\xc3\xa2\xe2\u20ac\x9d'
+b2: c3a2e2809d
+r2: '\xe2\u201d'
+b3: e294
+r3 err: 'utf-8' codec can't decode bytes in position 0-1: unexpected end of data
+
+icon chunk: '\xc3\u0192\xc2\xa2\xc3\u2026\xe2\u20ac\u0153\xc3\xa2\xe2\u201a\xac\xc2\xa2'
+icon r1: '\xc3\xa2\xc5\u201c\xe2\u20ac\xa2'
+icon r2: '\xe2\u0153\u2022'
+icon r3: '\u2715'

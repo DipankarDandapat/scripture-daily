@@ -85,6 +85,12 @@ class FcmTokenInput(BaseModel):
     fcm_token: str = Field(min_length=10, max_length=512)
 
 
+class DeviceVersionInput(BaseModel):
+    app_version: str = Field(min_length=1, max_length=20)       # e.g. "2.0.0"
+    app_version_code: int = Field(ge=1)                         # e.g. 200
+    os_version: str | None = Field(default=None, max_length=40) # e.g. "Android 14"
+
+
 class FeedbackInput(BaseModel):
     rating: int = Field(ge=1, le=10)
     comment: str | None = Field(default=None, max_length=1000)

@@ -1,5 +1,7 @@
-﻿from contextlib import asynccontextmanager  # noqa: F401
-from fastapi import FastAPI
+﻿import secrets
+from contextlib import asynccontextmanager  # noqa: F401
+from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import Base, SessionLocal, engine
@@ -64,9 +66,22 @@ def _add_missing_columns() -> None:
             conn.execute(text("UPDATE user_preferences SET wallpaper_mode = 'verse_and_image' WHERE wallpaper_mode IN ('change_verse', 'keep_same_verse')"))
     if "devices" in insp.get_table_names():
         cols = {c["name"] for c in insp.get_columns("devices")}
-        if "fcm_token" not in cols:
-            with engine.begin() as conn:
+        with engine.begin() as conn:
+            if "fcm_token" not in cols:
                 conn.execute(text("ALTER TABLE devices ADD COLUMN fcm_token VARCHAR(512)"))
+            if "app_version" not in cols:
+                conn.execute(text("ALTER TABLE devices ADD COLUMN app_version VARCHAR(20)"))
+            if "app_version_code" not in cols:
+                conn.execute(text("ALTER TABLE devices ADD COLUMN app_version_code INTEGER"))
+            if "os_version" not in cols:
+                conn.execute(text("ALTER TABLE devices ADD COLUMN os_version VARCHAR(40)"))
+            if "created_at" not in cols:
+                # SQLite forbids non-constant defaults in ALTER TABLE — add as NULL then backfill
+                conn.execute(text("ALTER TABLE devices ADD COLUMN created_at DATETIME"))
+                conn.execute(text("UPDATE devices SET created_at = datetime('now') WHERE created_at IS NULL"))
+            if "last_seen_at" not in cols:
+                conn.execute(text("ALTER TABLE devices ADD COLUMN last_seen_at DATETIME"))
+                conn.execute(text("UPDATE devices SET last_seen_at = datetime('now') WHERE last_seen_at IS NULL"))
 
 
 # Run at import time so Passenger WSGI and uvicorn both initialise the schema
@@ -80,13 +95,49 @@ with SessionLocal() as _db:
 
 init_firebase(settings.firebase_credentials_path)
 
+_security = HTTPBasic()
+_SWAGGER_USERNAME = settings.swagger_username
+_SWAGGER_PASSWORD = settings.swagger_password
+
+
+def _verify_swagger(credentials: HTTPBasicCredentials = Depends(_security)) -> str:
+    ok = secrets.compare_digest(credentials.username, _SWAGGER_USERNAME) and \
+         secrets.compare_digest(credentials.password, _SWAGGER_PASSWORD)
+    if not ok:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+    return credentials.username
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title=settings.app_name, version="2.0.0", description="Content-driven daily scripture API", lifespan=lifespan)
+app = FastAPI(
+    title=settings.app_name,
+    version="2.0.0",
+    description="Content-driven daily scripture API",
+    lifespan=lifespan,
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
+
+
+@app.get("/docs", include_in_schema=False)
+async def swagger_ui(_: str = Depends(_verify_swagger)):
+    from fastapi.openapi.docs import get_swagger_ui_html
+    return get_swagger_ui_html(openapi_url="/openapi.json", title=settings.app_name)
+
+
+@app.get("/openapi.json", include_in_schema=False)
+async def openapi_schema(_: str = Depends(_verify_swagger)):
+    from fastapi.openapi.utils import get_openapi
+    return get_openapi(title=app.title, version=app.version, routes=app.routes)
 app.add_middleware(CORSMiddleware, allow_origins=settings.allowed_origins, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 app.include_router(router, prefix="/api/v1")
 app.include_router(features_router, prefix="/api/v1")

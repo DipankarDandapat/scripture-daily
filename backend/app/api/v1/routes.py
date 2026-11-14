@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_access_token, hash_password, verify_password
 from app.models.entities import Religion, Language, Scripture, Verse, User, UserPreference, ActiveVerseState, VerseSelectionHistory, Favorite, Device, Feedback
-from app.schemas.api import AuthInput, TokenOut, UserOut, CatalogOut, ReligionOut, ScriptureItem, VerseOut, PreferenceInput, PreferenceOut, FavoriteInput, DeviceInput, FcmTokenInput, VerseCreate, FeedbackInput, FeedbackOut
+from app.schemas.api import AuthInput, TokenOut, UserOut, CatalogOut, ReligionOut, ScriptureItem, VerseOut, PreferenceInput, PreferenceOut, FavoriteInput, DeviceInput, FcmTokenInput, DeviceVersionInput, VerseCreate, FeedbackInput, FeedbackOut
 from app.core.firebase import send_to_tokens, send_to_topic
 
 router = APIRouter()
@@ -433,13 +433,15 @@ def remove_favorite(verse_id: int, user: User = Depends(current_user), db: Sessi
 
 @router.post("/devices", status_code=201)
 def register_device(data: DeviceInput, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    now = datetime.now(timezone.utc)
     row = db.scalar(select(Device).where(Device.user_id == user.id, Device.device_token == data.device_token))
     if row is None:
-        row = Device(user_id=user.id, **data.model_dump())
+        row = Device(user_id=user.id, created_at=now, last_seen_at=now, **data.model_dump())
         db.add(row)
     else:
         row.platform = data.platform
         row.device_model = data.device_model
+        row.last_seen_at = now
         if data.fcm_token:
             row.fcm_token = data.fcm_token
     db.commit()
@@ -451,11 +453,41 @@ def update_fcm_token(data: FcmTokenInput, user: User = Depends(current_user), db
     """Update (or set for the first time) the FCM push token for all of this user's devices."""
     rows = db.scalars(select(Device).where(Device.user_id == user.id)).all()
     if not rows:
-        # No device row yet — create a placeholder so the token is not lost
-        db.add(Device(user_id=user.id, device_token=f"fcm_{user.id}", platform="android", fcm_token=data.fcm_token))
+        now = datetime.now(timezone.utc)
+        db.add(Device(user_id=user.id, device_token=f"fcm_{user.id}", platform="android", fcm_token=data.fcm_token, created_at=now, last_seen_at=now))
     else:
         for row in rows:
             row.fcm_token = data.fcm_token
+    db.commit()
+    return {"ok": True}
+
+
+@router.put("/devices/version", status_code=200)
+def update_device_version(data: DeviceVersionInput, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Called on every cold app launch. Updates app_version, app_version_code, os_version
+    and last_seen_at for every device row belonging to this user.
+    Creates a placeholder row if none exists yet (e.g. FCM-only installs).
+    """
+    now = datetime.now(timezone.utc)
+    rows = db.scalars(select(Device).where(Device.user_id == user.id)).all()
+    if not rows:
+        db.add(Device(
+            user_id=user.id,
+            device_token=f"ver_{user.id}",
+            platform="android",
+            app_version=data.app_version,
+            app_version_code=data.app_version_code,
+            os_version=data.os_version,
+            created_at=now,
+            last_seen_at=now,
+        ))
+    else:
+        for row in rows:
+            row.app_version = data.app_version
+            row.app_version_code = data.app_version_code
+            if data.os_version:
+                row.os_version = data.os_version
+            row.last_seen_at = now
     db.commit()
     return {"ok": True}
 
